@@ -656,7 +656,7 @@ function rowFAC(f, i){
   const row=new Array(119).fill("");
   row[0]=1;                          // Tipo documento
   row[1]=i+1; // Numero documento - entero entre 1 y 999999
-  row[2]=f.numero||"";             // Referencia
+  row[2]=String(f.numero||"");             // Referencia
   row[3]=fe;                         // Fecha
   row[4]=0;                          // Estado
   row[5]="GEN";                      // Almacen
