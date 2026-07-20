@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duraspinvest · Registros IVA</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --navy:#0A2540;--navy-mid:#12345A;--navy-light:#1B4F8A;
+  --gold:#D4A017;--accent:#2B7FFF;
+  --white:#FFFFFF;--gray-50:#F8FAFC;--gray-100:#EEF2F7;
+  --gray-200:#D6DEE8;--gray-400:#8A9BB0;--gray-600:#4A5A6B;--gray-800:#1E2C3A;
+  --success:#10B981;--danger:#EF4444;--warning:#F59E0B;
+  --radius:10px;--shadow:0 1px 3px rgba(10,37,64,0.08),0 4px 12px rgba(10,37,64,0.06);
+  --shadow-lg:0 8px 32px rgba(10,37,64,0.14);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--gray-50);color:var(--gray-800);min-height:100vh;}
+header{background:var(--navy);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2);}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:32px;height:32px;background:var(--navy-mid);border-radius:7px;display:flex;align-items:center;justify-content:center;}
+.logo-name{color:white;font-size:14px;font-weight:600;}
+.logo-sub{color:var(--gray-400);font-size:10px;}
+nav{background:var(--navy-mid);display:flex;overflow-x:auto;scrollbar-width:none;}
+nav::-webkit-scrollbar{display:none;}
+.nav-btn{padding:11px 18px;color:var(--gray-400);font-size:13px;font-weight:500;border:none;background:none;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all 0.2s;}
+.nav-btn:hover{color:white;}
+.nav-btn.active{color:white;border-bottom-color:var(--accent);}
+main{padding:20px;max-width:1400px;margin:0 auto;}
+.section{display:none;}
+.section.active{display:block;}
+.card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:14px;}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
+.stat-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;border-left:3px solid var(--accent);}
+.stat-num{font-size:22px;font-weight:700;color:var(--navy);}
+.stat-label{font-size:11px;color:var(--gray-400);margin-top:2px;}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;}
+.filtro-group{display:flex;flex-direction:column;gap:4px;}
+.filtro-label{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;}
+.fi{padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:7px;font-size:13px;color:var(--gray-800);outline:none;font-family:inherit;background:white;}
+.fi:focus{border-color:var(--accent);}
+.tabla-wrapper{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--gray-200);}
+table{border-collapse:collapse;width:100%;font-size:12px;}
+thead{position:sticky;top:0;z-index:5;}
+th{background:var(--navy);color:white;padding:10px 8px;text-align:left;white-space:nowrap;font-size:11px;font-weight:600;}
+th:first-child{padding-left:14px;}
+td{padding:9px 8px;border-bottom:1px solid var(--gray-100);vertical-align:middle;}
+td:first-child{padding-left:14px;}
+tr:hover td{background:var(--gray-50);}
+tr:last-child td{border-bottom:none;}
+.td-r{text-align:right;font-variant-numeric:tabular-nums;}
+.td-c{text-align:center;}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;}
+.badge-ivr{background:#EFF6FF;color:#1B4F8A;}
+.badge-ivs{background:#FFF7ED;color:#C2410C;}
+.btn{padding:8px 16px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:inherit;transition:all 0.15s;}
+.btn-primary{background:var(--navy);color:white;}
+.btn-primary:hover{background:var(--navy-light);}
+.btn-secondary{background:var(--gray-100);color:var(--gray-600);}
+.btn-success{background:#F0FDF4;color:#059669;border:1px solid #BBF7D0;}
+.btn-ivs{background:#FFF7ED;color:#C2410C;border:1px solid #FED7AA;}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(10,37,64,0.5);z-index:200;align-items:center;justify-content:center;padding:16px;}
+.modal-overlay.open{display:flex;}
+.modal{background:white;border-radius:14px;padding:22px;width:100%;max-width:640px;box-shadow:var(--shadow-lg);max-height:92vh;overflow-y:auto;}
+.modal-title{font-size:15px;font-weight:600;color:var(--navy);margin-bottom:18px;}
+.mg2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.fg{display:flex;flex-direction:column;gap:5px;}
+.fg.full{grid-column:span 2;}
+.fl{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;}
+.fl .ob{color:var(--danger);}
+.fi2{padding:9px 11px;border:1.5px solid var(--gray-200);border-radius:7px;font-size:13px;color:var(--gray-800);outline:none;font-family:inherit;width:100%;}
+.fi2:focus{border-color:var(--accent);}
+.ma{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--gray-100);}
+.ac-wrap{position:relative;}
+.ac-list{position:absolute;top:100%;left:0;right:0;background:white;border:1px solid var(--gray-200);border-radius:7px;box-shadow:var(--shadow-lg);z-index:300;max-height:200px;overflow-y:auto;margin-top:2px;display:none;}
+.ac-item{padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--gray-100);}
+.ac-item:last-child{border-bottom:none;}
+.ac-item:hover{background:var(--gray-50);}
+.ac-sub{font-size:11px;color:var(--gray-400);margin-top:2px;}
+.iva-box{background:var(--gray-50);border-radius:7px;padding:12px;margin-top:10px;}
+.iva-box-title{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}
+.iva-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;}
+.icon-btn{background:none;border:none;cursor:pointer;padding:4px;color:var(--gray-400);font-size:14px;border-radius:4px;}
+.icon-btn:hover{color:var(--gray-800);background:var(--gray-100);}
+.empty{text-align:center;padding:40px 20px;color:var(--gray-400);}
+.empty-icon{font-size:28px;margin-bottom:8px;}
+@media(max-width:700px){.mg2{grid-template-columns:1fr;}.fg.full{grid-column:span 1;}.iva-row{grid-template-columns:1fr 1fr;}}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" style="display:none;position:fixed;inset:0;background:var(--navy);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:20px;">
+  <div style="text-align:center;">
+    <div style="width:68px;height:68px;background:var(--navy-mid);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+      <svg viewBox="0 0 36 36" width="68" height="68"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
+    </div>
+    <div style="color:white;font-size:18px;font-weight:600;">Duraspinvest</div>
+    <div style="color:var(--gray-400);font-size:11px;margin-top:3px;letter-spacing:1px;text-transform:uppercase;">Registros IVA · Exportacion Delsol</div>
+  </div>
+  <div style="background:white;border-radius:14px;padding:24px 28px;width:100%;max-width:320px;box-shadow:var(--shadow-lg);">
+    <div style="font-size:14px;font-weight:600;color:var(--navy);margin-bottom:16px;text-align:center;">Acceder</div>
+    <div style="margin-bottom:10px;"><label style="font-size:11px;font-weight:600;color:#4A5A6B;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Email</label>
+      <input type="email" id="loginEmail" placeholder="tu@email.com" style="width:100%;padding:9px 11px;border:1.5px solid #D6DEE8;border-radius:7px;font-size:13px;outline:none;font-family:inherit;"></div>
+    <div style="margin-bottom:14px;"><label style="font-size:11px;font-weight:600;color:#4A5A6B;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Contrasena</label>
+      <input type="password" id="loginPassword" placeholder="..."  style="width:100%;padding:9px 11px;border:1.5px solid #D6DEE8;border-radius:7px;font-size:13px;outline:none;font-family:inherit;"></div>
+    <div id="loginError" style="color:#EF4444;font-size:12px;margin-bottom:10px;display:none;">Email o contrasena incorrectos</div>
+    <button onclick="doLogin()" style="width:100%;padding:11px;background:#0A2540;color:white;border:none;border-radius:7px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;">Entrar</button>
+  </div>
+</div>
+
+<div id="appContent" style="display:none;flex-direction:column;min-height:100vh;">
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 36 36" width="32" height="32"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
+    </div>
+    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol</div></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span id="userBadge" style="color:var(--gold);font-size:11px;font-weight:600;padding:3px 9px;background:rgba(212,160,23,0.15);border-radius:20px;"></span>
+    <button onclick="doLogout()" style="background:rgba(255,255,255,0.1);color:var(--gray-400);border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Salir</button>
+  </div>
+</header>
+<nav>
+  <button class="nav-btn active" onclick="showSection('facturas',this)">Facturas</button>
+  <button class="nav-btn" onclick="showSection('cuentas',this)">Cuentas contables</button>
+  <button class="nav-btn" onclick="showSection('exportar',this)">Exportar a Delsol</button>
+</nav>
+<main>
+
+<!-- FACTURAS -->
+<div id="facturas" class="section active">
+  <div class="stats-row">
+    <div class="stat-card" style="border-left-color:#1B4F8A;"><div class="stat-num" id="stE">0</div><div class="stat-label">Facturas emitidas</div></div>
+    <div class="stat-card" style="border-left-color:#C2410C;"><div class="stat-num" id="stR">0</div><div class="stat-label">Facturas recibidas</div></div>
+    <div class="stat-card" style="border-left-color:var(--success);"><div class="stat-num" id="stBE">0 EUR</div><div class="stat-label">Base total emitidas</div></div>
+    <div class="stat-card" style="border-left-color:var(--warning);"><div class="stat-num" id="stBR">0 EUR</div><div class="stat-label">Base total recibidas</div></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div class="filtros" style="margin-bottom:0;">
+      <div class="filtro-group"><span class="filtro-label">Cliente</span>
+        <select class="fi" id="fFC" onchange="renderF()" style="min-width:180px;"><option value="">Todos</option></select></div>
+      <div class="filtro-group"><span class="filtro-label">Tipo</span>
+        <select class="fi" id="fFT" onchange="renderF()"><option value="">Todos</option><option value="IVR">Emitidas</option><option value="IVS">Recibidas</option></select></div>
+      <div class="filtro-group"><span class="filtro-label">Ano</span>
+        <select class="fi" id="fFA" onchange="renderF()"><option value="">Todos</option><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select></div>
+      <div class="filtro-group"><span class="filtro-label">Trimestre</span>
+        <select class="fi" id="fFQ" onchange="renderF()"><option value="">Todos</option><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="openFM('IVR')">+ Emitida</button>
+      <button class="btn btn-ivs" onclick="openFM('IVS')">+ Recibida</button>
+    </div>
+  </div>
+  <div class="tabla-wrapper">
+    <table><thead><tr>
+      <th>Tipo</th><th>Cliente despacho</th><th>Fecha</th><th>N Factura</th><th>Nombre</th><th>NIF/CIF</th><th>Cuenta</th>
+      <th class="td-r">Base 1</th><th class="td-c">%IVA</th><th class="td-r">Cuota</th><th class="td-r">Total</th><th class="td-c">Ret.</th><th class="td-c">347</th><th></th>
+    </tr></thead>
+    <tbody id="fTbody"><tr><td colspan="14"><div class="empty"><div class="empty-icon">&#128203;</div><div>No hay facturas.</div></div></td></tr></tbody></table>
+  </div>
+</div>
+
+<!-- CUENTAS -->
+<div id="cuentas" class="section">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <div><div style="font-size:16px;font-weight:600;color:var(--navy);">Cuentas contables</div>
+    <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Por cliente del despacho. El mismo proveedor puede tener cuentas distintas para cada cliente.</div></div>
+    <button class="btn btn-primary" onclick="openCM()">+ Anadir cuenta</button>
+  </div>
+  <div class="filtros">
+    <div class="filtro-group"><span class="filtro-label">Cliente</span>
+      <select class="fi" id="fCC" onchange="renderC()" style="min-width:180px;"><option value="">Todos</option></select></div>
+    <div class="filtro-group"><span class="filtro-label">Tipo</span>
+      <select class="fi" id="fCT" onchange="renderC()"><option value="">Todos</option><option value="proveedor">Proveedores (40x/41x)</option><option value="cliente">Clientes (43x)</option></select></div>
+    <div class="filtro-group"><span class="filtro-label">Buscar</span>
+      <input type="text" class="fi" id="fCB" placeholder="Nombre o cuenta..." oninput="renderC()"></div>
+  </div>
+  <div class="tabla-wrapper">
+    <table><thead><tr>
+      <th>Cliente despacho</th><th>Nombre</th><th>NIF/CIF</th><th>Cuenta</th><th>Tipo</th><th></th>
+    </tr></thead>
+    <tbody id="cTbody"><tr><td colspan="6"><div class="empty"><div class="empty-icon">&#128218;</div><div>No hay cuentas.</div></div></td></tr></tbody></table>
+  </div>
+</div>
+
+<!-- EXPORTAR -->
+<div id="exportar" class="section">
+  <div class="card">
+    <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:14px;">Exportar a Delsol</div>
+    <div style="font-size:13px;color:var(--gray-600);margin-bottom:14px;">Filtra por cliente y periodo para generar el archivo IVR.xlsx o IVS.xlsx listo para importar en Delsol.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px;">
+      <div class="fg"><label class="fl">Cliente <span class="ob">*</span></label><select class="fi2" id="eC"><option value="">Seleccionar...</option></select></div>
+      <div class="fg"><label class="fl">Tipo <span class="ob">*</span></label><select class="fi2" id="eT"><option value="IVR">IVR - Emitidas</option><option value="IVS">IVS - Recibidas</option></select></div>
+      <div class="fg"><label class="fl">Ano <span class="ob">*</span></label><select class="fi2" id="eA"><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select></div>
+      <div class="fg"><label class="fl">Periodo</label><select class="fi2" id="eP"><option value="">Todo el ano</option><option value="1">1T Ene-Mar</option><option value="2">2T Abr-Jun</option><option value="3">3T Jul-Sep</option><option value="4">4T Oct-Dic</option></select></div>
+    </div>
+    <div id="eRes" style="background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:13px;display:none;"></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" onclick="prevExp()">Vista previa</button>
+      <button class="btn btn-success" id="btnExp" onclick="doExport()" style="display:none;">Descargar archivo Delsol</button>
+    </div>
+  </div>
+  <div id="ePrev" style="display:none;">
+    <div class="card">
+      <div id="ePrevTitle" style="font-size:13px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;"></div>
+      <div class="tabla-wrapper"><table>
+        <thead><tr id="ePrevH"></tr></thead>
+        <tbody id="ePrevB"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- MODAL FACTURA -->
+<div class="modal-overlay" id="fModal" onclick="closeMO(event,'fModal')">
+  <div class="modal">
+    <div class="modal-title" id="fMTitle">Nueva factura emitida</div>
+    <input type="hidden" id="fId"><input type="hidden" id="fTipo">
+    <div class="mg2">
+      <div class="fg full"><label class="fl">Cliente del despacho <span class="ob">*</span></label>
+        <select class="fi2" id="fCD" onchange="onFCDChange()"><option value="">Seleccionar...</option></select></div>
+      <div class="fg"><label class="fl">Fecha <span class="ob">*</span></label><input type="date" class="fi2" id="fFecha"></div>
+      <div class="fg"><label class="fl">N Factura <span class="ob">*</span></label><input type="text" class="fi2" id="fNum" placeholder="2026/001"></div>
+      <div class="fg full"><label class="fl" id="fNLbl">Nombre cliente <span class="ob">*</span></label>
+        <div class="ac-wrap">
+          <input type="text" class="fi2" id="fNom" placeholder="Escribe para buscar..." oninput="acNombre(this.value)" autocomplete="off">
+          <div id="acList" class="ac-list"></div>
+        </div>
+      </div>
+      <div class="fg"><label class="fl">NIF/CIF</label><input type="text" class="fi2" id="fNif" placeholder="B12345678"></div>
+      <div class="fg"><label class="fl">Cuenta contable</label><input type="text" class="fi2" id="fCta" placeholder="43000001"></div>
+    </div>
+    <div class="iva-box">
+      <div class="iva-box-title">Linea 1 de IVA</div>
+      <div class="iva-row">
+        <div class="fg"><label class="fl">Base imponible <span class="ob">*</span></label><input type="number" step="0.01" class="fi2" id="fB1" placeholder="0.00" oninput="calcIVA(1)"></div>
+        <div class="fg"><label class="fl">% IVA <span class="ob">*</span></label><select class="fi2" id="fP1" onchange="calcIVA(1)"><option value="21">21%</option><option value="10">10%</option><option value="4">4%</option><option value="0">0% Exento</option></select></div>
+        <div class="fg"><label class="fl">Cuota IVA</label><input type="number" step="0.01" class="fi2" id="fI1" placeholder="0.00"></div>
+      </div>
+    </div>
+    <div class="iva-box" style="margin-top:8px;">
+      <div class="iva-box-title">Linea 2 de IVA (opcional)</div>
+      <div class="iva-row">
+        <div class="fg"><label class="fl">Base 2</label><input type="number" step="0.01" class="fi2" id="fB2" placeholder="0.00" oninput="calcIVA(2)"></div>
+        <div class="fg"><label class="fl">% IVA</label><select class="fi2" id="fP2" onchange="calcIVA(2)"><option value="">-</option><option value="21">21%</option><option value="10">10%</option><option value="4">4%</option><option value="0">0%</option></select></div>
+        <div class="fg"><label class="fl">Cuota IVA 2</label><input type="number" step="0.01" class="fi2" id="fI2" placeholder="0.00"></div>
+      </div>
+    </div>
+    <div class="mg2" style="margin-top:12px;">
+      <div class="fg"><label class="fl">Total factura <span class="ob">*</span></label><input type="number" step="0.01" class="fi2" id="fTot" placeholder="0.00"></div>
+      <div class="fg"><label class="fl">% Retencion</label>
+        <select class="fi2" id="fRP" onchange="calcRet()"><option value="">Sin retencion</option><option value="7">7%</option><option value="15">15%</option><option value="19">19%</option><option value="21">21%</option></select></div>
+      <div class="fg"><label class="fl">Importe retencion</label><input type="number" step="0.01" class="fi2" id="fRI" placeholder="0.00"></div>
+      <div class="fg"><label class="fl">Modelo 347</label>
+        <select class="fi2" id="f347"><option value="0">No incluir</option><option value="1">Incluir</option></select></div>
+      <div class="fg full" id="fDedG" style="display:none;"><label class="fl">IVA deducible</label>
+        <select class="fi2" id="fDed"><option value="1">Si</option><option value="0">No</option></select></div>
+    </div>
+    <div class="ma">
+      <button class="btn btn-secondary" onclick="closeM('fModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveF()">Guardar factura</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CUENTA -->
+<div class="modal-overlay" id="cModal" onclick="closeMO(event,'cModal')">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-title" id="cMTitle">Nueva cuenta contable</div>
+    <input type="hidden" id="cId">
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Cliente del despacho <span class="ob">*</span></label>
+      <select class="fi2" id="cCD"><option value="">Seleccionar...</option></select></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Nombre cliente/proveedor <span class="ob">*</span></label>
+      <input type="text" class="fi2" id="cNom" placeholder="ENDESA ENERGIA, S.A."></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">NIF/CIF</label>
+      <input type="text" class="fi2" id="cNif" placeholder="A81948077"></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Cuenta contable <span class="ob">*</span></label>
+      <input type="text" class="fi2" id="cCta" placeholder="41000001"></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Tipo</label>
+      <select class="fi2" id="cTip"><option value="proveedor">Proveedor (40x/41x)</option><option value="cliente">Cliente (43x)</option><option value="otro">Otro</option></select></div>
+    <div class="ma">
+      <button class="btn btn-secondary" onclick="closeM('cModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveC()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- FIREBASE -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  const app = initializeApp({apiKey:"AIzaSyCVK3yF15Udps1l046kv6M1TASIwVEPcVs",authDomain:"duraspinvest.firebaseapp.com",projectId:"duraspinvest",storageBucket:"duraspinvest.firebasestorage.app",messagingSenderId:"280764832749",appId:"1:280764832749:web:a1fa6c44cf59518541a5e4"});
+  const db=getFirestore(app),auth=getAuth(app);
+  window.db=db;window.auth=auth;window.fsSignIn=signInWithEmailAndPassword;window.fsSignOut=signOut;
+  window.fsDoc=doc;window.fsSetDoc=setDoc;window.fsDeleteDoc=deleteDoc;window.fsCollection=collection;
+  let u1,u2,u3;
+  function act(){
+    u1=onSnapshot(collection(db,"clients"),s=>{
+      window.WC=s.docs.map(d=>({...d.data(),id:d.id})).filter(c=>(c.categoria||"despacho")!=="auxiliar");
+      poblarSel();renderF();
+    });
+    u2=onSnapshot(collection(db,"iva_facturas"),s=>{
+      window.WF=s.docs.map(d=>({...d.data(),id:d.id}));renderF();renderSt();
+    });
+    u3=onSnapshot(collection(db,"iva_cuentas"),s=>{
+      window.WCC=s.docs.map(d=>({...d.data(),id:d.id}));renderC();
+    });
+  }
+  function des(){if(u1)u1();if(u2)u2();if(u3)u3();}
+  onAuthStateChanged(auth,user=>{
+    if(user){
+      window.WC=[];window.WF=[];window.WCC=[];
+      document.getElementById("loginScreen").style.display="none";
+      document.getElementById("appContent").style.display="flex";
+      document.getElementById("userBadge").textContent=user.email.split("@")[0];
+      act();
+    } else {
+      des();
+      document.getElementById("loginScreen").style.display="flex";
+      document.getElementById("appContent").style.display="none";
+    }
+  });
+</script>
+
+<script>
+window.WC=[];window.WF=[];window.WCC=[];
+let expData=[];
+
+function showSection(id,btn){
+  document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
+  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  if(btn)btn.classList.add("active");
+}
+function closeM(id){document.getElementById(id).classList.remove("open");}
+function closeMO(e,id){if(e.target===document.getElementById(id))closeM(id);}
+async function fbS(col,id,d){try{await window.fsSetDoc(window.fsDoc(window.db,col,String(id)),d);}catch(e){console.error(e);}}
+async function fbD(col,id){try{await window.fsDeleteDoc(window.fsDoc(window.db,col,String(id)));}catch(e){console.error(e);}}
+function eur(n){if(n===undefined||n===null||n==="")return"";return parseFloat(n).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" EUR";}
+function q(f){const m=new Date(f+"T12:00:00").getMonth()+1;if(m<=3)return"1";if(m<=6)return"2";if(m<=9)return"3";return"4";}
+
+function poblarSel(){
+  const cl=window.WC||[];
+  ["fFC","fCC","fCD","cCD","eC"].forEach(id=>{
+    const s=document.getElementById(id);if(!s)return;
+    const v=s.value,f=s.options[0];
+    s.innerHTML="";s.appendChild(f);
+    cl.sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es")).forEach(c=>{
+      const o=document.createElement("option");o.value=c.id;o.textContent=c.nombre;s.appendChild(o);
+    });
+    s.value=v;
+  });
+}
+
+function renderSt(){
+  const fs=window.WF||[];
+  const ivr=fs.filter(f=>f.tipo==="IVR"),ivs=fs.filter(f=>f.tipo==="IVS");
+  document.getElementById("stE").textContent=ivr.length;
+  document.getElementById("stR").textContent=ivs.length;
+  const be=ivr.reduce((s,f)=>s+parseFloat(f.base1||0)+parseFloat(f.base2||0),0);
+  const br=ivs.reduce((s,f)=>s+parseFloat(f.base1||0)+parseFloat(f.base2||0),0);
+  document.getElementById("stBE").textContent=be.toLocaleString("es-ES",{minimumFractionDigits:2})+" EUR";
+  document.getElementById("stBR").textContent=br.toLocaleString("es-ES",{minimumFractionDigits:2})+" EUR";
+}
+
+function renderF(){
+  const tb=document.getElementById("fTbody");if(!tb)return;
+  const fc=document.getElementById("fFC").value,ft=document.getElementById("fFT").value;
+  const fa=document.getElementById("fFA").value,fq=document.getElementById("fFQ").value;
+  let fs=(window.WF||[]).filter(f=>{
+    if(fc&&f.clienteDespachoId!==fc)return false;
+    if(ft&&f.tipo!==ft)return false;
+    if(fa&&f.fecha&&new Date(f.fecha+"T12:00:00").getFullYear()!==parseInt(fa))return false;
+    if(fq&&f.fecha&&q(f.fecha)!==fq)return false;
+    return true;
+  }).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
+  if(!fs.length){tb.innerHTML="<tr><td colspan='14'><div class='empty'><div class='empty-icon'>&#128203;</div><div>No hay facturas con esos filtros.</div></div></td></tr>";return;}
+  tb.innerHTML=fs.map(f=>{
+    const cl=(window.WC||[]).find(c=>c.id===f.clienteDespachoId);
+    const fe=f.fecha?new Date(f.fecha+"T12:00:00").toLocaleDateString("es-ES",{day:"2-digit",month:"2-digit",year:"numeric"}):"";
+    const badge=f.tipo==="IVR"?"<span class='badge badge-ivr'>Emitida</span>":"<span class='badge badge-ivs'>Recibida</span>";
+    return "<tr>"+
+      "<td>"+badge+"</td>"+
+      "<td style='font-size:11px;'>"+(cl?cl.nombre:f.clienteDespachoId||"")+"</td>"+
+      "<td>"+fe+"</td>"+
+      "<td>"+(f.numero||"")+"</td>"+
+      "<td style='font-weight:500;'>"+(f.nombre||"")+"</td>"+
+      "<td style='font-size:11px;color:var(--gray-400);'>"+(f.nif||"")+"</td>"+
+      "<td style='font-family:monospace;font-size:11px;'>"+(f.cuenta||"")+"</td>"+
+      "<td class='td-r'>"+eur(f.base1)+"</td>"+
+      "<td class='td-c'>"+(f.pct1||"21")+"%</td>"+
+      "<td class='td-r'>"+eur(f.iva1)+"</td>"+
+      "<td class='td-r' style='font-weight:600;'>"+eur(f.total)+"</td>"+
+      "<td class='td-c'>"+(f.retPct?f.retPct+"%":"")+"</td>"+
+      "<td class='td-c'>"+(f.m347==="1"?"Si":"")+"</td>"+
+      "<td><button class='icon-btn' data-id='"+f.id+"' onclick='delF(this.dataset.id)'>x</button></td>"+
+    "</tr>";
+  }).join("");
+}
+
+function openFM(tipo){
+  document.getElementById("fId").value="";
+  document.getElementById("fTipo").value=tipo;
+  document.getElementById("fMTitle").textContent=tipo==="IVR"?"Nueva factura emitida":"Nueva factura recibida";
+  document.getElementById("fNLbl").innerHTML=(tipo==="IVR"?"Nombre cliente":"Nombre proveedor")+" <span class='ob'>*</span>";
+  document.getElementById("fDedG").style.display=tipo==="IVS"?"block":"none";
+  ["fCD","fNom","fNif","fCta","fNum","fB1","fB2","fI1","fI2","fTot","fRI"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
+  document.getElementById("fFecha").value=new Date().toISOString().slice(0,10);
+  document.getElementById("fP1").value="21";document.getElementById("fP2").value="";
+  document.getElementById("fRP").value="";document.getElementById("f347").value="0";
+  document.getElementById("acList").style.display="none";
+  document.getElementById("fModal").classList.add("open");
+}
+
+function onFCDChange(){
+  document.getElementById("fNom").value="";
+  document.getElementById("fNif").value="";
+  document.getElementById("fCta").value="";
+  document.getElementById("acList").style.display="none";
+}
+
+function acNombre(v){
+  const cid=document.getElementById("fCD").value,tipo=document.getElementById("fTipo").value;
+  const lista=document.getElementById("acList");
+  if(!v||v.length<2||!cid){lista.style.display="none";return;}
+  const ccs=(window.WCC||[]).filter(cc=>{
+    if(cc.clienteDespachoId!==cid)return false;
+    if(tipo==="IVR"&&cc.tipo!=="cliente")return false;
+    if(tipo==="IVS"&&cc.tipo==="cliente")return false;
+    return(cc.nombre||"").toLowerCase().includes(v.toLowerCase());
+  });
+  if(!ccs.length){lista.style.display="none";return;}
+  lista.innerHTML=ccs.map(cc=>
+    "<div class='ac-item' data-n='"+cc.nombre+"' data-nif='"+(cc.nif||"")+"' data-cta='"+cc.cuenta+"' onclick='selCC(this)'>"+
+    cc.nombre+"<div class='ac-sub'>"+(cc.nif?cc.nif+" · ":"")+"Cta: "+cc.cuenta+"</div></div>"
+  ).join("");
+  lista.style.display="block";
+}
+
+function selCC(el){
+  document.getElementById("fNom").value=el.dataset.n;
+  document.getElementById("fNif").value=el.dataset.nif;
+  document.getElementById("fCta").value=el.dataset.cta;
+  document.getElementById("acList").style.display="none";
+}
+
+function calcIVA(l){
+  const b=parseFloat(document.getElementById("fB"+l).value)||0;
+  const p=parseFloat(document.getElementById("fP"+l).value)||0;
+  document.getElementById("fI"+l).value=Math.round(b*p/100*100)/100||"";
+  calcTot();
+}
+function calcTot(){
+  const b1=parseFloat(document.getElementById("fB1").value)||0;
+  const b2=parseFloat(document.getElementById("fB2").value)||0;
+  const i1=parseFloat(document.getElementById("fI1").value)||0;
+  const i2=parseFloat(document.getElementById("fI2").value)||0;
+  const r=parseFloat(document.getElementById("fRI").value)||0;
+  document.getElementById("fTot").value=Math.round((b1+b2+i1+i2-r)*100)/100||"";
+}
+function calcRet(){
+  const b=parseFloat(document.getElementById("fB1").value)||0;
+  const p=parseFloat(document.getElementById("fRP").value)||0;
+  if(p)document.getElementById("fRI").value=Math.round(b*p/100*100)/100;
+  else document.getElementById("fRI").value="";
+  calcTot();
+}
+
+async function saveF(){
+  const cid=document.getElementById("fCD").value;
+  const nom=document.getElementById("fNom").value.trim();
+  const fec=document.getElementById("fFecha").value;
+  const num=document.getElementById("fNum").value.trim();
+  const b1=document.getElementById("fB1").value;
+  if(!cid||!nom||!fec||!num||!b1){alert("Rellena los campos obligatorios.");return;}
+  const tipo=document.getElementById("fTipo").value;
+  const cl=(window.WC||[]).find(c=>c.id===cid);
+  const id=document.getElementById("fId").value||String(Date.now());
+  await fbS("iva_facturas",id,{
+    id,tipo,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",
+    fecha:fec,numero:num,nombre:nom,
+    nif:document.getElementById("fNif").value.trim(),
+    cuenta:document.getElementById("fCta").value.trim(),
+    base1:parseFloat(b1)||0,base2:parseFloat(document.getElementById("fB2").value)||0,
+    pct1:document.getElementById("fP1").value,pct2:document.getElementById("fP2").value,
+    iva1:parseFloat(document.getElementById("fI1").value)||0,iva2:parseFloat(document.getElementById("fI2").value)||0,
+    total:parseFloat(document.getElementById("fTot").value)||0,
+    retPct:document.getElementById("fRP").value,retImporte:parseFloat(document.getElementById("fRI").value)||0,
+    m347:document.getElementById("f347").value,
+    deducible:tipo==="IVS"?document.getElementById("fDed").value:"",
+    creado:new Date().toISOString()
+  });
+  closeM("fModal");
+}
+
+async function delF(id){if(!confirm("Eliminar esta factura?"))return;await fbD("iva_facturas",id);}
+
+function renderC(){
+  const tb=document.getElementById("cTbody");if(!tb)return;
+  const fc=document.getElementById("fCC").value,ft=document.getElementById("fCT").value;
+  const fb=(document.getElementById("fCB").value||"").toLowerCase();
+  let ccs=(window.WCC||[]).filter(cc=>{
+    if(fc&&cc.clienteDespachoId!==fc)return false;
+    if(ft&&cc.tipo!==ft)return false;
+    if(fb&&!(cc.nombre||"").toLowerCase().includes(fb)&&!(cc.cuenta||"").includes(fb))return false;
+    return true;
+  }).sort((a,b)=>{
+    const ca=(window.WC||[]).find(c=>c.id===a.clienteDespachoId);
+    const cb=(window.WC||[]).find(c=>c.id===b.clienteDespachoId);
+    const na=ca?ca.nombre:"",nb=cb?cb.nombre:"";
+    if(na!==nb)return na.localeCompare(nb,"es");
+    return(a.nombre||"").localeCompare(b.nombre||"","es");
+  });
+  if(!ccs.length){tb.innerHTML="<tr><td colspan='6'><div class='empty'><div class='empty-icon'>&#128218;</div><div>No hay cuentas.</div></div></td></tr>";return;}
+  tb.innerHTML=ccs.map(cc=>{
+    const cl=(window.WC||[]).find(c=>c.id===cc.clienteDespachoId);
+    const tl=cc.tipo==="cliente"?"Cliente (43x)":cc.tipo==="proveedor"?"Proveedor (40x/41x)":"Otro";
+    return "<tr>"+
+      "<td style='font-size:12px;'>"+(cl?cl.nombre:cc.clienteDespachoId||"")+"</td>"+
+      "<td style='font-weight:500;'>"+(cc.nombre||"")+"</td>"+
+      "<td style='font-size:11px;color:var(--gray-400);'>"+(cc.nif||"")+"</td>"+
+      "<td style='font-family:monospace;font-weight:600;color:var(--navy);'>"+(cc.cuenta||"")+"</td>"+
+      "<td style='font-size:11px;'>"+tl+"</td>"+
+      "<td><button class='icon-btn' data-id='"+cc.id+"' onclick='delC(this.dataset.id)'>x</button></td>"+
+    "</tr>";
+  }).join("");
+}
+
+function openCM(){
+  document.getElementById("cId").value="";
+  document.getElementById("cMTitle").textContent="Nueva cuenta contable";
+  ["cNom","cNif","cCta"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("cCD").value="";
+  document.getElementById("cTip").value="proveedor";
+  document.getElementById("cModal").classList.add("open");
+}
+
+async function saveC(){
+  const cid=document.getElementById("cCD").value;
+  const nom=document.getElementById("cNom").value.trim();
+  const cta=document.getElementById("cCta").value.trim();
+  if(!cid||!nom||!cta){alert("Rellena cliente, nombre y cuenta contable.");return;}
+  const id=document.getElementById("cId").value||String(Date.now());
+  const cl=(window.WC||[]).find(c=>c.id===cid);
+  await fbS("iva_cuentas",id,{
+    id,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",
+    nombre:nom,nif:document.getElementById("cNif").value.trim(),
+    cuenta:cta,tipo:document.getElementById("cTip").value,
+    creado:new Date().toISOString()
+  });
+  closeM("cModal");
+}
+
+async function delC(id){if(!confirm("Eliminar esta cuenta?"))return;await fbD("iva_cuentas",id);}
+
+function prevExp(){
+  const cid=document.getElementById("eC").value,tipo=document.getElementById("eT").value;
+  const anio=document.getElementById("eA").value,per=document.getElementById("eP").value;
+  if(!cid){alert("Selecciona un cliente.");return;}
+  const cl=(window.WC||[]).find(c=>c.id===cid);
+  let fs=(window.WF||[]).filter(f=>{
+    if(f.tipo!==tipo||f.clienteDespachoId!==cid)return false;
+    if(f.fecha){
+      const d=new Date(f.fecha+"T12:00:00");
+      if(anio&&d.getFullYear()!==parseInt(anio))return false;
+      if(per&&q(f.fecha)!==per)return false;
+    }
+    return true;
+  }).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
+  const res=document.getElementById("eRes");
+  res.style.display="block";
+  res.innerHTML="<strong>"+(cl?cl.nombre:"")+"</strong> &middot; "+tipo+" &middot; "+anio+(per?" &middot; "+per+"T":"")+" &middot; <strong>"+fs.length+" facturas</strong>";
+  document.getElementById("ePrev").style.display=fs.length?"block":"none";
+  document.getElementById("btnExp").style.display=fs.length?"inline-block":"none";
+  if(!fs.length){res.innerHTML+=" &middot; Sin facturas en este periodo.";return;}
+  expData=fs.map((f,i)=>{
+    const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
+    if(tipo==="IVR")return[i+1,1,fe,f.cuenta||"",f.numero||"",f.nombre||"",f.nif||"",0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe,"",0];
+    else return[i+1,1,fe,f.cuenta||"",f.numero||"",f.nombre||"",f.nif||"",0,f.deducible||0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe];
+  });
+  const cv=tipo==="IVR"?["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","%Rec1","%Rec2","%Rec3","IVA1","IVA2","IVA3","Rec1","Rec2","Rec3","Total"]:["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Deducible","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","%Rec1","%Rec2","%Rec3","IVA1","IVA2","IVA3","Rec1","Rec2","Rec3","Total"];
+  document.getElementById("ePrevTitle").textContent="Vista previa "+tipo+" ("+fs.length+" registros)";
+  document.getElementById("ePrevH").innerHTML=cv.map(c=>"<th>"+c+"</th>").join("");
+  document.getElementById("ePrevB").innerHTML=expData.map(r=>"<tr>"+r.slice(0,cv.length).map(v=>"<td>"+(v!==undefined&&v!==""?v:"")+"</td>").join("")+"</tr>").join("");
+}
+
+function doExport(){
+  if(!expData.length){alert("Primero haz la vista previa.");return;}
+  const tipo=document.getElementById("eT").value;
+  const rows=expData.map(r=>r.map(v=>v!==undefined&&v!==null?String(v):"").join("\t"));
+  const blob=new Blob([rows.join("\r\n")],{type:"application/vnd.ms-excel"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=tipo+".xlsx";a.click();
+}
+
+function doLogin(){
+  const e=document.getElementById("loginEmail").value.trim(),p=document.getElementById("loginPassword").value;
+  document.getElementById("loginError").style.display="none";
+  if(!e||!p)return;
+  window.fsSignIn(window.auth,e,p).catch(()=>{document.getElementById("loginError").style.display="block";});
+}
+function doLogout(){window.fsSignOut(window.auth);}
+
+document.getElementById("loginEmail").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("loginPassword").focus();});
+document.getElementById("loginPassword").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
+document.addEventListener("click",e=>{if(!e.target.closest(".ac-wrap"))document.getElementById("acList").style.display="none";});
+</script>
+</body>
+</html>
