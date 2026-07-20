@@ -661,36 +661,30 @@ function prevExp(){
 
 function doExport(){
   if(!expData.length){alert("Primero haz la vista previa.");return;}
-  
-  // Verificar que SheetJS está disponible
-  if(typeof XLSX === "undefined"){
-    alert("Error: libreria de Excel no disponible. Recarga la pagina.");
-    return;
-  }
-
+  if(typeof XLSX==="undefined"){alert("Error: libreria Excel no disponible. Recarga la pagina.");return;}
   const formato=document.getElementById("eT").value;
-
-  // Obtener cabeceras de la vista previa
   const ths=document.getElementById("ePrevH").querySelectorAll("th");
   const headers=Array.from(ths).map(th=>th.textContent);
-
   try {
-    // Crear workbook con SheetJS
     const wb=XLSX.utils.book_new();
     const wsData=[headers,...expData.map(r=>r.slice(0,headers.length).map(v=>v===undefined||v===null?"":v))];
     const ws=XLSX.utils.aoa_to_sheet(wsData);
-
-    // Ajustar anchos
     ws["!cols"]=headers.map((_,i)=>{
       const maxLen=Math.max(headers[i].length,...expData.map(r=>String(r[i]||"").length));
       return {wch:Math.min(Math.max(maxLen,8),30)};
     });
-
     XLSX.utils.book_append_sheet(wb,ws,formato);
-    XLSX.writeFile(wb,formato+".xlsx");
+    const u=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+    const b=new Blob([u],{type:"application/octet-stream"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(b);
+    a.download=formato+".xlsx";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   } catch(e) {
-    console.error("Error generando Excel:", e);
-    alert("Error al generar el archivo: " + e.message);
+    console.error("Error:",e);
+    alert("Error al generar el archivo: "+e.message);
   }
 }
 
