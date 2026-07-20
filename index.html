@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Duraspinvest · Registros IVA</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -661,25 +661,37 @@ function prevExp(){
 
 function doExport(){
   if(!expData.length){alert("Primero haz la vista previa.");return;}
+  
+  // Verificar que SheetJS está disponible
+  if(typeof XLSX === "undefined"){
+    alert("Error: libreria de Excel no disponible. Recarga la pagina.");
+    return;
+  }
+
   const formato=document.getElementById("eT").value;
 
   // Obtener cabeceras de la vista previa
   const ths=document.getElementById("ePrevH").querySelectorAll("th");
   const headers=Array.from(ths).map(th=>th.textContent);
 
-  // Crear workbook con SheetJS
-  const wb=XLSX.utils.book_new();
-  const wsData=[headers,...expData.map(r=>r.slice(0,headers.length))];
-  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  try {
+    // Crear workbook con SheetJS
+    const wb=XLSX.utils.book_new();
+    const wsData=[headers,...expData.map(r=>r.slice(0,headers.length).map(v=>v===undefined||v===null?"":v))];
+    const ws=XLSX.utils.aoa_to_sheet(wsData);
 
-  // Ajustar anchos de columna automáticamente
-  ws["!cols"]=headers.map((_,i)=>{
-    const maxLen=Math.max(headers[i].length,...expData.map(r=>String(r[i]||"").length));
-    return {wch:Math.min(Math.max(maxLen,8),30)};
-  });
+    // Ajustar anchos
+    ws["!cols"]=headers.map((_,i)=>{
+      const maxLen=Math.max(headers[i].length,...expData.map(r=>String(r[i]||"").length));
+      return {wch:Math.min(Math.max(maxLen,8),30)};
+    });
 
-  XLSX.utils.book_append_sheet(wb,ws,formato);
-  XLSX.writeFile(wb,formato+".xlsx");
+    XLSX.utils.book_append_sheet(wb,ws,formato);
+    XLSX.writeFile(wb,formato+".xlsx");
+  } catch(e) {
+    console.error("Error generando Excel:", e);
+    alert("Error al generar el archivo: " + e.message);
+  }
 }
 
 function doLogin(){
