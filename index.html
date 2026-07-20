@@ -582,22 +582,125 @@ async function saveC(){
 
 async function delC(id){if(!confirm("Eliminar esta cuenta?"))return;await fbD("iva_cuentas",id);}
 
-function onExpTipoChange(){
-  // FAC/FRE son para facturas que en la app guardamos como IVR/IVS
-  // El formato de exportacion cambia pero los datos son los mismos
-}
+function onExpTipoChange(){}
 
 function getTipoFactura(formato){
   return (formato==="IVR"||formato==="FAC")?"IVR":"IVS";
 }
 
-function getCuentaParaFactura(f, formato){
-  // Buscar cuenta del proveedor/cliente en la tabla de cuentas
-  const cc=(window.WCC||[]).find(c=>
-    c.clienteDespachoId===f.clienteDespachoId &&
-    c.nombre===f.nombre
-  );
-  return cc||{cuenta:f.cuenta||"",domicilio:"",poblacion:"",cp:"",provincia:"",telefono:""};
+function getCuentaParaFactura(f){
+  return (window.WCC||[]).find(c=>
+    c.clienteDespachoId===f.clienteDespachoId && c.nombre===f.nombre
+  )||{cuenta:f.cuenta||"",domicilio:"",poblacion:"",cp:"",provincia:"",telefono:"",nif:""};
+}
+
+// Genera fila en formato FRE (98 columnas)
+function rowFRE(f, i){
+  const cc=getCuentaParaFactura(f);
+  const fe=f.fecha?new Date(f.fecha+"T12:00:00"):null;
+  const cod=parseInt(cc.cuenta)||i+1;
+  const row=new Array(98).fill("");
+  row[0]=1;                          // Tipo documento
+  row[1]=f.numero||String(i+1).padStart(6,"0"); // Numero documento
+  row[2]="";                         // Codigo exterior
+  row[3]=f.numero||"";              // Referencia
+  row[4]=fe;                         // Fecha
+  row[5]=cod;                        // Proveedor
+  row[6]=1;                          // Estado
+  row[7]=cod;                        // Codigo cliente
+  row[8]=f.nombre||"";             // Nombre proveedor
+  row[9]=cc.domicilio||"";         // Domicilio
+  row[10]=cc.poblacion||"";        // Poblacion
+  row[11]=cc.cp||"";               // CP
+  row[12]=cc.provincia||"";        // Provincia
+  row[13]=f.nif||cc.nif||"";      // NIF
+  row[14]=0;                         // Tipo IVA
+  row[15]=0;                         // Recargo equiv
+  row[16]=cc.telefono||"";         // Telefono
+  row[17]=parseFloat(f.base1)||0;  // Importe neto 1
+  row[18]=parseFloat(f.base2)||0;  // Importe neto 2
+  // cols 19-43 descuentos/pp/portes/financiacion -> vacío
+  row[44]=parseFloat(f.base1)||0;  // Base imponible 1
+  row[45]=parseFloat(f.base2)||0;  // Base imponible 2
+  row[46]=0;                         // Base imponible 3
+  row[47]=parseFloat(f.pct1)||0;   // % IVA 1
+  row[48]=parseFloat(f.pct2)||0;   // % IVA 2
+  row[49]=0;                         // % IVA 3
+  row[50]=parseFloat(f.iva1)||0;   // Importe IVA 1
+  row[51]=parseFloat(f.iva2)||0;   // Importe IVA 2
+  row[52]=0;                         // Importe IVA 3
+  // cols 53-59 recargo equivalencia -> 0
+  row[59]=parseFloat(f.retPct)||0; // % retencion
+  row[60]=parseFloat(f.retImporte)||0; // Importe retencion
+  row[61]=parseFloat(f.total)||0;  // Total
+  row[62]="";                        // Forma pago
+  row[65]=0;                         // Traspasada contabilidad -> 0
+  row[72]=parseFloat(f.deducible)||0; // Factura deducible
+  row[73]=1;                         // Usuario creo
+  row[74]=1;                         // Ultimo usuario
+  row[75]="GEN";                     // Almacen
+  row[86]=0;                         // Enviado mail
+  row[87]=0;                         // Proveedor/Acreedor
+  row[88]=0;                         // Bien inversion
+  row[90]=parseFloat(f.retPct)?parseInt(f.retPct):0; // Tipo retencion
+  row[91]=0;                         // Clave operacion
+  row[95]=0;                         // Regimen esp caja
+  return row;
+}
+
+// Genera fila en formato FAC (119 columnas)
+function rowFAC(f, i){
+  const cc=getCuentaParaFactura(f);
+  const fe=f.fecha?new Date(f.fecha+"T12:00:00"):null;
+  const cod=parseInt(cc.cuenta)||i+1;
+  const row=new Array(119).fill("");
+  row[0]=1;                          // Tipo documento
+  row[1]=f.numero||String(i+1).padStart(6,"0"); // Numero documento
+  row[2]=f.numero||"";             // Referencia
+  row[3]=fe;                         // Fecha
+  row[4]=0;                          // Estado
+  row[5]="GEN";                      // Almacen
+  row[6]=1;                          // Agente
+  row[7]="";                         // Codigo proveedor
+  row[8]=cod;                        // Codigo cliente
+  row[9]=f.nombre||"";             // Nombre cliente
+  row[10]=cc.domicilio||"";        // Domicilio
+  row[11]=cc.poblacion||"";        // Poblacion
+  row[12]=cc.cp||"";               // CP
+  row[13]=cc.provincia||"";        // Provincia
+  row[14]=f.nif||cc.nif||"";      // NIF
+  row[15]=0;                         // Tipo IVA
+  row[16]=0;                         // Recargo equiv
+  row[17]=cc.telefono||"";         // Telefono
+  row[18]=parseFloat(f.base1)||0;  // Importe neto 1
+  row[19]=parseFloat(f.base2)||0;  // Importe neto 2
+  // cols 20-44 descuentos/pp/portes/financiacion -> vacío
+  row[45]=parseFloat(f.base1)||0;  // Base imponible 1
+  row[46]=parseFloat(f.base2)||0;  // Base imponible 2
+  row[47]=0;                         // Base imponible 3
+  row[48]=parseFloat(f.pct1)||0;   // % IVA 1
+  row[49]=parseFloat(f.pct2)||0;   // % IVA 2
+  row[50]=0;                         // % IVA 3
+  row[51]=parseFloat(f.iva1)||0;   // Importe IVA 1
+  row[52]=parseFloat(f.iva2)||0;   // Importe IVA 2
+  row[53]=0;                         // Importe IVA 3
+  row[60]=parseFloat(f.retPct)||0; // % retencion
+  row[61]=parseFloat(f.retImporte)||0; // Importe retencion
+  row[62]=parseFloat(f.total)||0;  // Total
+  row[63]=1;                         // Forma pago
+  row[64]=0;                         // Portes
+  row[75]=0;                         // Cobrado
+  row[76]=1;                         // Tipo creacion
+  row[77]=1;                         // Tipo recibo
+  row[79]=0;                         // Traspasada
+  row[82]=0;                         // Impresa
+  row[86]=1;                         // Usuario creo
+  row[87]=1;                         // Ultimo usuario
+  row[112]=0;                        // Clave operacion
+  row[114]=0;                        // Tipo retencion
+  row[115]=0;                        // Clave op intracom
+  row[116]=0;                        // Regimen esp caja
+  return row;
 }
 
 function prevExp(){
@@ -622,37 +725,31 @@ function prevExp(){
   document.getElementById("btnExp").style.display=fs.length?"inline-block":"none";
   if(!fs.length){res.innerHTML+=" &middot; Sin facturas en este periodo.";return;}
 
-  expData=fs.map((f,i)=>{
-    const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
-    const cc=getCuentaParaFactura(f,formato);
-    const cod=cc.cuenta||f.cuenta||"";
-    const dom=cc.domicilio||"";
-    const pob=cc.poblacion||"";
-    const cp=cc.cp||"";
-    const prov=cc.provincia||"";
-    const tel=cc.telefono||"";
-    const nif=f.nif||cc.nif||"";
+  // Obtener cabeceras reales del archivo Delsol
+  const cvIVR=["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","IVA1","IVA2","IVA3","Total"];
+  const cvIVS=["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Deducible","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","IVA1","IVA2","IVA3","Total"];
 
+  // Para FAC y FRE usamos los headers reales de Delsol
+  const hFAC=["Tipo de documento","Número de documento","Referencia","Fecha","Estado","Almacén","Agente","Código del proveedor","Código de cliente","Nombre del cliente","Domicilio del cliente","Población","Código postal","Provincia","N.I.F.","Tipo de IVA","Recargo de equivalencia","Teléfono del cliente","Importe neto 1","Importe neto 2","Importe neto 3","Porcentaje de descuento 1","Porcentaje de descuento 2","Porcentaje de descuento 3","Importe de descuento 1","Importe de descuento 2","Importe de descuento 3","Porcentaje de pronto pago 1","Porcentaje de pronto pago 2","Porcentaje de pronto pago 3","Importe pronto pago 1","Importe pronto pago 2","Importe pronto pago 3","Porcentaje portes 1","Porcentaje portes 2","Porcentaje portes 3","Importe portes 1","Importe portes 2","Importe portes 3","Porcentaje de financiación 1","Porcentaje de financiación 2","Porcentaje de financiación 3","Importe de financiación 1 ","Importe de financiación 2","Importe de financiación 3","Base imponible 1","Base imponible 2","Base imponible 3","Porcentaje IVA 1","Porcentaje IVA 2","Porcentaje IVA 3","Importe IVA 1","Importe IVA 2","Importe IVA 3","Porcentaje de recargo de equivalencia 1","Porcentaje de recargo de equivalencia 2","Porcentaje de recargo de equivalencia 3","Importe de recargo de equivalencia 1","Importe de recargo de equivalencia 2","Importe de recargo de equivalencia 3","Porcentaje de la retención","Importe de la retención","Total","Forma de pago","Portes","Texto de portes","1ª línea de observaciones","2ª línea de observaciones","Obra de entrega","Remitido por","Embalado por","A la atención de","Referencia","Nº de su pedido","Fecha de su pedido","Cobrado","Tipo de creación","Tipo de recibo","Código del recibo que se crea a partir de esta factura","Traspasada","Anotaciones privadas","Documentos externos asociados","Impresa","Banco del cliente","Hora de creación","Comentario después de las líneas de detalle","Usuario que creó el documento","Último usuario que modificó el documento","Fax","Imagen","Importe neto exento","Porcentaje de descuento exento","Importe de descuento exento","Porcentaje pronto pago exento","Importe de pronto pago exento","Porcentaje de portes exento","Importe de portes exento","Porcentaje de financiación exento","Importe de financiación exento","Base imponible exenta","Enviado por mail","Permisos y contraseña del documento","Ticket, porcentaje de descuento","Ticket, importe de descuento","Caja en que se creó el documento","IBAN del banco","BIC del banco","Nombre del banco","Entidad de la cuenta del cliente","Oficina de la cuenta del cliente","Dígitos de control de la cuenta del cliente","Número de la cuenta del cliente","Clave de operación","Fecha de operación","Tipo de retención","Clave de operación intracomunitaria","Régimen especial de criterio de caja","Departamento","Subdepartamento"];
+  const hFRE=["Tipo de documento","Número de documento","Código exterior","Referencia","Fecha","Proveedor","Estado","Código de cliente","Nombre del proveedor","Domicilio del proveedor","Población","Código postal","Provincia","N.I.F.","Tipo de IVA","Recargo de equivalencia","Teléfono del proveedor","Importe neto 1","Importe neto 2","Importe neto 3","Porcentaje de descuento 1","Porcentaje de descuento 2","Porcentaje de descuento 3","Importe de descuento 1","Importe de descuento 2","Importe de descuento 3","Porcentaje de pronto pago 1","Porcentaje de pronto pago 2","Porcentaje de pronto pago 3","Importe pronto pago 1","Importe pronto pago 2","Importe pronto pago 3","Porcentaje portes 1","Porcentaje portes 2","Porcentaje portes 3","Importe portes 1","Importe portes 2","Importe portes 3","Porcentaje de financiación 1","Porcentaje de financiación 2","Porcentaje de financiación 3","Importe de financiación 1 ","Importe de financiación 2","Importe de financiación 3","Base imponible 1","Base imponible 2","Base imponible 3","Porcentaje IVA 1","Porcentaje IVA 2","Porcentaje IVA 3","Importe IVA 1","Importe IVA 2","Importe IVA 3","Porcentaje de recargo de equivalencia 1","Porcentaje de recargo de equivalencia 2","Porcentaje de recargo de equivalencia 3","Importe de recargo de equivalencia 1","Importe de recargo de equivalencia 2","Importe de recargo de equivalencia 3","Porcentaje de la retención","Importe de la retención","Total","Forma de pago","1ª línea de observaciones","2ª línea de observaciones","Traspasada a contabilidad","Fecha de entrega ","Hora de entrega","Portes","Texto de portes","Agencia de transportes","Comentario después de las líneas de detalle","Factura deducible","Usuario que creó el documento","Último usuario que modificó el documento","Almacén","Importe neto exento","Porcentaje de descuento exento","Importe de descuento exento","Porcentaje pronto pago exento","Importe de pronto pago exento","Porcentaje de portes exento","Importe de portes exento","Porcentaje de financiación exento","Importe de financiación exento","Base imponible exenta","Enviado por mail","Proveedor/Acreedor","Bien de inversión","Imagen","Tipo de retención","Clave de operación","Fecha de operación","Fecha de registro contable","Clave de operación intracomunitaria","Régimen especial de caja","Departamento","Subdepartamento"];
+
+  expData=fs.map((f,i)=>{
     if(formato==="IVR"){
-      // Contabilidad emitidas
-      return[i+1,1,fe,cod,f.numero||"",f.nombre||"",nif,0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe,"",0];
+      const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
+      const cc=getCuentaParaFactura(f);
+      return[i+1,1,fe,cc.cuenta||f.cuenta||"",f.numero||"",f.nombre||"",f.nif||cc.nif||"",0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe,"",0];
     } else if(formato==="IVS"){
-      // Contabilidad recibidas
-      return[i+1,1,fe,cod,f.numero||"",f.nombre||"",nif,0,f.deducible||0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe];
+      const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
+      const cc=getCuentaParaFactura(f);
+      return[i+1,1,fe,cc.cuenta||f.cuenta||"",f.numero||"",f.nombre||"",f.nif||cc.nif||"",0,f.deducible||0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe];
     } else if(formato==="FAC"){
-      // Gestion emitidas - formato FAC
-      return[1,f.numero||"",f.numero||"",fe,0,"GEN",1,"",cod,f.nombre||"",dom,pob,cp,prov,nif,0,1,tel,f.base1||0,f.base2||0,"","","","","","","","","","","","","","","","","","","","","","","","","",f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||""];
+      return rowFAC(f,i);
     } else {
-      // Gestion recibidas - formato FRE
-      return[1,f.numero||"","",f.numero||"",fe,cod,1,"",cod,f.nombre||"",dom,pob,cp,prov,nif,0,1,tel,f.base1||0,f.base2||0,"","","","","","","","","","","","","","","","","","","","","","","","","",f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"",""];
+      return rowFRE(f,i);
     }
   });
 
-  const cvIVR=["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","IVA1","IVA2","IVA3","Total"];
-  const cvIVS=["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Deducible","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","IVA1","IVA2","IVA3","Total"];
-  const cvFAC=["Tipo doc.","N documento","Referencia","Fecha","Estado","Almacen","Agente","Cod. proveedor","Cod. cliente","Nombre cliente","Domicilio","Poblacion","CP","Provincia","NIF","Tipo IVA","Rec. equiv.","Telefono","Importe neto 1","Importe neto 2","Importe neto 3","% dto 1","% dto 2","% dto 3","Importe dto 1","Importe dto 2","Importe dto 3","% p.pago 1","% p.pago 2","% p.pago 3","Imp p.pago 1","Imp p.pago 2","Imp p.pago 3","% portes 1","% portes 2","% portes 3","Imp portes 1","Imp portes 2","Imp portes 3","% financ 1","% financ 2","% financ 3","Imp financ 1","Imp financ 2","Imp financ 3","Base imponible 1","Base imponible 2","Base imponible 3","% IVA 1","% IVA 2"];
-  const cvFRE=["Tipo doc.","N documento","Cod exterior","Referencia","Fecha","Proveedor","Estado","Cod cliente","Nombre proveedor","Domicilio","Poblacion","CP","Provincia","NIF","Tipo IVA","Rec. equiv.","Telefono","Importe neto 1","Importe neto 2","Importe neto 3","% dto 1","% dto 2","% dto 3","Importe dto 1","Importe dto 2","Importe dto 3","% p.pago 1","% p.pago 2","% p.pago 3","Imp p.pago 1","Imp p.pago 2","Imp p.pago 3","% portes 1","% portes 2","% portes 3","Imp portes 1","Imp portes 2","Imp portes 3","% financ 1","% financ 2","% financ 3","Imp financ 1","Imp financ 2","Imp financ 3","Base imponible 1","Base imponible 2","Base imponible 3","% IVA 1","% IVA 2","% IVA 3"];
-  const cv=formato==="IVR"?cvIVR:formato==="IVS"?cvIVS:formato==="FAC"?cvFAC:cvFRE;
+  const cv=formato==="IVR"?cvIVR:formato==="IVS"?cvIVS:formato==="FAC"?hFAC:hFRE;
 
   document.getElementById("ePrevTitle").textContent="Vista previa "+formato+" ("+fs.length+" registros)";
   document.getElementById("ePrevH").innerHTML=cv.map(c=>"<th>"+c+"</th>").join("");
