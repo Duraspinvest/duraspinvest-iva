@@ -192,7 +192,14 @@ tr:last-child td{border-bottom:none;}
     <div style="font-size:13px;color:var(--gray-600);margin-bottom:14px;">Filtra por cliente y periodo para generar el archivo IVR.xlsx o IVS.xlsx listo para importar en Delsol.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px;">
       <div class="fg"><label class="fl">Cliente <span class="ob">*</span></label><select class="fi2" id="eC"><option value="">Seleccionar...</option></select></div>
-      <div class="fg"><label class="fl">Tipo <span class="ob">*</span></label><select class="fi2" id="eT"><option value="IVR">IVR - Emitidas</option><option value="IVS">IVS - Recibidas</option></select></div>
+      <div class="fg"><label class="fl">Formato <span class="ob">*</span></label>
+        <select class="fi2" id="eT" onchange="onExpTipoChange()">
+          <option value="IVR">IVR - Emitidas contabilidad (sociedades)</option>
+          <option value="IVS">IVS - Recibidas contabilidad (sociedades)</option>
+          <option value="FAC">FAC - Emitidas gestion (autonomos)</option>
+          <option value="FRE">FRE - Recibidas gestion (autonomos)</option>
+        </select>
+      </div>
       <div class="fg"><label class="fl">Ano <span class="ob">*</span></label><select class="fi2" id="eA"><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select></div>
       <div class="fg"><label class="fl">Periodo</label><select class="fi2" id="eP"><option value="">Todo el ano</option><option value="1">1T Ene-Mar</option><option value="2">2T Abr-Jun</option><option value="3">3T Jul-Sep</option><option value="4">4T Oct-Dic</option></select></div>
     </div>
@@ -279,10 +286,20 @@ tr:last-child td{border-bottom:none;}
       <input type="text" class="fi2" id="cNom" placeholder="ENDESA ENERGIA, S.A."></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">NIF/CIF</label>
       <input type="text" class="fi2" id="cNif" placeholder="A81948077"></div>
-    <div class="fg" style="margin-bottom:12px;"><label class="fl">Cuenta contable <span class="ob">*</span></label>
-      <input type="text" class="fi2" id="cCta" placeholder="41000001"></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Codigo / Cuenta <span class="ob">*</span></label>
+      <input type="text" class="fi2" id="cCta" placeholder="41000001 o numero correlativo"></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Tipo</label>
       <select class="fi2" id="cTip"><option value="proveedor">Proveedor (40x/41x)</option><option value="cliente">Cliente (43x)</option><option value="otro">Otro</option></select></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Domicilio</label>
+      <input type="text" class="fi2" id="cDir" placeholder="Calle Mayor 1"></div>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="fg"><label class="fl">Poblacion</label><input type="text" class="fi2" id="cPob" placeholder="Madrid"></div>
+      <div class="fg"><label class="fl">CP</label><input type="text" class="fi2" id="cCP" placeholder="28001"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="fg"><label class="fl">Provincia</label><input type="text" class="fi2" id="cProv" placeholder="Madrid"></div>
+      <div class="fg"><label class="fl">Telefono</label><input type="text" class="fi2" id="cTel" placeholder="600000000"></div>
+    </div>
     <div class="ma">
       <button class="btn btn-secondary" onclick="closeM('cModal')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveC()">Guardar</button>
@@ -535,7 +552,7 @@ function renderC(){
 function openCM(){
   document.getElementById("cId").value="";
   document.getElementById("cMTitle").textContent="Nueva cuenta contable";
-  ["cNom","cNif","cCta"].forEach(id=>document.getElementById(id).value="");
+  ["cNom","cNif","cCta","cDir","cPob","cCP","cProv","cTel"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("cCD").value="";
   document.getElementById("cTip").value="proveedor";
   document.getElementById("cModal").classList.add("open");
@@ -552,6 +569,11 @@ async function saveC(){
     id,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",
     nombre:nom,nif:document.getElementById("cNif").value.trim(),
     cuenta:cta,tipo:document.getElementById("cTip").value,
+    domicilio:document.getElementById("cDir").value.trim(),
+    poblacion:document.getElementById("cPob").value.trim(),
+    cp:document.getElementById("cCP").value.trim(),
+    provincia:document.getElementById("cProv").value.trim(),
+    telefono:document.getElementById("cTel").value.trim(),
     creado:new Date().toISOString()
   });
   closeM("cModal");
@@ -559,13 +581,32 @@ async function saveC(){
 
 async function delC(id){if(!confirm("Eliminar esta cuenta?"))return;await fbD("iva_cuentas",id);}
 
+function onExpTipoChange(){
+  // FAC/FRE son para facturas que en la app guardamos como IVR/IVS
+  // El formato de exportacion cambia pero los datos son los mismos
+}
+
+function getTipoFactura(formato){
+  return (formato==="IVR"||formato==="FAC")?"IVR":"IVS";
+}
+
+function getCuentaParaFactura(f, formato){
+  // Buscar cuenta del proveedor/cliente en la tabla de cuentas
+  const cc=(window.WCC||[]).find(c=>
+    c.clienteDespachoId===f.clienteDespachoId &&
+    c.nombre===f.nombre
+  );
+  return cc||{cuenta:f.cuenta||"",domicilio:"",poblacion:"",cp:"",provincia:"",telefono:""};
+}
+
 function prevExp(){
-  const cid=document.getElementById("eC").value,tipo=document.getElementById("eT").value;
+  const cid=document.getElementById("eC").value,formato=document.getElementById("eT").value;
   const anio=document.getElementById("eA").value,per=document.getElementById("eP").value;
   if(!cid){alert("Selecciona un cliente.");return;}
   const cl=(window.WC||[]).find(c=>c.id===cid);
+  const tipoF=getTipoFactura(formato);
   let fs=(window.WF||[]).filter(f=>{
-    if(f.tipo!==tipo||f.clienteDespachoId!==cid)return false;
+    if(f.tipo!==tipoF||f.clienteDespachoId!==cid)return false;
     if(f.fecha){
       const d=new Date(f.fecha+"T12:00:00");
       if(anio&&d.getFullYear()!==parseInt(anio))return false;
@@ -575,27 +616,54 @@ function prevExp(){
   }).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
   const res=document.getElementById("eRes");
   res.style.display="block";
-  res.innerHTML="<strong>"+(cl?cl.nombre:"")+"</strong> &middot; "+tipo+" &middot; "+anio+(per?" &middot; "+per+"T":"")+" &middot; <strong>"+fs.length+" facturas</strong>";
+  res.innerHTML="<strong>"+(cl?cl.nombre:"")+"</strong> &middot; "+formato+" &middot; "+anio+(per?" &middot; "+per+"T":"")+" &middot; <strong>"+fs.length+" facturas</strong>";
   document.getElementById("ePrev").style.display=fs.length?"block":"none";
   document.getElementById("btnExp").style.display=fs.length?"inline-block":"none";
   if(!fs.length){res.innerHTML+=" &middot; Sin facturas en este periodo.";return;}
+
   expData=fs.map((f,i)=>{
     const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
-    if(tipo==="IVR")return[i+1,1,fe,f.cuenta||"",f.numero||"",f.nombre||"",f.nif||"",0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe,"",0];
-    else return[i+1,1,fe,f.cuenta||"",f.numero||"",f.nombre||"",f.nif||"",0,f.deducible||0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe];
+    const cc=getCuentaParaFactura(f,formato);
+    const cod=cc.cuenta||f.cuenta||"";
+    const dom=cc.domicilio||"";
+    const pob=cc.poblacion||"";
+    const cp=cc.cp||"";
+    const prov=cc.provincia||"";
+    const tel=cc.telefono||"";
+    const nif=f.nif||cc.nif||"";
+
+    if(formato==="IVR"){
+      // Contabilidad emitidas
+      return[i+1,1,fe,cod,f.numero||"",f.nombre||"",nif,0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe,"",0];
+    } else if(formato==="IVS"){
+      // Contabilidad recibidas
+      return[i+1,1,fe,cod,f.numero||"",f.nombre||"",nif,0,f.deducible||0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe];
+    } else if(formato==="FAC"){
+      // Gestion emitidas - formato FAC
+      return[1,f.numero||"",f.numero||"",fe,0,"GEN",1,"",cod,f.nombre||"",dom,pob,cp,prov,nif,0,1,tel,f.base1||0,f.base2||0,"","","","","","","","","","","","","","","","","","","","","","","","","",f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||""];
+    } else {
+      // Gestion recibidas - formato FRE
+      return[1,f.numero||"","",f.numero||"",fe,cod,1,"",cod,f.nombre||"",dom,pob,cp,prov,nif,0,1,tel,f.base1||0,f.base2||0,"","","","","","","","","","","","","","","","","","","","","","","","","",f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"",""];
+    }
   });
-  const cv=tipo==="IVR"?["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","%Rec1","%Rec2","%Rec3","IVA1","IVA2","IVA3","Rec1","Rec2","Rec3","Total"]:["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Deducible","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","%Rec1","%Rec2","%Rec3","IVA1","IVA2","IVA3","Rec1","Rec2","Rec3","Total"];
-  document.getElementById("ePrevTitle").textContent="Vista previa "+tipo+" ("+fs.length+" registros)";
+
+  const cvIVR=["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","IVA1","IVA2","IVA3","Total"];
+  const cvIVS=["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Deducible","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","IVA1","IVA2","IVA3","Total"];
+  const cvFAC=["Tipo doc.","N documento","Referencia","Fecha","Estado","Almacen","Agente","Cod. proveedor","Cod. cliente","Nombre cliente","Domicilio","Poblacion","CP","Provincia","NIF","Tipo IVA","Rec. equiv.","Telefono","Importe neto 1","Importe neto 2","Importe neto 3","% dto 1","% dto 2","% dto 3","Importe dto 1","Importe dto 2","Importe dto 3","% p.pago 1","% p.pago 2","% p.pago 3","Imp p.pago 1","Imp p.pago 2","Imp p.pago 3","% portes 1","% portes 2","% portes 3","Imp portes 1","Imp portes 2","Imp portes 3","% financ 1","% financ 2","% financ 3","Imp financ 1","Imp financ 2","Imp financ 3","Base imponible 1","Base imponible 2","Base imponible 3","% IVA 1","% IVA 2"];
+  const cvFRE=["Tipo doc.","N documento","Cod exterior","Referencia","Fecha","Proveedor","Estado","Cod cliente","Nombre proveedor","Domicilio","Poblacion","CP","Provincia","NIF","Tipo IVA","Rec. equiv.","Telefono","Importe neto 1","Importe neto 2","Importe neto 3","% dto 1","% dto 2","% dto 3","Importe dto 1","Importe dto 2","Importe dto 3","% p.pago 1","% p.pago 2","% p.pago 3","Imp p.pago 1","Imp p.pago 2","Imp p.pago 3","% portes 1","% portes 2","% portes 3","Imp portes 1","Imp portes 2","Imp portes 3","% financ 1","% financ 2","% financ 3","Imp financ 1","Imp financ 2","Imp financ 3","Base imponible 1","Base imponible 2","Base imponible 3","% IVA 1","% IVA 2","% IVA 3"];
+  const cv=formato==="IVR"?cvIVR:formato==="IVS"?cvIVS:formato==="FAC"?cvFAC:cvFRE;
+
+  document.getElementById("ePrevTitle").textContent="Vista previa "+formato+" ("+fs.length+" registros)";
   document.getElementById("ePrevH").innerHTML=cv.map(c=>"<th>"+c+"</th>").join("");
   document.getElementById("ePrevB").innerHTML=expData.map(r=>"<tr>"+r.slice(0,cv.length).map(v=>"<td>"+(v!==undefined&&v!==""?v:"")+"</td>").join("")+"</tr>").join("");
 }
 
 function doExport(){
   if(!expData.length){alert("Primero haz la vista previa.");return;}
-  const tipo=document.getElementById("eT").value;
+  const formato=document.getElementById("eT").value;
   const rows=expData.map(r=>r.map(v=>v!==undefined&&v!==null?String(v):"").join("\t"));
   const blob=new Blob([rows.join("\r\n")],{type:"application/vnd.ms-excel"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=tipo+".xlsx";a.click();
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=formato+".xlsx";a.click();
 }
 
 function doLogin(){
