@@ -601,9 +601,9 @@ function rowFRE(f, i){
   const cod=parseInt(cc.cuenta)||i+1;
   const row=new Array(98).fill("");
   row[0]=1;                          // Tipo documento
-  row[1]=f.numero||String(i+1).padStart(6,"0"); // Numero documento
+  row[1]=i+1; // Numero documento - entero entre 1 y 999999
   row[2]="";                         // Codigo exterior
-  row[3]=f.numero||"";              // Referencia
+  row[3]=f.numero||""; // Referencia = numero factura              // Referencia
   row[4]=fe;                         // Fecha
   row[5]=cod;                        // Proveedor
   row[6]=1;                          // Estado
@@ -655,7 +655,7 @@ function rowFAC(f, i){
   const cod=parseInt(cc.cuenta)||i+1;
   const row=new Array(119).fill("");
   row[0]=1;                          // Tipo documento
-  row[1]=f.numero||String(i+1).padStart(6,"0"); // Numero documento
+  row[1]=i+1; // Numero documento - entero entre 1 y 999999
   row[2]=f.numero||"";             // Referencia
   row[3]=fe;                         // Fecha
   row[4]=0;                          // Estado
