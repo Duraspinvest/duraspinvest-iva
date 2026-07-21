@@ -721,6 +721,61 @@ function rowFAC(f, i, docNum){
   return row;
 }
 
+// Genera fila del Libro de IVA REPERCUTIDO (IVR) para ContaSOL - 64 columnas (A..BL)
+function rowIVR(f, i){
+  const cc=getCuentaParaFactura(f);
+  const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
+  const b2=parseFloat(f.base2)||0, i2=parseFloat(f.iva2)||0;
+  const row=new Array(64).fill("");
+  row[0]=i+1;                        // A  Codigo (campo indice)
+  row[1]=1;                          // B  Libro de IVA
+  row[2]=fe;                         // C  Fecha
+  row[3]=cc.cuenta||f.cuenta||"";    // D  Cuenta
+  row[4]=f.numero||"";               // E  Factura
+  row[5]=f.nombre||"";               // F  Nombre
+  row[6]=f.nif||cc.nif||"";          // G  C.I.F.
+  row[7]=0;                          // H  Tipo de operacion
+  row[8]=parseFloat(f.base1)||0;     // I  Base 1
+  row[9]=b2||"";                     // J  Base 2
+  row[11]=parseFloat(f.pct1)||21;    // L  % de IVA 1
+  row[12]=f.pct2||"";                // M  % de IVA 2
+  row[17]=parseFloat(f.iva1)||0;     // R  Importe de IVA 1
+  row[18]=i2||"";                    // S  Importe de IVA 2
+  row[23]=parseFloat(f.total)||0;    // X  Total
+  row[42]=Number(f.m347)||0;         // AQ Incluir en el modelo 347
+  if(f.retPct){row[43]=parseFloat(f.retPct)||0;row[44]=parseFloat(f.retImporte)||0;} // AR/AS retencion
+  row[47]=fe;                        // AV Fecha de expedicion de la factura
+  return row;
+}
+
+// Genera fila del Libro de IVA SOPORTADO (IVS) para ContaSOL - 73 columnas (A..BU)
+function rowIVS(f, i){
+  const cc=getCuentaParaFactura(f);
+  const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
+  const b2=parseFloat(f.base2)||0, i2=parseFloat(f.iva2)||0;
+  const row=new Array(73).fill("");
+  row[0]=i+1;                        // A  Codigo (campo indice)
+  row[1]=1;                          // B  Libro de IVA
+  row[2]=fe;                         // C  Fecha
+  row[3]=cc.cuenta||f.cuenta||"";    // D  Cuenta
+  row[4]=f.numero||"";               // E  Factura
+  row[5]=f.nombre||"";               // F  Nombre
+  row[6]=f.nif||cc.nif||"";          // G  C.I.F.
+  row[7]=0;                          // H  Tipo de operacion
+  row[8]=(f.deducible==="0")?0:1;    // I  Deducible (1=si)
+  row[9]=parseFloat(f.base1)||0;     // J  Base 1
+  row[10]=b2||"";                    // K  Base 2
+  row[12]=parseFloat(f.pct1)||21;    // M  % de IVA 1
+  row[13]=f.pct2||"";                // N  % de IVA 2
+  row[18]=parseFloat(f.iva1)||0;     // S  Importe de IVA 1
+  row[19]=i2||"";                    // T  Importe de IVA 2
+  row[24]=parseFloat(f.total)||0;    // Y  Total
+  row[44]=Number(f.m347)||0;         // AS Incluir en el modelo 347
+  if(f.retPct){row[45]=parseFloat(f.retPct)||0;row[46]=parseFloat(f.retImporte)||0;} // AT/AU retencion
+  row[49]=fe;                        // AX Fecha expedicion de la factura
+  return row;
+}
+
 function prevExp(){
   const cid=document.getElementById("eC").value,formato=document.getElementById("eT").value;
   const anio=document.getElementById("eA").value,per=document.getElementById("eP").value;
@@ -744,8 +799,8 @@ function prevExp(){
   if(!fs.length){res.innerHTML+=" &middot; Sin facturas en este periodo.";return;}
 
   // Obtener cabeceras reales del archivo Delsol
-  const cvIVR=["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","IVA1","IVA2","IVA3","Total"];
-  const cvIVS=["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Deducible","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","IVA1","IVA2","IVA3","Total"];
+  const cvIVR=["Codigo","Libro de IVA","Fecha","Cuenta","Factura","Nombre","C.I.F.","Tipo de operacion","Base 1","Base 2","Base 3","% de IVA 1","% de IVA 2","% de IVA 3","% de recargo 1","% de recargo 2","% de recargo 3","Importe de IVA 1","Importe de IVA 2","Importe de IVA 3","Importe de recargo 1","Importe de recargo 2","Importe de recargo 3","Total","Factura rectificada","Fecha factura rectificativa","Total factura rectificativa","% IVA 1 rectificativa","% IVA 2 rectificativa","% IVA 3 rectificativa","% recargo 1 rectificativa","% recargo 2 rectificativa","% recargo 3 rectificativa","Base 1 rectificativa","Base 2 rectificativa","Base 3 rectificativa","Importe IVA 1 rectificativa","Importe IVA 2 rectificativa","Importe IVA 3 rectificativa","Importe recargo 1 rectificativa","Importe recargo 2 rectificativa","Importe recargo 3 rectificativa","Incluir en el modelo 347","Porcentaje de retencion","Importe de retencion","Tipo de retencion","Importe retencion factura rectificativa","Fecha de expedicion de la factura","Base exenta factura","Clave de operacion","Identificacion fiscal","Tipo de impuesto","Base exenta factura rectificativa","Base imponible a coste","Numero de facturas","Primer numero","Ultimo numero","Tipo de operacion (2)","Dias de plazo","Descripcion de los bienes","Otras facturas o documentacion","Estado miembro origen o destino del bien","Importe de suplidos","Incluir exportaciones en la liquidacion"];
+  const cvIVS=["Codigo","Libro de IVA","Fecha","Cuenta","Factura","Nombre","C.I.F.","Tipo de operacion","Deducible","Base 1","Base 2","Base 3","% de IVA 1","% de IVA 2","% de IVA 3","% de recargo 1","% de recargo 2","% de recargo 3","Importe de IVA 1","Importe de IVA 2","Importe de IVA 3","Importe de recargo 1","Importe de recargo 2","Importe de recargo 3","Total","Bienes soportados","Factura rectificada","Fecha factura rectificativa","Total factura rectificativa","% IVA 1 rectificativa","% IVA 2 rectificativa","% IVA 3 rectificativa","% recargo 1 rectificativa","% recargo 2 rectificativa","% recargo 3 rectificativa","Base 1 rectificativa","Base 2 rectificativa","Base 3 rectificativa","Importe IVA 1 rectificativa","Importe IVA 2 rectificativa","Importe IVA 3 rectificativa","Importe recargo 1 rectificativa","Importe recargo 2 rectificativa","Importe recargo 3 rectificativa","Incluir en el modelo 347","Porcentaje de retencion","Importe de retencion","Tipo de retencion","Importe retencion factura rectificativa","Fecha expedicion de la factura","Base imponible exenta","Porcentaje deducible","Base exenta factura rectificativa","Clave de operacion","Identificacion fiscal","Tipo de impuesto","Identificacion del bien","Prorrata definitiva","Fecha de inicio de la utilizacion","Regularizacion anual de la inversion","Identificacion de entrega","Regularizacion de la deduccion efectuada","Base imponible a coste","Numero de Facturas","Primer numero","Ultimo numero","Tipo de operacion (2)","Dias de plazo","Descripcion de los bienes","Otras facturas o documentacion","Estado miembro origen o destino del bien","Importe suplidos","Porcentaje de deduccion"];
 
   // Para FAC y FRE usamos los headers reales de Delsol
   const hFAC=["Tipo de documento","Número de documento","Referencia","Fecha","Estado","Almacén","Agente","Código del proveedor","Código de cliente","Nombre del cliente","Domicilio del cliente","Población","Código postal","Provincia","N.I.F.","Tipo de IVA","Recargo de equivalencia","Teléfono del cliente","Importe neto 1","Importe neto 2","Importe neto 3","Porcentaje de descuento 1","Porcentaje de descuento 2","Porcentaje de descuento 3","Importe de descuento 1","Importe de descuento 2","Importe de descuento 3","Porcentaje de pronto pago 1","Porcentaje de pronto pago 2","Porcentaje de pronto pago 3","Importe pronto pago 1","Importe pronto pago 2","Importe pronto pago 3","Porcentaje portes 1","Porcentaje portes 2","Porcentaje portes 3","Importe portes 1","Importe portes 2","Importe portes 3","Porcentaje de financiación 1","Porcentaje de financiación 2","Porcentaje de financiación 3","Importe de financiación 1 ","Importe de financiación 2","Importe de financiación 3","Base imponible 1","Base imponible 2","Base imponible 3","Porcentaje IVA 1","Porcentaje IVA 2","Porcentaje IVA 3","Importe IVA 1","Importe IVA 2","Importe IVA 3","Porcentaje de recargo de equivalencia 1","Porcentaje de recargo de equivalencia 2","Porcentaje de recargo de equivalencia 3","Importe de recargo de equivalencia 1","Importe de recargo de equivalencia 2","Importe de recargo de equivalencia 3","Porcentaje de la retención","Importe de la retención","Total","Forma de pago","Portes","Texto de portes","1ª línea de observaciones","2ª línea de observaciones","Obra de entrega","Remitido por","Embalado por","A la atención de","Referencia","Nº de su pedido","Fecha de su pedido","Cobrado","Tipo de creación","Tipo de recibo","Código del recibo que se crea a partir de esta factura","Traspasada","Anotaciones privadas","Documentos externos asociados","Impresa","Banco del cliente","Hora de creación","Comentario después de las líneas de detalle","Usuario que creó el documento","Último usuario que modificó el documento","Fax","Imagen","Importe neto exento","Porcentaje de descuento exento","Importe de descuento exento","Porcentaje pronto pago exento","Importe de pronto pago exento","Porcentaje de portes exento","Importe de portes exento","Porcentaje de financiación exento","Importe de financiación exento","Base imponible exenta","Enviado por mail","Permisos y contraseña del documento","Ticket, porcentaje de descuento","Ticket, importe de descuento","Caja en que se creó el documento","IBAN del banco","BIC del banco","Nombre del banco","Entidad de la cuenta del cliente","Oficina de la cuenta del cliente","Dígitos de control de la cuenta del cliente","Número de la cuenta del cliente","Clave de operación","Fecha de operación","Tipo de retención","Clave de operación intracomunitaria","Régimen especial de criterio de caja","Departamento","Subdepartamento"];
@@ -754,13 +809,9 @@ function prevExp(){
   const facNums=formato==="FAC"?docNumsFAC(fs):null;
   expData=fs.map((f,i)=>{
     if(formato==="IVR"){
-      const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
-      const cc=getCuentaParaFactura(f);
-      return[i+1,1,fe,cc.cuenta||f.cuenta||"",f.numero||"",f.nombre||"",f.nif||cc.nif||"",0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe,"",0];
+      return rowIVR(f,i);
     } else if(formato==="IVS"){
-      const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
-      const cc=getCuentaParaFactura(f);
-      return[i+1,1,fe,cc.cuenta||f.cuenta||"",f.numero||"",f.nombre||"",f.nif||cc.nif||"",0,f.deducible||0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe];
+      return rowIVS(f,i);
     } else if(formato==="FAC"){
       return rowFAC(f,i,facNums[i]);
     } else {
