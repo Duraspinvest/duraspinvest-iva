@@ -648,24 +648,6 @@ function rowFRE(f, i){
   return row;
 }
 
-// Asigna "Numero de documento" para FAC: usa el numero real si es entero puro (1-999999),
-// y para el resto un correlativo que no choque con los numeros reales ya usados
-function docNumsFAC(fs){
-  const used=new Set(), nums=new Array(fs.length).fill(null);
-  fs.forEach((f,i)=>{
-    const n=String(f.numero||"").trim();
-    if(/^\d{1,6}$/.test(n)){
-      const v=parseInt(n,10);
-      if(v>=1&&v<=999999&&!used.has(v)){nums[i]=v;used.add(v);}
-    }
-  });
-  let next=1;
-  fs.forEach((f,i)=>{
-    if(nums[i]===null){while(used.has(next))next++;nums[i]=next;used.add(next);}
-  });
-  return nums;
-}
-
 // Genera fila en formato FAC (119 columnas)
 function rowFAC(f, i, docNum){
   const cc=getCuentaParaFactura(f);
@@ -673,8 +655,8 @@ function rowFAC(f, i, docNum){
   const cod=parseInt(cc.cuenta)||i+1;
   const row=new Array(119).fill("");
   row[0]=1;                          // Tipo documento
-  row[1]=docNum||i+1; // Numero documento = numero real de la factura si es entero puro
-  row[2]=(docNum&&String(docNum)===String(f.numero||"").trim())?"":String(f.numero||""); // Referencia solo si el numero lleva letras/serie
+  row[1]=docNum||i+1;                // Numero documento = correlativo continuo por cliente
+  row[2]=String(f.numero||"");       // Referencia (Su ref.) = numero real de la factura
   row[3]=fe;                         // Fecha
   row[4]=0;                          // Estado
   row[5]="GEN";                      // Almacen
@@ -806,14 +788,21 @@ function prevExp(){
   const hFAC=["Tipo de documento","Número de documento","Referencia","Fecha","Estado","Almacén","Agente","Código del proveedor","Código de cliente","Nombre del cliente","Domicilio del cliente","Población","Código postal","Provincia","N.I.F.","Tipo de IVA","Recargo de equivalencia","Teléfono del cliente","Importe neto 1","Importe neto 2","Importe neto 3","Porcentaje de descuento 1","Porcentaje de descuento 2","Porcentaje de descuento 3","Importe de descuento 1","Importe de descuento 2","Importe de descuento 3","Porcentaje de pronto pago 1","Porcentaje de pronto pago 2","Porcentaje de pronto pago 3","Importe pronto pago 1","Importe pronto pago 2","Importe pronto pago 3","Porcentaje portes 1","Porcentaje portes 2","Porcentaje portes 3","Importe portes 1","Importe portes 2","Importe portes 3","Porcentaje de financiación 1","Porcentaje de financiación 2","Porcentaje de financiación 3","Importe de financiación 1 ","Importe de financiación 2","Importe de financiación 3","Base imponible 1","Base imponible 2","Base imponible 3","Porcentaje IVA 1","Porcentaje IVA 2","Porcentaje IVA 3","Importe IVA 1","Importe IVA 2","Importe IVA 3","Porcentaje de recargo de equivalencia 1","Porcentaje de recargo de equivalencia 2","Porcentaje de recargo de equivalencia 3","Importe de recargo de equivalencia 1","Importe de recargo de equivalencia 2","Importe de recargo de equivalencia 3","Porcentaje de la retención","Importe de la retención","Total","Forma de pago","Portes","Texto de portes","1ª línea de observaciones","2ª línea de observaciones","Obra de entrega","Remitido por","Embalado por","A la atención de","Referencia","Nº de su pedido","Fecha de su pedido","Cobrado","Tipo de creación","Tipo de recibo","Código del recibo que se crea a partir de esta factura","Traspasada","Anotaciones privadas","Documentos externos asociados","Impresa","Banco del cliente","Hora de creación","Comentario después de las líneas de detalle","Usuario que creó el documento","Último usuario que modificó el documento","Fax","Imagen","Importe neto exento","Porcentaje de descuento exento","Importe de descuento exento","Porcentaje pronto pago exento","Importe de pronto pago exento","Porcentaje de portes exento","Importe de portes exento","Porcentaje de financiación exento","Importe de financiación exento","Base imponible exenta","Enviado por mail","Permisos y contraseña del documento","Ticket, porcentaje de descuento","Ticket, importe de descuento","Caja en que se creó el documento","IBAN del banco","BIC del banco","Nombre del banco","Entidad de la cuenta del cliente","Oficina de la cuenta del cliente","Dígitos de control de la cuenta del cliente","Número de la cuenta del cliente","Clave de operación","Fecha de operación","Tipo de retención","Clave de operación intracomunitaria","Régimen especial de criterio de caja","Departamento","Subdepartamento"];
   const hFRE=["Tipo de documento","Número de documento","Código exterior","Referencia","Fecha","Proveedor","Estado","Código de cliente","Nombre del proveedor","Domicilio del proveedor","Población","Código postal","Provincia","N.I.F.","Tipo de IVA","Recargo de equivalencia","Teléfono del proveedor","Importe neto 1","Importe neto 2","Importe neto 3","Porcentaje de descuento 1","Porcentaje de descuento 2","Porcentaje de descuento 3","Importe de descuento 1","Importe de descuento 2","Importe de descuento 3","Porcentaje de pronto pago 1","Porcentaje de pronto pago 2","Porcentaje de pronto pago 3","Importe pronto pago 1","Importe pronto pago 2","Importe pronto pago 3","Porcentaje portes 1","Porcentaje portes 2","Porcentaje portes 3","Importe portes 1","Importe portes 2","Importe portes 3","Porcentaje de financiación 1","Porcentaje de financiación 2","Porcentaje de financiación 3","Importe de financiación 1 ","Importe de financiación 2","Importe de financiación 3","Base imponible 1","Base imponible 2","Base imponible 3","Porcentaje IVA 1","Porcentaje IVA 2","Porcentaje IVA 3","Importe IVA 1","Importe IVA 2","Importe IVA 3","Porcentaje de recargo de equivalencia 1","Porcentaje de recargo de equivalencia 2","Porcentaje de recargo de equivalencia 3","Importe de recargo de equivalencia 1","Importe de recargo de equivalencia 2","Importe de recargo de equivalencia 3","Porcentaje de la retención","Importe de la retención","Total","Forma de pago","1ª línea de observaciones","2ª línea de observaciones","Traspasada a contabilidad","Fecha de entrega ","Hora de entrega","Portes","Texto de portes","Agencia de transportes","Comentario después de las líneas de detalle","Factura deducible","Usuario que creó el documento","Último usuario que modificó el documento","Almacén","Importe neto exento","Porcentaje de descuento exento","Importe de descuento exento","Porcentaje pronto pago exento","Importe de pronto pago exento","Porcentaje de portes exento","Importe de portes exento","Porcentaje de financiación exento","Importe de financiación exento","Base imponible exenta","Enviado por mail","Proveedor/Acreedor","Bien de inversión","Imagen","Tipo de retención","Clave de operación","Fecha de operación","Fecha de registro contable","Clave de operación intracomunitaria","Régimen especial de caja","Departamento","Subdepartamento"];
 
-  const facNums=formato==="FAC"?docNumsFAC(fs):null;
+  // FAC: numero de documento = correlativo continuo por cliente (todas sus emitidas, ordenadas por fecha)
+  let facSeq=null;
+  if(formato==="FAC"){
+    facSeq={};
+    (window.WF||[]).filter(x=>x.tipo===tipoF&&x.clienteDespachoId===cid)
+      .sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")||(a.creado||"").localeCompare(b.creado||""))
+      .forEach((x,idx)=>{facSeq[x.id]=idx+1;});
+  }
   expData=fs.map((f,i)=>{
     if(formato==="IVR"){
       return rowIVR(f,i);
     } else if(formato==="IVS"){
       return rowIVS(f,i);
     } else if(formato==="FAC"){
-      return rowFAC(f,i,facNums[i]);
+      return rowFAC(f,i,facSeq?facSeq[f.id]:i+1);
     } else {
       return rowFRE(f,i);
     }
