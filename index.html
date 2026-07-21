@@ -201,10 +201,23 @@ tr:last-child td{border-bottom:none;}
           <option value="LFA">LFA - Emitidas gestion (lineas, tras FAC)</option>
           <option value="FRE">FRE - Recibidas gestion (cabecera)</option>
           <option value="LFR">LFR - Recibidas gestion (lineas, tras FRE)</option>
+          <option value="APU">APU - Asientos contabilidad (diario)</option>
         </select>
       </div>
       <div class="fg"><label class="fl">Ano <span class="ob">*</span></label><select class="fi2" id="eA"><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select></div>
       <div class="fg"><label class="fl">Periodo</label><select class="fi2" id="eP"><option value="">Todo el ano</option><option value="1">1T Ene-Mar</option><option value="2">2T Abr-Jun</option><option value="3">3T Jul-Sep</option><option value="4">4T Oct-Dic</option></select></div>
+    </div>
+    <div id="apuCfg" style="display:none;border-top:1px solid var(--gray-100);padding-top:12px;margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Cuentas para los asientos (APU)</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+        <div class="fg"><label class="fl">Diario</label><input type="number" class="fi2" id="aDiario" value="1" min="1"></div>
+        <div class="fg"><label class="fl">Nº asiento inicial</label><input type="number" class="fi2" id="aAsIni" value="1" min="1"></div>
+        <div class="fg"><label class="fl">IVA repercutido</label><input type="text" class="fi2" id="aIvaR" value="47700000"></div>
+        <div class="fg"><label class="fl">IVA soportado</label><input type="text" class="fi2" id="aIvaS" value="47200000"></div>
+        <div class="fg"><label class="fl">Retencion emitidas (473)</label><input type="text" class="fi2" id="aRetE" value="47300000"></div>
+        <div class="fg"><label class="fl">Retencion recibidas (4751)</label><input type="text" class="fi2" id="aRetR" value="47510000"></div>
+      </div>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:8px;">La cuenta del cliente/proveedor y su contrapartida (gasto/venta) salen de cada ficha de Cuentas contables. El APU incluye emitidas y recibidas del periodo.</div>
     </div>
     <div id="eRes" style="background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:13px;display:none;"></div>
     <div style="display:flex;gap:8px;">
@@ -291,6 +304,8 @@ tr:last-child td{border-bottom:none;}
       <input type="text" class="fi2" id="cNif" placeholder="A81948077"></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Codigo / Cuenta <span class="ob">*</span></label>
       <input type="text" class="fi2" id="cCta" placeholder="41000001 o numero correlativo"></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Cuenta de contrapartida (gasto/venta)</label>
+      <input type="text" class="fi2" id="cContra" placeholder="62800000 gasto (recibidas) o 70000000 venta (emitidas)"></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Tipo</label>
       <select class="fi2" id="cTip"><option value="proveedor">Proveedor (40x/41x)</option><option value="cliente">Cliente (43x)</option><option value="otro">Otro</option></select></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Domicilio</label>
@@ -545,9 +560,9 @@ function renderC(){
       "<td style='font-size:12px;'>"+(cl?cl.nombre:cc.clienteDespachoId||"")+"</td>"+
       "<td style='font-weight:500;'>"+(cc.nombre||"")+"</td>"+
       "<td style='font-size:11px;color:var(--gray-400);'>"+(cc.nif||"")+"</td>"+
-      "<td style='font-family:monospace;font-weight:600;color:var(--navy);'>"+(cc.cuenta||"")+"</td>"+
+      "<td style='font-family:monospace;font-weight:600;color:var(--navy);'>"+(cc.cuenta||"")+(cc.contrapartida?" <span style='color:var(--gray-400);font-weight:400;'>&rarr; "+cc.contrapartida+"</span>":"")+"</td>"+
       "<td style='font-size:11px;'>"+tl+"</td>"+
-      "<td><button class='icon-btn' data-id='"+cc.id+"' onclick='delC(this.dataset.id)'>x</button></td>"+
+      "<td style='white-space:nowrap;'><button class='icon-btn' data-id='"+cc.id+"' onclick='editC(this.dataset.id)'>&#9998;</button><button class='icon-btn' data-id='"+cc.id+"' onclick='delC(this.dataset.id)'>x</button></td>"+
     "</tr>";
   }).join("");
 }
@@ -555,9 +570,27 @@ function renderC(){
 function openCM(){
   document.getElementById("cId").value="";
   document.getElementById("cMTitle").textContent="Nueva cuenta contable";
-  ["cNom","cNif","cCta","cDir","cPob","cCP","cProv","cTel"].forEach(id=>document.getElementById(id).value="");
+  ["cNom","cNif","cCta","cContra","cDir","cPob","cCP","cProv","cTel"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("cCD").value="";
   document.getElementById("cTip").value="proveedor";
+  document.getElementById("cModal").classList.add("open");
+}
+
+function editC(id){
+  const cc=(window.WCC||[]).find(c=>c.id===id);if(!cc)return;
+  document.getElementById("cId").value=cc.id;
+  document.getElementById("cMTitle").textContent="Editar cuenta contable";
+  document.getElementById("cCD").value=cc.clienteDespachoId||"";
+  document.getElementById("cNom").value=cc.nombre||"";
+  document.getElementById("cNif").value=cc.nif||"";
+  document.getElementById("cCta").value=cc.cuenta||"";
+  document.getElementById("cContra").value=cc.contrapartida||"";
+  document.getElementById("cTip").value=cc.tipo||"proveedor";
+  document.getElementById("cDir").value=cc.domicilio||"";
+  document.getElementById("cPob").value=cc.poblacion||"";
+  document.getElementById("cCP").value=cc.cp||"";
+  document.getElementById("cProv").value=cc.provincia||"";
+  document.getElementById("cTel").value=cc.telefono||"";
   document.getElementById("cModal").classList.add("open");
 }
 
@@ -572,6 +605,7 @@ async function saveC(){
     id,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",
     nombre:nom,nif:document.getElementById("cNif").value.trim(),
     cuenta:cta,tipo:document.getElementById("cTip").value,
+    contrapartida:document.getElementById("cContra").value.trim(),
     domicilio:document.getElementById("cDir").value.trim(),
     poblacion:document.getElementById("cPob").value.trim(),
     cp:document.getElementById("cCP").value.trim(),
@@ -584,7 +618,9 @@ async function saveC(){
 
 async function delC(id){if(!confirm("Eliminar esta cuenta?"))return;await fbD("iva_cuentas",id);}
 
-function onExpTipoChange(){}
+function onExpTipoChange(){
+  document.getElementById("apuCfg").style.display=(document.getElementById("eT").value==="APU")?"block":"none";
+}
 
 function getTipoFactura(formato){
   return (formato==="IVR"||formato==="FAC"||formato==="LFA")?"IVR":"IVS";
@@ -593,7 +629,7 @@ function getTipoFactura(formato){
 function getCuentaParaFactura(f){
   return (window.WCC||[]).find(c=>
     c.clienteDespachoId===f.clienteDespachoId && c.nombre===f.nombre
-  )||{cuenta:f.cuenta||"",domicilio:"",poblacion:"",cp:"",provincia:"",telefono:"",nif:""};
+  )||{cuenta:f.cuenta||"",contrapartida:"",domicilio:"",poblacion:"",cp:"",provincia:"",telefono:"",nif:""};
 }
 
 // Tipo de IVA de FactuSOL segun el porcentaje (config por defecto: 1=21%, 2=10%, 3=4%, 4=0%/exento)
@@ -736,6 +772,60 @@ function rowFAC(f, i, docNum){
   return row;
 }
 
+// ===== ASIENTOS (fichero APU) para ContaSOL =====
+function round2(x){return Math.round((parseFloat(x)||0)*100)/100;}
+// Una linea del asiento (17 columnas A..Q)
+function apuLine(cfg,asNum,fe,orden,cuenta,concepto,doc,debe,haber,tiva){
+  const row=new Array(17).fill("");
+  row[0]=cfg.diario;                 // A Diario
+  row[1]=fe;                         // B Fecha
+  row[2]=asNum;                      // C Asiento
+  row[3]=orden;                      // D Orden
+  row[4]=cuenta;                     // E Cuenta
+  row[6]=concepto;                   // G Concepto
+  row[7]=doc;                        // H Documento
+  if(debe)row[8]=round2(debe);       // I Importe debe euros
+  if(haber)row[9]=round2(haber);     // J Importe haber euros
+  row[10]="E";                       // K Moneda
+  row[11]=0;                         // L Punteo
+  if(tiva)row[12]=tiva;              // M Tipo de IVA (R/S)
+  return row;
+}
+// Asiento de una factura EMITIDA (venta): Debe cliente / Haber ventas + IVA rep
+function asientoEmitida(f,cfg,asNum){
+  const cc=getCuentaParaFactura(f);
+  const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
+  const num=String(f.numero||""),doc=num.substring(0,5),con="S/Fra "+num;
+  const cliente=cc.cuenta||f.cuenta||"",contra=cc.contrapartida||"70000000";
+  const base=(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
+  const iva1=parseFloat(f.iva1)||0,iva2=parseFloat(f.iva2)||0;
+  const total=parseFloat(f.total)||0,ret=parseFloat(f.retImporte)||0;
+  const L=[];let o=1;
+  L.push(apuLine(cfg,asNum,fe,o++,cliente,con,doc,total,0,""));          // Debe cliente (total)
+  if(ret>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.retE,con,doc,ret,0,""));  // Debe retencion (473)
+  L.push(apuLine(cfg,asNum,fe,o++,contra,con,doc,0,base,""));            // Haber ventas (base)
+  if(iva1>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaR,con,doc,0,iva1,"R"));// Haber IVA repercutido
+  if(iva2>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaR,con,doc,0,iva2,"R"));
+  return L;
+}
+// Asiento de una factura RECIBIDA (compra/gasto): Debe gasto + IVA sop / Haber proveedor
+function asientoRecibida(f,cfg,asNum){
+  const cc=getCuentaParaFactura(f);
+  const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
+  const num=String(f.numero||""),doc=num.substring(0,5),con="S/Fra "+num;
+  const prov=cc.cuenta||f.cuenta||"",contra=cc.contrapartida||"60000000";
+  const base=(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
+  const iva1=parseFloat(f.iva1)||0,iva2=parseFloat(f.iva2)||0;
+  const total=parseFloat(f.total)||0,ret=parseFloat(f.retImporte)||0;
+  const L=[];let o=1;
+  L.push(apuLine(cfg,asNum,fe,o++,contra,con,doc,base,0,""));            // Debe gasto (base)
+  if(iva1>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaS,con,doc,iva1,0,"S"));// Debe IVA soportado
+  if(iva2>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaS,con,doc,iva2,0,"S"));
+  L.push(apuLine(cfg,asNum,fe,o++,prov,con,doc,0,total,""));            // Haber proveedor (total)
+  if(ret>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.retR,con,doc,0,ret,""));  // Haber retencion (4751)
+  return L;
+}
+
 // Genera fila del Libro de IVA REPERCUTIDO (IVR) para ContaSOL - 64 columnas (A..BL)
 function rowIVR(f, i){
   const cc=getCuentaParaFactura(f);
@@ -798,14 +888,15 @@ function prevExp(){
   const cl=(window.WC||[]).find(c=>c.id===cid);
   const tipoF=getTipoFactura(formato);
   let fs=(window.WF||[]).filter(f=>{
-    if(f.tipo!==tipoF||f.clienteDespachoId!==cid)return false;
+    if(f.clienteDespachoId!==cid)return false;
+    if(formato!=="APU"&&f.tipo!==tipoF)return false;   // APU incluye emitidas y recibidas
     if(f.fecha){
       const d=new Date(f.fecha+"T12:00:00");
       if(anio&&d.getFullYear()!==parseInt(anio))return false;
       if(per&&q(f.fecha)!==per)return false;
     }
     return true;
-  }).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
+  }).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")||(a.creado||"").localeCompare(b.creado||""));
   const res=document.getElementById("eRes");
   res.style.display="block";
   res.innerHTML="<strong>"+(cl?cl.nombre:"")+"</strong> &middot; "+formato+" &middot; "+anio+(per?" &middot; "+per+"T":"")+" &middot; <strong>"+fs.length+" facturas</strong>";
@@ -832,8 +923,24 @@ function prevExp(){
       .forEach((x,idx)=>{facSeq[x.id]=idx+1;});
   }
   const hLINEAS=["Tipo de documento","Número de documento","Posición de la línea","Artículo","Descripción","Cantidad","Porcentaje descuento 1","Porcentaje descuento 2","Porcentaje descuento 3","Precio del artículo","Total","Tipo de IVA"];
+  const hAPU=["Diario","Fecha","Asiento","Orden","Cuenta","Importe en pesetas","Concepto","Documento","Importe debe","Importe haber","Moneda","Punteo","Tipo de IVA","Codigo de IVA","Departamento","Subdepartamento","Archivo de imagen"];
 
-  if(formato==="LFA"||formato==="LFR"){
+  if(formato==="APU"){
+    const cfg={
+      diario:parseInt(document.getElementById("aDiario").value,10)||1,
+      ivaR:document.getElementById("aIvaR").value.trim()||"47700000",
+      ivaS:document.getElementById("aIvaS").value.trim()||"47200000",
+      retE:document.getElementById("aRetE").value.trim()||"47300000",
+      retR:document.getElementById("aRetR").value.trim()||"47510000"
+    };
+    let asNum=parseInt(document.getElementById("aAsIni").value,10)||1;
+    expData=[];
+    fs.forEach(f=>{
+      const lineas=(f.tipo===getTipoFactura("FAC"))?asientoEmitida(f,cfg,asNum):asientoRecibida(f,cfg,asNum);
+      lineas.forEach(l=>expData.push(l));
+      asNum++;
+    });
+  } else if(formato==="LFA"||formato==="LFR"){
     expData=[];
     fs.forEach((f,i)=>{ lineasFactura(f,facSeq?facSeq[f.id]:i+1).forEach(l=>expData.push(l)); });
   } else {
@@ -850,7 +957,7 @@ function prevExp(){
     });
   }
 
-  const cv=formato==="IVR"?cvIVR:formato==="IVS"?cvIVS:formato==="FAC"?hFAC:formato==="FRE"?hFRE:hLINEAS;
+  const cv=formato==="IVR"?cvIVR:formato==="IVS"?cvIVS:formato==="FAC"?hFAC:formato==="FRE"?hFRE:formato==="APU"?hAPU:hLINEAS;
 
   document.getElementById("ePrevTitle").textContent="Vista previa "+formato+" ("+expData.length+" registros)";
   document.getElementById("ePrevH").innerHTML=cv.map(c=>"<th>"+c+"</th>").join("");
