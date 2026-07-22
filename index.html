@@ -266,6 +266,7 @@ tr:last-child td{border-bottom:none;}
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
       <div class="fg" style="min-width:220px;"><label class="fl">Cliente</label><select class="fi2" id="lqCli"><option value="">Seleccionar...</option></select></div>
       <div class="fg" style="width:120px;"><label class="fl">Ano</label><select class="fi2" id="lqAnio"><option>2025</option><option selected>2026</option><option>2027</option></select></div>
+      <div class="fg" style="width:180px;"><label class="fl">IVA a compensar anos ant.</label><input type="number" step="0.01" class="fi2" id="lqComp" value="0"></div>
       <button class="btn btn-primary" onclick="calcLiq()">Calcular</button>
     </div>
     <div id="lqRes"></div>
@@ -849,6 +850,7 @@ function eur2(n){return (Math.round((n||0)*100)/100).toLocaleString("es-ES",{min
 function trimOf(fecha){const m=parseInt(String(fecha||"").slice(5,7),10)||0;return m<=3?1:m<=6?2:m<=9?3:4;}
 function calcLiq(){
   const cid=document.getElementById("lqCli").value,anio=String(document.getElementById("lqAnio").value);
+  const compAnt=parseFloat(document.getElementById("lqComp").value)||0;
   const cont=document.getElementById("lqRes");
   if(!cid){cont.innerHTML="<div style='color:var(--warning);font-size:12px;'>Selecciona un cliente.</div>";return;}
   const ficha=(window.WFI||{})[cid]||{regimen:"directa"};
@@ -867,32 +869,41 @@ function calcLiq(){
     const cuotaDev=(e.modulosIva||[]).reduce((s,m)=>s+(m.valor||0)*(parseFloat(uIv[m.nombre])||0),0);
     const ivaAc=cuotaDev*(parseFloat(e.ingresoCuentaIvaPct)||0)/100;
     const sopAnual=reci.reduce((s,f)=>s+iva(f),0);
-    const unoPct=cuotaDev*0.01, cuotaMin=cuotaDev*(parseFloat(e.cuotaMinIvaPct)||0)/100;
-    const cuotaAnual=Math.max(cuotaDev-sopAnual-unoPct,cuotaMin), ivaQ4=cuotaAnual-3*ivaAc;
-    const rows=[1,2,3,4].map(t=>"<tr><td>"+t+"T</td><td class='td-r'>"+eur2(t<4?ivaAc:ivaQ4)+"</td><td class='td-r'>"+eur2(irpfTrim)+"</td></tr>").join("");
+    const cuotaMin=cuotaDev*(parseFloat(e.cuotaMinIvaPct)||0)/100;
+    const cuotaAnual=Math.max(cuotaDev-sopAnual,cuotaMin);
+    const res4=cuotaAnual-3*ivaAc;
+    let pend=compAnt,q4Pagar;
+    if(res4>=0){const usa=Math.min(res4,pend);q4Pagar=res4-usa;pend-=usa;}else{pend+=(-res4);q4Pagar=0;}
+    const rows=[1,2,3,4].map(t=>"<tr><td>"+t+"T</td><td class='td-r'>"+eur2(t<4?ivaAc:q4Pagar)+"</td><td class='td-r'>"+eur2(irpfTrim)+"</td></tr>").join("");
     cont.innerHTML="<div style='background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;'>"+
       "<strong>Datos base (objetiva &middot; epigrafe "+e.id+")</strong><br>"+
       "Rendimiento modulos IRPF: "+eur2(rendPrevio)+" &nbsp;&rarr;&nbsp; base pagos fraccionados (x"+(1-(parseFloat(e.reduccionGralPct)||0)/100).toFixed(2)+" x indice "+indice+"): <strong>"+eur2(rendPF)+"</strong><br>"+
-      "Cuota devengada IVA: "+eur2(cuotaDev)+" &nbsp;&middot;&nbsp; IVA soportado del ano: "+eur2(sopAnual)+" &nbsp;&middot;&nbsp; +1% dif. justif.: "+eur2(unoPct)+"<br>"+
-      "Cuota minima ("+(e.cuotaMinIvaPct||0)+"%): "+eur2(cuotaMin)+" &nbsp;&middot;&nbsp; cuota anual IVA (4T): <strong>"+eur2(cuotaAnual)+"</strong></div>"+
+      "Cuota devengada IVA: "+eur2(cuotaDev)+" &nbsp;&middot;&nbsp; IVA soportado del ano: "+eur2(sopAnual)+"<br>"+
+      "Cuota minima ("+(e.cuotaMinIvaPct||0)+"%): "+eur2(cuotaMin)+" &nbsp;&middot;&nbsp; cuota anual IVA: <strong>"+eur2(cuotaAnual)+"</strong> &nbsp;&middot;&nbsp; resultado 4T: "+eur2(res4)+
+      (res4<0?" &rarr; <span style='color:var(--success);'>a compensar</span>":"")+
+      ((compAnt>0||res4<0)?"<br>Pendiente de compensar tras el 4T: <strong>"+eur2(pend)+"</strong>":"")+"</div>"+
       "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA (reg. simplificado)</th><th class='td-r'>IRPF (131)</th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
-      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>1T-3T el IVA es el ingreso a cuenta ("+(e.ingresoCuentaIvaPct||0)+"% de la cuota devengada). El 4T regulariza: max(cuota devengada &minus; IVA soportado &minus; 1%, cuota minima) &minus; los tres ingresos a cuenta. El IRPF (131) es "+(e.pagoFraccIrpfPct||0)+"% de la base, igual cada trimestre.</div>";
+      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>1T-3T = ingreso a cuenta ("+(e.ingresoCuentaIvaPct||0)+"% de la cuota devengada). El 4T incorpora el IVA soportado del ano: max(cuota devengada &minus; soportado, cuota minima) &minus; los tres ingresos a cuenta; si sale negativo queda a compensar (hasta 4 anos). IRPF (131) = "+(e.pagoFraccIrpfPct||0)+"% de la base cada trimestre.</div>";
     return;
   }
 
-  let pagosPrev=0;
+  // Directa: 303 con arrastre trimestral de compensaciones + 130 acumulado
+  let pagosPrev=0,pend=compAnt;
   const q=[1,2,3,4].map(t=>{
     const repIVA=emit.filter(f=>trimOf(f.fecha)===t).reduce((s,f)=>s+iva(f),0);
     const sopIVA=reci.filter(f=>trimOf(f.fecha)===t).reduce((s,f)=>s+iva(f),0);
+    const res=repIVA-sopIVA;
+    let aPagar=0;
+    if(res>=0){const usa=Math.min(res,pend);aPagar=res-usa;pend-=usa;}else{pend+=(-res);aPagar=0;}
     const ingAcum=emit.filter(f=>trimOf(f.fecha)<=t).reduce((s,f)=>s+base(f),0);
     const gasAcum=reci.filter(f=>trimOf(f.fecha)<=t).reduce((s,f)=>s+base(f),0);
     const rend=ingAcum-gasAcum, pago130acum=Math.max(0,rend*0.20), pago130=Math.max(0,pago130acum-pagosPrev);
     pagosPrev+=pago130;
-    return {t,repIVA,sopIVA,iva303:repIVA-sopIVA,rend,pago130};
+    return {t,repIVA,sopIVA,res,aPagar,pendFin:pend,pago130};
   });
-  cont.innerHTML="<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA repercutido</th><th class='td-r'>IVA soportado</th><th class='td-r'>303 (resultado)</th><th class='td-r'>Rdto. acum.</th><th class='td-r'>130 a pagar</th></tr></thead><tbody>"+
-    q.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='font-weight:600;color:"+(x.iva303>=0?"var(--navy)":"var(--success)")+";'>"+eur2(x.iva303)+"</td><td class='td-r'>"+eur2(x.rend)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td></tr>").join("")+"</tbody></table></div>"+
-    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>303 negativo = a compensar/devolver. El 130 usa el 20% de (ingresos &minus; gastos) acumulados desde enero, menos lo pagado en trimestres anteriores; nunca sale negativo (eso se regulariza en la renta).</div>";
+  cont.innerHTML="<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA reperc.</th><th class='td-r'>IVA soport.</th><th class='td-r'>Resultado</th><th class='td-r'>IVA a pagar</th><th class='td-r'>Pdte. comp.</th><th class='td-r'>IRPF 130</th></tr></thead><tbody>"+
+    q.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='color:"+(x.res>=0?"var(--gray-600)":"var(--success)")+";'>"+eur2(x.res)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.aPagar)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.pendFin)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td></tr>").join("")+"</tbody></table></div>"+
+    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado. Si es negativo queda pendiente de compensar y se aplica contra los trimestres siguientes que salgan a pagar (arrastre hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados desde enero, menos lo pagado antes.</div>";
 }
 
 function openEpi(id){
