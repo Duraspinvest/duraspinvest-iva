@@ -852,11 +852,34 @@ function calcLiq(){
   const cont=document.getElementById("lqRes");
   if(!cid){cont.innerHTML="<div style='color:var(--warning);font-size:12px;'>Selecciona un cliente.</div>";return;}
   const ficha=(window.WFI||{})[cid]||{regimen:"directa"};
-  if(ficha.regimen==="objetiva"){cont.innerHTML="<div style='font-size:12px;color:var(--gray-400);'>Este cliente esta en estimacion objetiva (modulos). El calculo por modulos llega en la Fase 3; los modulos ya estan definidos en su ficha.</div>";return;}
   const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&String(f.fecha||"").slice(0,4)===anio);
   const emit=fs.filter(f=>f.tipo==="IVR"),reci=fs.filter(f=>f.tipo==="IVS");
   const base=f=>(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
   const iva=f=>(parseFloat(f.iva1)||0)+(parseFloat(f.iva2)||0);
+
+  if(ficha.regimen==="objetiva"){
+    const e=(window.WM||{})[ficha.epigrafe];
+    if(!e){cont.innerHTML="<div style='font-size:12px;color:var(--warning);'>El cliente es objetiva pero su ficha no tiene epigrafe/modulos definidos.</div>";return;}
+    const uIr=ficha.unidadesIrpf||{},uIv=ficha.unidadesIva||{},indice=parseFloat(ficha.indice)||1;
+    const rendPrevio=(e.modulosIrpf||[]).reduce((s,m)=>s+(m.valor||0)*(parseFloat(uIr[m.nombre])||0),0);
+    const rendPF=rendPrevio*(1-(parseFloat(e.reduccionGralPct)||0)/100)*indice;
+    const irpfTrim=rendPF*(parseFloat(e.pagoFraccIrpfPct)||0)/100;
+    const cuotaDev=(e.modulosIva||[]).reduce((s,m)=>s+(m.valor||0)*(parseFloat(uIv[m.nombre])||0),0);
+    const ivaAc=cuotaDev*(parseFloat(e.ingresoCuentaIvaPct)||0)/100;
+    const sopAnual=reci.reduce((s,f)=>s+iva(f),0);
+    const unoPct=cuotaDev*0.01, cuotaMin=cuotaDev*(parseFloat(e.cuotaMinIvaPct)||0)/100;
+    const cuotaAnual=Math.max(cuotaDev-sopAnual-unoPct,cuotaMin), ivaQ4=cuotaAnual-3*ivaAc;
+    const rows=[1,2,3,4].map(t=>"<tr><td>"+t+"T</td><td class='td-r'>"+eur2(t<4?ivaAc:ivaQ4)+"</td><td class='td-r'>"+eur2(irpfTrim)+"</td></tr>").join("");
+    cont.innerHTML="<div style='background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;'>"+
+      "<strong>Datos base (objetiva &middot; epigrafe "+e.id+")</strong><br>"+
+      "Rendimiento modulos IRPF: "+eur2(rendPrevio)+" &nbsp;&rarr;&nbsp; base pagos fraccionados (x"+(1-(parseFloat(e.reduccionGralPct)||0)/100).toFixed(2)+" x indice "+indice+"): <strong>"+eur2(rendPF)+"</strong><br>"+
+      "Cuota devengada IVA: "+eur2(cuotaDev)+" &nbsp;&middot;&nbsp; IVA soportado del ano: "+eur2(sopAnual)+" &nbsp;&middot;&nbsp; +1% dif. justif.: "+eur2(unoPct)+"<br>"+
+      "Cuota minima ("+(e.cuotaMinIvaPct||0)+"%): "+eur2(cuotaMin)+" &nbsp;&middot;&nbsp; cuota anual IVA (4T): <strong>"+eur2(cuotaAnual)+"</strong></div>"+
+      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA (reg. simplificado)</th><th class='td-r'>IRPF (131)</th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
+      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>1T-3T el IVA es el ingreso a cuenta ("+(e.ingresoCuentaIvaPct||0)+"% de la cuota devengada). El 4T regulariza: max(cuota devengada &minus; IVA soportado &minus; 1%, cuota minima) &minus; los tres ingresos a cuenta. El IRPF (131) es "+(e.pagoFraccIrpfPct||0)+"% de la base, igual cada trimestre.</div>";
+    return;
+  }
+
   let pagosPrev=0;
   const q=[1,2,3,4].map(t=>{
     const repIVA=emit.filter(f=>trimOf(f.fecha)===t).reduce((s,f)=>s+iva(f),0);
