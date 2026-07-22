@@ -267,6 +267,7 @@ tr:last-child td{border-bottom:none;}
       <div class="fg" style="min-width:220px;"><label class="fl">Cliente</label><select class="fi2" id="lqCli"><option value="">Seleccionar...</option></select></div>
       <div class="fg" style="width:120px;"><label class="fl">Ano</label><select class="fi2" id="lqAnio"><option>2025</option><option selected>2026</option><option>2027</option></select></div>
       <div class="fg" style="width:180px;"><label class="fl">IVA a compensar anos ant.</label><input type="number" step="0.01" class="fi2" id="lqComp" value="0"></div>
+      <div class="fg" style="width:210px;"><label class="fl">Ing. a cuenta 1T-3T pagados (objetiva)</label><input type="number" step="0.01" class="fi2" id="lqIc" placeholder="vacio = usa el calculado"></div>
       <button class="btn btn-primary" onclick="calcLiq()">Calcular</button>
     </div>
     <div id="lqRes"></div>
@@ -871,7 +872,9 @@ function calcLiq(){
     const sopAnual=reci.reduce((s,f)=>s+iva(f),0);
     const cuotaMin=cuotaDev*(parseFloat(e.cuotaMinIvaPct)||0)/100;
     const cuotaAnual=Math.max(cuotaDev-sopAnual,cuotaMin);
-    const res4=cuotaAnual-3*ivaAc;
+    const icCalc=3*ivaAc, icRaw=document.getElementById("lqIc").value;
+    const icReal=(icRaw!==""&&icRaw!=null)?(parseFloat(icRaw)||0):icCalc;   // ingresos a cuenta realmente pagados en 1T-3T
+    const res4=cuotaAnual-icReal;
     let pend=compAnt,q4Pagar;
     if(res4>=0){const usa=Math.min(res4,pend);q4Pagar=res4-usa;pend-=usa;}else{pend+=(-res4);q4Pagar=0;}
     const rows=[1,2,3,4].map(t=>"<tr><td>"+t+"T</td><td class='td-r'>"+eur2(t<4?ivaAc:q4Pagar)+"</td><td class='td-r'>"+eur2(irpfTrim)+"</td></tr>").join("");
@@ -879,11 +882,12 @@ function calcLiq(){
       "<strong>Datos base (objetiva &middot; epigrafe "+e.id+")</strong><br>"+
       "Rendimiento modulos IRPF: "+eur2(rendPrevio)+" &nbsp;&rarr;&nbsp; base pagos fraccionados (x"+(1-(parseFloat(e.reduccionGralPct)||0)/100).toFixed(2)+" x indice "+indice+"): <strong>"+eur2(rendPF)+"</strong><br>"+
       "Cuota devengada IVA: "+eur2(cuotaDev)+" &nbsp;&middot;&nbsp; IVA soportado del ano: "+eur2(sopAnual)+"<br>"+
-      "Cuota minima ("+(e.cuotaMinIvaPct||0)+"%): "+eur2(cuotaMin)+" &nbsp;&middot;&nbsp; cuota anual IVA: <strong>"+eur2(cuotaAnual)+"</strong> &nbsp;&middot;&nbsp; resultado 4T: "+eur2(res4)+
+      "Cuota minima ("+(e.cuotaMinIvaPct||0)+"%): "+eur2(cuotaMin)+" &nbsp;&middot;&nbsp; cuota anual IVA: <strong>"+eur2(cuotaAnual)+"</strong><br>"+
+      "Ing. a cuenta 1T-3T "+(icRaw!==""&&icRaw!=null?"(introducidos)":"(calculados)")+": "+eur2(icReal)+" &nbsp;&middot;&nbsp; resultado 4T: <strong>"+eur2(res4)+"</strong>"+
       (res4<0?" &rarr; <span style='color:var(--success);'>a compensar</span>":"")+
       ((compAnt>0||res4<0)?"<br>Pendiente de compensar tras el 4T: <strong>"+eur2(pend)+"</strong>":"")+"</div>"+
       "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA (reg. simplificado)</th><th class='td-r'>IRPF (131)</th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
-      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>1T-3T = ingreso a cuenta ("+(e.ingresoCuentaIvaPct||0)+"% de la cuota devengada). El 4T incorpora el IVA soportado del ano: max(cuota devengada &minus; soportado, cuota minima) &minus; los tres ingresos a cuenta; si sale negativo queda a compensar (hasta 4 anos). IRPF (131) = "+(e.pagoFraccIrpfPct||0)+"% de la base cada trimestre.</div>";
+      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>1T-3T = ingreso a cuenta ("+(e.ingresoCuentaIvaPct||0)+"% de la cuota devengada). El 4T = cuota anual [max(cuota devengada &minus; soportado, cuota minima)] &minus; los ingresos a cuenta pagados en 1T-3T. Si dejas el campo de ingresos a cuenta vacio uso el calculado; metelo a mano si lo real fue distinto (como en tu hoja).</div>";
     return;
   }
 
