@@ -999,8 +999,8 @@ function rowIVS(f, i){
   row[5]=f.nombre||"";               // F  Nombre
   row[6]=f.nif||cc.nif||"";          // G  C.I.F.
   row[7]=0;                          // H  Tipo de operacion
-  row[8]=(f.deducible==="0")?0:1;    // I  Deducible (1=si)
-  row[51]=(f.deducible==="0")?0:100; // AZ Porcentaje deducible (100% = deducible; sin esto ContaSOL lo trata como no deducible)
+  row[8]=(f.deducible==="0")?1:0;    // I  Deducible en ContaSOL: 0=deducible, 1=no deducible, 2=prorrata (f.deducible "1"=Si -> 0)
+  row[51]=(f.deducible==="0")?0:100; // AZ Porcentaje deducible (100% si es deducible)
   row[9]=parseFloat(f.base1)||0;     // J  Base 1
   row[10]=b2||"";                    // K  Base 2
   row[12]=parseFloat(f.pct1)||21;    // M  % de IVA 1
