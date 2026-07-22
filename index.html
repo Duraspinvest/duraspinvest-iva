@@ -126,6 +126,7 @@ tr:last-child td{border-bottom:none;}
 <nav>
   <button class="nav-btn active" onclick="showSection('facturas',this)">Facturas</button>
   <button class="nav-btn" onclick="showSection('cuentas',this)">Cuentas contables</button>
+  <button class="nav-btn" onclick="showSection('fiscal',this)">Fiscal</button>
   <button class="nav-btn" onclick="showSection('exportar',this)">Exportar a Delsol</button>
 </nav>
 <main>
@@ -239,7 +240,54 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
+<!-- FISCAL -->
+<div id="fiscal" class="section">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div><div style="font-size:15px;font-weight:600;color:var(--navy);">Módulos por epígrafe</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Valores anuales de Hacienda (rendimiento IRPF y cuota IVA por unidad). Los comparten todos los clientes del mismo epígrafe.</div></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary" onclick="seedEpi673()">Cargar ejemplo bares (673.2)</button>
+        <button class="btn btn-primary" onclick="openEpi()">+ Anadir epigrafe</button>
+      </div>
+    </div>
+    <div id="epiList"></div>
+  </div>
+  <div class="card">
+    <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:4px;">Ficha fiscal del cliente</div>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px;">Regimen y, si es objetiva, epigrafe y unidades de cada modulo.</div>
+    <div class="fg" style="max-width:320px;margin-bottom:12px;"><label class="fl">Cliente del despacho</label>
+      <select class="fi2" id="fiCli" onchange="renderFichaForm()"><option value="">Seleccionar...</option></select></div>
+    <div id="fichaForm"></div>
+  </div>
+</div>
+
 </main>
+</div>
+
+<!-- MODAL EPIGRAFE -->
+<div class="modal-overlay" id="epiModal" onclick="closeMO(event,'epiModal')">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-title" id="epiMTitle">Epigrafe de modulos</div>
+    <input type="hidden" id="epiId">
+    <div class="mg2">
+      <div class="fg"><label class="fl">Codigo epigrafe</label><input class="fi2" id="epiCod" placeholder="673.2"></div>
+      <div class="fg"><label class="fl">Nombre</label><input class="fi2" id="epiNom" placeholder="Otros cafes y bares"></div>
+      <div class="fg"><label class="fl">Ano</label><input type="number" class="fi2" id="epiAnio" value="2026"></div>
+      <div class="fg"><label class="fl">% pago fraccionado IRPF</label><input type="number" step="0.01" class="fi2" id="epiIrpfPct" value="2"></div>
+      <div class="fg"><label class="fl">% reduccion general IRPF</label><input type="number" step="0.01" class="fi2" id="epiRedPct" value="5"></div>
+      <div class="fg"><label class="fl">% ingreso a cuenta IVA (1T-3T)</label><input type="number" step="0.01" class="fi2" id="epiIcIva" value="2"></div>
+      <div class="fg"><label class="fl">% cuota minima IVA (4T)</label><input type="number" step="0.01" class="fi2" id="epiCmIva" value="6"></div>
+    </div>
+    <div class="fg full" style="margin-top:10px;"><label class="fl">Modulos IRPF (una linea por modulo: Concepto = valor/unidad)</label>
+      <textarea class="fi2" id="epiModIrpf" rows="7" style="font-family:monospace;font-size:12px;"></textarea></div>
+    <div class="fg full" style="margin-top:10px;"><label class="fl">Modulos IVA (una linea por modulo: Concepto = cuota/unidad)</label>
+      <textarea class="fi2" id="epiModIva" rows="7" style="font-family:monospace;font-size:12px;"></textarea></div>
+    <div class="ma">
+      <button class="btn btn-secondary" onclick="closeM('epiModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEpi()">Guardar</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL FACTURA -->
@@ -354,11 +402,11 @@ tr:last-child td{border-bottom:none;}
   const db=getFirestore(app),auth=getAuth(app);
   window.db=db;window.auth=auth;window.fsSignIn=signInWithEmailAndPassword;window.fsSignOut=signOut;
   window.fsDoc=doc;window.fsSetDoc=setDoc;window.fsDeleteDoc=deleteDoc;window.fsCollection=collection;
-  let u1,u2,u3;
+  let u1,u2,u3,u4,u5;
   function act(){
     u1=onSnapshot(collection(db,"clients"),s=>{
       window.WC=s.docs.map(d=>({...d.data(),id:d.id})).filter(c=>(c.categoria||"despacho")!=="auxiliar");
-      poblarSel();renderF();
+      poblarSel();renderF();renderFiscal();
     });
     u2=onSnapshot(collection(db,"iva_facturas"),s=>{
       window.WF=s.docs.map(d=>({...d.data(),id:d.id}));renderF();renderSt();
@@ -366,11 +414,17 @@ tr:last-child td{border-bottom:none;}
     u3=onSnapshot(collection(db,"iva_cuentas"),s=>{
       window.WCC=s.docs.map(d=>({...d.data(),id:d.id}));renderC();
     });
+    u4=onSnapshot(collection(db,"iva_modulos"),s=>{
+      window.WM={};s.docs.forEach(d=>window.WM[d.id]={...d.data(),id:d.id});renderFiscal();
+    });
+    u5=onSnapshot(collection(db,"iva_fiscal"),s=>{
+      window.WFI={};s.docs.forEach(d=>window.WFI[d.id]={...d.data(),id:d.id});renderFiscal();
+    });
   }
-  function des(){if(u1)u1();if(u2)u2();if(u3)u3();}
+  function des(){[u1,u2,u3,u4,u5].forEach(u=>{if(u)u();});}
   onAuthStateChanged(auth,user=>{
     if(user){
-      window.WC=[];window.WF=[];window.WCC=[];
+      window.WC=[];window.WF=[];window.WCC=[];window.WM={};window.WFI={};
       document.getElementById("loginScreen").style.display="none";
       document.getElementById("appContent").style.display="flex";
       document.getElementById("userBadge").textContent=user.email.split("@")[0];
@@ -384,7 +438,7 @@ tr:last-child td{border-bottom:none;}
 </script>
 
 <script>
-window.WC=[];window.WF=[];window.WCC=[];
+window.WC=[];window.WF=[];window.WCC=[];window.WM={};window.WFI={};
 let expData=[];
 
 function showSection(id,btn){
@@ -748,6 +802,109 @@ async function doImpC(){
     document.getElementById("impBtn").disabled=false;
     document.getElementById("impStatus").textContent="Error al leer el archivo: "+(e.message||e);
   }
+}
+
+// ===== MODULO FISCAL (ficha por cliente + tabla de modulos por epigrafe) =====
+function parseMods(txt){
+  return String(txt||"").split("\n").map(l=>l.trim()).filter(l=>l).map(l=>{
+    const i=l.lastIndexOf("=");if(i<0)return null;
+    return {nombre:l.slice(0,i).trim(),valor:parseFloat(String(l.slice(i+1)).replace(",","."))||0};
+  }).filter(Boolean);
+}
+function modsToText(arr){return (arr||[]).map(m=>m.nombre+" = "+m.valor).join("\n");}
+
+function renderFiscal(){
+  const el=document.getElementById("epiList");if(!el)return;
+  const eps=Object.values(window.WM||{}).sort((a,b)=>(a.id||"").localeCompare(b.id||""));
+  el.innerHTML=eps.length?eps.map(e=>
+    "<div style='border:1px solid var(--gray-200);border-radius:7px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;'>"+
+    "<div><strong>"+e.id+"</strong> "+(e.nombre||"")+" <span style='color:var(--gray-400);font-size:11px;'>("+(e.anio||"")+" &middot; IRPF "+(e.modulosIrpf||[]).length+" mod &middot; IVA "+(e.modulosIva||[]).length+" mod)</span></div>"+
+    "<div style='white-space:nowrap;'><button class='icon-btn' data-id='"+e.id+"' onclick='openEpi(this.dataset.id)'>&#9998;</button><button class='icon-btn' data-id='"+e.id+"' onclick='delEpi(this.dataset.id)'>x</button></div></div>"
+  ).join(""):"<div class='empty' style='padding:18px;'>No hay epigrafes. Anade uno o carga el ejemplo de bares.</div>";
+  const sel=document.getElementById("fiCli");if(sel){const cur=sel.value;
+    sel.innerHTML="<option value=''>Seleccionar...</option>"+(window.WC||[]).slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es")).map(c=>"<option value='"+c.id+"'>"+(c.nombre||c.id)+"</option>").join("");
+    sel.value=cur;renderFichaForm();}
+}
+
+function openEpi(id){
+  const e=(window.WM||{})[id]||{};
+  document.getElementById("epiId").value=id||"";
+  document.getElementById("epiMTitle").textContent=id?"Editar epigrafe":"Nuevo epigrafe";
+  document.getElementById("epiCod").value=e.id||"";
+  document.getElementById("epiNom").value=e.nombre||"";
+  document.getElementById("epiAnio").value=e.anio||2026;
+  document.getElementById("epiIrpfPct").value=e.pagoFraccIrpfPct!=null?e.pagoFraccIrpfPct:2;
+  document.getElementById("epiRedPct").value=e.reduccionGralPct!=null?e.reduccionGralPct:5;
+  document.getElementById("epiIcIva").value=e.ingresoCuentaIvaPct!=null?e.ingresoCuentaIvaPct:2;
+  document.getElementById("epiCmIva").value=e.cuotaMinIvaPct!=null?e.cuotaMinIvaPct:6;
+  document.getElementById("epiModIrpf").value=modsToText(e.modulosIrpf);
+  document.getElementById("epiModIva").value=modsToText(e.modulosIva);
+  document.getElementById("epiModal").classList.add("open");
+}
+async function saveEpi(){
+  const cod=document.getElementById("epiCod").value.trim();
+  if(!cod){alert("Indica el codigo del epigrafe.");return;}
+  await fbS("iva_modulos",cod,{id:cod,nombre:document.getElementById("epiNom").value.trim(),
+    anio:parseInt(document.getElementById("epiAnio").value,10)||2026,
+    pagoFraccIrpfPct:parseFloat(document.getElementById("epiIrpfPct").value)||0,
+    reduccionGralPct:parseFloat(document.getElementById("epiRedPct").value)||0,
+    ingresoCuentaIvaPct:parseFloat(document.getElementById("epiIcIva").value)||0,
+    cuotaMinIvaPct:parseFloat(document.getElementById("epiCmIva").value)||0,
+    modulosIrpf:parseMods(document.getElementById("epiModIrpf").value),
+    modulosIva:parseMods(document.getElementById("epiModIva").value)});
+  closeM("epiModal");
+}
+async function delEpi(id){if(!confirm("Eliminar el epigrafe "+id+"?"))return;await fbD("iva_modulos",id);}
+async function seedEpi673(){
+  await fbS("iva_modulos","673.2",{id:"673.2",nombre:"Otros cafes y bares",anio:2025,
+    pagoFraccIrpfPct:2,reduccionGralPct:5,ingresoCuentaIvaPct:2,cuotaMinIvaPct:6,
+    modulosIrpf:[{nombre:"Personal asalariado",valor:1643.93},{nombre:"Personal no asalariado",valor:11413.08},{nombre:"Potencia electrica",valor:94.48},{nombre:"Mesas",valor:119.67},{nombre:"Longitud de barra",valor:163.76},{nombre:"Maquina tipo A",valor:806.23},{nombre:"Maquinas tipo B",valor:2947.75}],
+    modulosIva:[{nombre:"Personal asalariado",valor:2577.52},{nombre:"Potencia electrica",valor:47.83},{nombre:"Mesas",valor:56.69},{nombre:"Longitud de barra",valor:62.89},{nombre:"Maquina tipo A",valor:177.15},{nombre:"Maquinas tipo B",valor:655.45}]});
+}
+
+function renderFichaForm(){
+  const cont=document.getElementById("fichaForm");if(!cont)return;
+  const cid=document.getElementById("fiCli").value;
+  if(!cid){cont.innerHTML="";return;}
+  const f=(window.WFI||{})[cid]||{regimen:"directa",epigrafe:"",indice:1};
+  const eps=Object.values(window.WM||{}).sort((a,b)=>(a.id||"").localeCompare(b.id||""));
+  cont.innerHTML="<div class='mg2' style='max-width:640px;'>"+
+    "<div class='fg'><label class='fl'>Regimen</label><select class='fi2' id='fiReg' onchange='renderFichaForm2()'>"+
+      "<option value='directa'"+(f.regimen==="directa"?" selected":"")+">Estimacion directa</option>"+
+      "<option value='objetiva'"+(f.regimen==="objetiva"?" selected":"")+">Estimacion objetiva (modulos)</option></select></div>"+
+    "<div class='fg' id='fiEpiWrap'><label class='fl'>Epigrafe</label><select class='fi2' id='fiEpi' onchange='renderFichaForm2()'><option value=''>Seleccionar...</option>"+
+      eps.map(e=>"<option value='"+e.id+"'"+(f.epigrafe===e.id?" selected":"")+">"+e.id+" "+(e.nombre||"")+"</option>").join("")+"</select></div></div>"+
+    "<div id='fiUnidades' style='margin-top:12px;'></div>"+
+    "<div class='ma' style='justify-content:flex-start;'><button class='btn btn-primary' onclick='saveFicha()'>Guardar ficha fiscal</button></div>";
+  renderFichaForm2();
+}
+function renderFichaForm2(){
+  const cid=document.getElementById("fiCli").value;
+  const f=(window.WFI||{})[cid]||{indice:1};
+  const reg=document.getElementById("fiReg").value;
+  document.getElementById("fiEpiWrap").style.display=(reg==="objetiva")?"":"none";
+  const u=document.getElementById("fiUnidades");
+  if(reg!=="objetiva"){u.innerHTML="<div style='font-size:12px;color:var(--gray-400);'>En estimacion directa no hay modulos: la liquidacion saldra de los ingresos y gastos registrados.</div>";return;}
+  const e=(window.WM||{})[document.getElementById("fiEpi").value];
+  if(!e){u.innerHTML="<div style='font-size:12px;color:var(--warning);'>Selecciona un epigrafe (o crealo antes en la tabla de arriba).</div>";return;}
+  const ui=f.unidadesIrpf||{},uv=f.unidadesIva||{};
+  const tbl=(arr,mapObj,pref)=>"<table style='width:100%;font-size:12px;margin-bottom:6px;'><thead><tr><th style='text-align:left;'>Modulo</th><th style='text-align:right;'>Valor/ud</th><th style='text-align:right;'>Unidades</th></tr></thead><tbody>"+
+    arr.map((m,i)=>"<tr><td>"+m.nombre+"</td><td style='text-align:right;color:var(--gray-400);'>"+m.valor+"</td><td style='text-align:right;'><input type='number' step='0.01' style='width:88px;padding:4px;border:1px solid var(--gray-200);border-radius:5px;text-align:right;' id='"+pref+i+"' value='"+(mapObj[m.nombre]!=null?mapObj[m.nombre]:"")+"'></td></tr>").join("")+"</tbody></table>";
+  u.innerHTML="<div class='mg2'><div><div class='fl' style='margin-bottom:6px;'>Unidades IRPF</div>"+tbl(e.modulosIrpf||[],ui,"uir")+"</div><div><div class='fl' style='margin-bottom:6px;'>Unidades IVA</div>"+tbl(e.modulosIva||[],uv,"uiv")+"</div></div>"+
+    "<div class='fg' style='max-width:280px;margin-top:8px;'><label class='fl'>Indice corrector (0,8 pequena dimension; 1 si ninguno)</label><input type='number' step='0.01' class='fi2' id='fiIndice' value='"+(f.indice!=null?f.indice:1)+"'></div>";
+}
+async function saveFicha(){
+  const cid=document.getElementById("fiCli").value;if(!cid){alert("Selecciona un cliente.");return;}
+  const reg=document.getElementById("fiReg").value;
+  const rec={id:cid,regimen:reg,epigrafe:"",unidadesIrpf:{},unidadesIva:{},indice:1};
+  if(reg==="objetiva"){
+    const epi=document.getElementById("fiEpi").value;rec.epigrafe=epi;
+    const e=(window.WM||{})[epi]||{};
+    (e.modulosIrpf||[]).forEach((m,i)=>{const inp=document.getElementById("uir"+i);if(inp&&inp.value!==""){const v=parseFloat(inp.value);if(!isNaN(v))rec.unidadesIrpf[m.nombre]=v;}});
+    (e.modulosIva||[]).forEach((m,i)=>{const inp=document.getElementById("uiv"+i);if(inp&&inp.value!==""){const v=parseFloat(inp.value);if(!isNaN(v))rec.unidadesIva[m.nombre]=v;}});
+    const ind=document.getElementById("fiIndice");rec.indice=ind?(parseFloat(ind.value)||1):1;
+  }
+  await fbS("iva_fiscal",cid,rec);alert("Ficha fiscal guardada.");
 }
 
 function onExpTipoChange(){
