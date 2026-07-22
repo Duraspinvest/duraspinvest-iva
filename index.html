@@ -151,6 +151,7 @@ tr:last-child td{border-bottom:none;}
         <select class="fi" id="fFQ" onchange="renderF()"><option value="">Todos</option><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
     </div>
     <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary" onclick="openImpF()">Importar facturas</button>
       <button class="btn btn-primary" onclick="openFM('IVR')">+ Emitida</button>
       <button class="btn btn-ivs" onclick="openFM('IVS')">+ Recibida</button>
     </div>
@@ -298,6 +299,23 @@ tr:last-child td{border-bottom:none;}
     <div class="ma">
       <button class="btn btn-secondary" onclick="closeM('epiModal')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveEpi()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORTAR FACTURAS -->
+<div class="modal-overlay" id="impfModal" onclick="closeMO(event,'impfModal')">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-title">Importar facturas desde Excel</div>
+    <div style="font-size:12px;color:var(--gray-600);margin-bottom:14px;">Sube el Excel de facturas (el que genera el OCR). Columnas: Tipo (Emitida/Recibida), Fecha, Numero, Nombre, NIF, Base 1, % IVA 1, Cuota IVA 1, Base 2, % IVA 2, Cuota IVA 2, Total, % Retencion, Retencion. Los datos que falten se dejan en blanco.</div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Cliente del despacho <span class="ob">*</span></label>
+      <select class="fi2" id="impfCD"><option value="">Seleccionar...</option></select></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Archivo (.xlsx / .xls)</label>
+      <input type="file" class="fi2" id="impfFile" accept=".xlsx,.xls,.ods" style="padding:7px;"></div>
+    <div id="impfStatus" style="font-size:12px;color:var(--gray-600);margin-bottom:8px;min-height:18px;"></div>
+    <div class="ma">
+      <button class="btn btn-secondary" onclick="closeM('impfModal')">Cancelar</button>
+      <button class="btn btn-primary" id="impfBtn" onclick="doImpF()">Importar</button>
     </div>
   </div>
 </div>
@@ -822,6 +840,68 @@ async function doImpC(){
     document.getElementById("impBtn").disabled=false;
     document.getElementById("impStatus").textContent="Error al leer el archivo: "+(e.message||e);
   }
+}
+
+// ===== IMPORTADOR DE FACTURAS (formato del OCR) =====
+function openImpF(){
+  const sel=document.getElementById("impfCD");
+  sel.innerHTML="<option value=''>Seleccionar...</option>"+(window.WC||[]).slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es")).map(c=>"<option value='"+c.id+"'>"+(c.nombre||c.id)+"</option>").join("");
+  document.getElementById("impfFile").value="";document.getElementById("impfStatus").textContent="";
+  document.getElementById("impfModal").classList.add("open");
+}
+async function doImpF(){
+  const cid=document.getElementById("impfCD").value,file=document.getElementById("impfFile").files[0],st=document.getElementById("impfStatus");
+  if(!cid){st.textContent="Selecciona el cliente del despacho.";return;}
+  if(!file){st.textContent="Selecciona un archivo.";return;}
+  if(typeof XLSX==="undefined"){st.textContent="Libreria Excel no disponible. Recarga la pagina.";return;}
+  st.textContent="Leyendo archivo...";
+  try{
+    const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});
+    let h=-1,col={};
+    for(let i=0;i<rows.length;i++){const r=(rows[i]||[]).map(x=>String(x).trim().toLowerCase());
+      if(r.some(x=>x==="tipo")&&r.some(x=>x.startsWith("fecha"))){h=i;r.forEach((x,j)=>{if(col[x]==null)col[x]=j;});break;}}
+    if(h<0){st.textContent="No encuentro la fila de cabecera (Tipo, Fecha, ...).";return;}
+    const cl=(window.WC||[]).find(c=>c.id===cid);
+    const txt=v=>String(v==null?"":v).trim();
+    const num=v=>{ // acepta numero, "210.93", "234,56" y "1.234,56"
+      if(typeof v==="number")return v;
+      let s=txt(v);if(!s)return 0;
+      if(s.indexOf(",")>=0&&s.indexOf(".")>=0)s=s.replace(/\./g,"").replace(",",".");
+      else if(s.indexOf(",")>=0)s=s.replace(",",".");
+      const n=parseFloat(s);return isNaN(n)?0:n;};
+    const idx=(...ns)=>{for(const n of ns){if(col[n]!=null)return col[n];}return -1;};
+    const iTipo=idx("tipo"),iFe=idx("fecha"),iNum=idx("numero","número","nº","n factura"),iNom=idx("nombre"),iNif=idx("nif","nif/cif","cif"),
+      iB1=idx("base 1","base","base imponible","base imponible 1"),iP1=idx("% iva 1","%iva 1","% iva","iva","% iva1"),iC1=idx("cuota iva 1","cuota iva","importe iva 1","cuota 1"),
+      iB2=idx("base 2","base imponible 2"),iP2=idx("% iva 2","%iva 2"),iC2=idx("cuota iva 2","importe iva 2"),
+      iTot=idx("total"),iRp=idx("% retencion","%retencion","% retención"),iRi=idx("retencion","retención","importe retencion");
+    const pFe=v=>{if(v instanceof Date)return v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
+      const s=txt(v);let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+"-"+m[2]+"-"+m[3];
+      m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);if(m)return m[3]+"-"+String(m[2]).padStart(2,"0")+"-"+String(m[1]).padStart(2,"0");return s;};
+    const regs=[];
+    for(let i=h+1;i<rows.length;i++){
+      const r=rows[i]||[],tr=txt(r[iTipo]).toLowerCase(),fecha=pFe(r[iFe]),base1=iB1>=0?num(r[iB1]):0;
+      if(!tr&&!fecha&&!base1)continue;
+      const tipo=(tr.indexOf("emit")>=0||tr==="ivr")?"IVR":"IVS";
+      const pct1=iP1>=0?txt(r[iP1]).replace("%","").trim():"",iva1=iC1>=0&&txt(r[iC1])!==""?num(r[iC1]):base1*(parseFloat(pct1)||0)/100;
+      const base2=iB2>=0?num(r[iB2]):0,pct2=iP2>=0?txt(r[iP2]).replace("%","").trim():"",iva2=iC2>=0&&txt(r[iC2])!==""?num(r[iC2]):base2*(parseFloat(pct2)||0)/100;
+      const total=iTot>=0&&num(r[iTot])?num(r[iTot]):base1+iva1+base2+iva2;
+      const numero=iNum>=0?txt(r[iNum]):"";
+      regs.push({id:"imp_"+cid+"_"+tipo+"_"+(numero||("f"+i))+"_"+fecha+"_"+Math.round(base1*100),
+        tipo,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",fecha,numero,
+        nombre:iNom>=0?txt(r[iNom]):"",nif:iNif>=0?txt(r[iNif]):"",cuenta:"",
+        base1,pct1:String(pct1||""),base2,pct2:String(pct2||""),
+        iva1:Math.round(iva1*100)/100,iva2:Math.round(iva2*100)/100,total:Math.round(total*100)/100,
+        retPct:iRp>=0?txt(r[iRp]).replace("%","").trim():"",retImporte:iRi>=0?num(r[iRi]):0,
+        m347:"0",deducible:tipo==="IVS"?"1":"",creado:new Date().toISOString()});
+    }
+    if(!regs.length){st.textContent="No se encontraron facturas validas en el archivo.";return;}
+    st.textContent="Importando "+regs.length+" facturas...";document.getElementById("impfBtn").disabled=true;
+    for(const rec of regs){await fbS("iva_facturas",rec.id,rec);}
+    document.getElementById("impfBtn").disabled=false;
+    st.textContent="Importadas "+regs.length+" facturas correctamente.";
+    setTimeout(()=>closeM("impfModal"),1400);
+  }catch(e){console.error(e);document.getElementById("impfBtn").disabled=false;document.getElementById("impfStatus").textContent="Error al leer el archivo: "+(e.message||e);}
 }
 
 // ===== MODULO FISCAL (ficha por cliente + tabla de modulos por epigrafe) =====
