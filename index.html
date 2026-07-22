@@ -465,8 +465,9 @@ function openFM(tipo){
   document.getElementById("fMTitle").textContent=tipo==="IVR"?"Nueva factura emitida":"Nueva factura recibida";
   document.getElementById("fNLbl").innerHTML=(tipo==="IVR"?"Nombre cliente":"Nombre proveedor")+" <span class='ob'>*</span>";
   document.getElementById("fDedG").style.display=tipo==="IVS"?"block":"none";
-  ["fCD","fNom","fNif","fCta","fNum","fB1","fB2","fI1","fI2","fTot","fRI"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
-  document.getElementById("fFecha").value=new Date().toISOString().slice(0,10);
+  ["fNom","fNif","fCta","fNum","fB1","fB2","fI1","fI2","fTot","fRI"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
+  document.getElementById("fCD").value=window.lastCD||"";   // mantener el cliente del despacho fijo entre facturas
+  document.getElementById("fFecha").value=window.lastFecha||new Date().toISOString().slice(0,10);
   document.getElementById("fP1").value="21";document.getElementById("fP2").value="";
   document.getElementById("fRP").value="";document.getElementById("f347").value="0";
   document.getElementById("acList").style.display="none";
@@ -503,6 +504,7 @@ function editF(id){
 }
 
 function onFCDChange(){
+  window.lastCD=document.getElementById("fCD").value;
   document.getElementById("fNom").value="";
   document.getElementById("fNif").value="";
   document.getElementById("fCta").value="";
@@ -565,6 +567,7 @@ async function saveF(){
   if(!cid||!nom||!fec||!num||!b1){alert("Rellena los campos obligatorios.");return;}
   const tipo=document.getElementById("fTipo").value;
   const cl=(window.WC||[]).find(c=>c.id===cid);
+  window.lastCD=cid;window.lastFecha=fec;   // recordar cliente y fecha para la siguiente factura
   const id=document.getElementById("fId").value||String(Date.now());
   const prev=(window.WF||[]).find(x=>x.id===id);
   await fbS("iva_facturas",id,{
@@ -997,6 +1000,7 @@ function rowIVS(f, i){
   row[6]=f.nif||cc.nif||"";          // G  C.I.F.
   row[7]=0;                          // H  Tipo de operacion
   row[8]=(f.deducible==="0")?0:1;    // I  Deducible (1=si)
+  row[51]=(f.deducible==="0")?0:100; // AZ Porcentaje deducible (100% = deducible; sin esto ContaSOL lo trata como no deducible)
   row[9]=parseFloat(f.base1)||0;     // J  Base 1
   row[10]=b2||"";                    // K  Base 2
   row[12]=parseFloat(f.pct1)||21;    // M  % de IVA 1
