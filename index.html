@@ -171,6 +171,7 @@ tr:last-child td{border-bottom:none;}
     <div><div style="font-size:16px;font-weight:600;color:var(--navy);">Cuentas contables</div>
     <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Por cliente del despacho. El mismo proveedor puede tener cuentas distintas para cada cliente.</div></div>
     <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary" onclick="openTGM()">Tipos de gasto</button>
       <button class="btn btn-secondary" onclick="openImpC()">Importar Excel</button>
       <button class="btn btn-primary" onclick="openCM()">+ Anadir cuenta</button>
     </div>
@@ -372,7 +373,7 @@ tr:last-child td{border-bottom:none;}
         <select class="fi2" id="fRP" onchange="calcRet()"><option value="">Sin retencion</option><option value="7">7%</option><option value="15">15%</option><option value="19">19%</option><option value="21">21%</option></select></div>
       <div class="fg"><label class="fl">Importe retencion</label><input type="number" step="0.01" class="fi2" id="fRI" placeholder="0.00"></div>
       <div class="fg"><label class="fl">Modelo 347</label>
-        <select class="fi2" id="f347"><option value="0">No incluir</option><option value="1">Incluir</option></select></div>
+        <select class="fi2" id="f347"><option value="1">Incluir</option><option value="0">No incluir</option></select></div>
       <div class="fg full" id="fDedG" style="display:none;"><label class="fl">IVA deducible</label>
         <select class="fi2" id="fDed"><option value="1">Si</option><option value="0">No</option></select></div>
     </div>
@@ -398,6 +399,8 @@ tr:last-child td{border-bottom:none;}
       <select class="fi2" id="cTip"><option value="proveedor">Proveedor (400)</option><option value="acreedor">Acreedor (410)</option><option value="cliente">Cliente (430)</option><option value="otro">Otro</option></select></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Codigo / Cuenta <span style="color:var(--gray-400);font-weight:400;">(vacio = se genera solo segun el tipo)</span></label>
       <input type="text" class="fi2" id="cCta" placeholder="Dejar vacio para autogenerar (43000001...)"></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Tipo de gasto <span style="color:var(--gray-400);font-weight:400;">(rellena la contrapartida)</span></label>
+      <select class="fi2" id="cTG" onchange="fillContraFromTG()"><option value="">- Sin tipo / manual -</option></select></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Cuenta de contrapartida (gasto/venta)</label>
       <input type="text" class="fi2" id="cContra" placeholder="62800000 gasto (recibidas) o 70000000 venta (emitidas)"></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Domicilio</label>
@@ -413,6 +416,28 @@ tr:last-child td{border-bottom:none;}
     <div class="ma">
       <button class="btn btn-secondary" onclick="closeM('cModal')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveC()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TIPOS DE GASTO -->
+<div class="modal-overlay" id="tgModal" onclick="closeMO(event,'tgModal')">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-title">Tipos de gasto</div>
+    <div style="font-size:12px;color:var(--gray-600);margin-bottom:14px;">Cada tipo enlaza con su cuenta contable de gasto/venta (grupo 6 o 7). Al asignarlo a una cuenta de proveedor o acreedor, rellena su contrapartida, que es la que viaja al asiento (APU). Ideal para cuentas genericas de ticket ("Combustible varios" &rarr; 62800000).</div>
+    <div id="tgList" style="margin-bottom:14px;"></div>
+    <div style="border-top:1px solid var(--gray-200);padding-top:12px;">
+      <div style="font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Anadir / editar tipo</div>
+      <input type="hidden" id="tgId">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="fg" style="flex:1;min-width:160px;"><label class="fl">Nombre</label><input type="text" class="fi2" id="tgNom" placeholder="Combustible"></div>
+        <div class="fg" style="width:150px;"><label class="fl">Cuenta contable</label><input type="text" class="fi2" id="tgCta" placeholder="62800000"></div>
+        <button class="btn btn-primary" onclick="saveTG()">Guardar</button>
+      </div>
+    </div>
+    <div class="ma">
+      <button class="btn btn-secondary" onclick="seedTG()">Cargar tipos comunes</button>
+      <button class="btn btn-secondary" onclick="closeM('tgModal')">Cerrar</button>
     </div>
   </div>
 </div>
@@ -443,7 +468,7 @@ tr:last-child td{border-bottom:none;}
   const db=getFirestore(app),auth=getAuth(app);
   window.db=db;window.auth=auth;window.fsSignIn=signInWithEmailAndPassword;window.fsSignOut=signOut;
   window.fsDoc=doc;window.fsSetDoc=setDoc;window.fsDeleteDoc=deleteDoc;window.fsCollection=collection;
-  let u1,u2,u3,u4,u5;
+  let u1,u2,u3,u4,u5,u6;
   function act(){
     u1=onSnapshot(collection(db,"clients"),s=>{
       window.WC=s.docs.map(d=>({...d.data(),id:d.id})).filter(c=>(c.categoria||"despacho")!=="auxiliar");
@@ -461,11 +486,14 @@ tr:last-child td{border-bottom:none;}
     u5=onSnapshot(collection(db,"iva_fiscal"),s=>{
       window.WFI={};s.docs.forEach(d=>window.WFI[d.id]={...d.data(),id:d.id});renderFiscal();
     });
+    u6=onSnapshot(collection(db,"iva_tgastos"),s=>{
+      window.WTG=s.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"));renderTG();
+    });
   }
-  function des(){[u1,u2,u3,u4,u5].forEach(u=>{if(u)u();});}
+  function des(){[u1,u2,u3,u4,u5,u6].forEach(u=>{if(u)u();});}
   onAuthStateChanged(auth,user=>{
     if(user){
-      window.WC=[];window.WF=[];window.WCC=[];window.WM={};window.WFI={};
+      window.WC=[];window.WF=[];window.WCC=[];window.WM={};window.WFI={};window.WTG=[];
       document.getElementById("loginScreen").style.display="none";
       document.getElementById("appContent").style.display="flex";
       document.getElementById("userBadge").textContent=user.email.split("@")[0];
@@ -479,7 +507,7 @@ tr:last-child td{border-bottom:none;}
 </script>
 
 <script>
-window.WC=[];window.WF=[];window.WCC=[];window.WM={};window.WFI={};
+window.WC=[];window.WF=[];window.WCC=[];window.WM={};window.WFI={};window.WTG=[];
 let expData=[];
 
 function showSection(id,btn){
@@ -564,7 +592,7 @@ function openFM(tipo){
   document.getElementById("fCD").value=window.lastCD||"";   // mantener el cliente del despacho fijo entre facturas
   document.getElementById("fFecha").value=window.lastFecha||new Date().toISOString().slice(0,10);
   document.getElementById("fP1").value="21";document.getElementById("fP2").value="";
-  document.getElementById("fRP").value="";document.getElementById("f347").value="0";
+  document.getElementById("fRP").value="";document.getElementById("f347").value="1";
   document.getElementById("acList").style.display="none";
   document.getElementById("fModal").classList.add("open");
 }
@@ -729,6 +757,7 @@ function openCM(){
   ["cNom","cNif","cCta","cContra","cDir","cPob","cCP","cProv","cTel"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("cCD").value="";
   document.getElementById("cTip").value="proveedor";
+  document.getElementById("cTG").value="";
   document.getElementById("cModal").classList.add("open");
 }
 
@@ -741,6 +770,8 @@ function editC(id){
   document.getElementById("cNif").value=cc.nif||"";
   document.getElementById("cCta").value=cc.cuenta||"";
   document.getElementById("cContra").value=cc.contrapartida||"";
+  const tgm=(window.WTG||[]).find(t=>t.cuenta===cc.contrapartida);
+  document.getElementById("cTG").value=tgm?tgm.id:"";
   document.getElementById("cTip").value=cc.tipo||"proveedor";
   document.getElementById("cDir").value=cc.domicilio||"";
   document.getElementById("cPob").value=cc.poblacion||"";
@@ -792,6 +823,62 @@ async function saveC(){
 }
 
 async function delC(id){if(!confirm("Eliminar esta cuenta?"))return;await fbD("iva_cuentas",id);}
+
+// ===== TIPOS DE GASTO (contrapartida del asiento) =====
+function renderTG(){
+  const tgs=(window.WTG||[]);
+  // Desplegable dentro del modal de cuenta
+  const sel=document.getElementById("cTG");
+  if(sel){const cur=sel.value;
+    sel.innerHTML="<option value=''>- Sin tipo / manual -</option>"+tgs.map(t=>"<option value='"+t.id+"'>"+(t.nombre||"")+" ("+(t.cuenta||"")+")</option>").join("");
+    sel.value=cur;
+  }
+  // Lista dentro del gestor
+  const list=document.getElementById("tgList");
+  if(list){
+    list.innerHTML=tgs.length?tgs.map(t=>
+      "<div style='border:1px solid var(--gray-200);border-radius:7px;padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;'>"+
+      "<div><strong>"+(t.nombre||"")+"</strong> <span style='font-family:monospace;color:var(--gray-400);font-size:12px;'>"+(t.cuenta||"")+"</span></div>"+
+      "<div style='white-space:nowrap;'><button class='icon-btn' data-id='"+t.id+"' onclick='editTG(this.dataset.id)'>&#9998;</button><button class='icon-btn' data-id='"+t.id+"' onclick='delTG(this.dataset.id)'>x</button></div></div>"
+    ).join(""):"<div class='empty' style='padding:14px;font-size:12px;'>No hay tipos de gasto. Anade uno o pulsa \"Cargar tipos comunes\".</div>";
+  }
+}
+function fillContraFromTG(){
+  const id=document.getElementById("cTG").value;
+  const t=(window.WTG||[]).find(x=>x.id===id);
+  if(t)document.getElementById("cContra").value=t.cuenta||"";
+}
+function openTGM(){
+  document.getElementById("tgId").value="";
+  document.getElementById("tgNom").value="";
+  document.getElementById("tgCta").value="";
+  renderTG();
+  document.getElementById("tgModal").classList.add("open");
+}
+function editTG(id){
+  const t=(window.WTG||[]).find(x=>x.id===id);if(!t)return;
+  document.getElementById("tgId").value=t.id;
+  document.getElementById("tgNom").value=t.nombre||"";
+  document.getElementById("tgCta").value=t.cuenta||"";
+}
+async function saveTG(){
+  const nom=document.getElementById("tgNom").value.trim();
+  const cta=document.getElementById("tgCta").value.trim();
+  if(!nom||!cta){alert("Indica nombre y cuenta.");return;}
+  const id=document.getElementById("tgId").value||("tg_"+nom.toLowerCase().replace(/[^a-z0-9]+/g,"_")).replace(/_+$/,"");
+  await fbS("iva_tgastos",id,{id,nombre:nom,cuenta:cta,creado:new Date().toISOString()});
+  document.getElementById("tgId").value="";
+  document.getElementById("tgNom").value="";
+  document.getElementById("tgCta").value="";
+}
+async function delTG(id){if(!confirm("Eliminar este tipo de gasto?"))return;await fbD("iva_tgastos",id);}
+async function seedTG(){
+  const base=[["Compras / mercaderias","60000000"],["Arrendamientos","62100000"],["Reparaciones y conservacion","62200000"],["Servicios profesionales","62300000"],["Transportes / mensajeria","62400000"],["Primas de seguros","62500000"],["Servicios bancarios","62600000"],["Publicidad y propaganda","62700000"],["Suministros (luz, agua, tel.)","62800000"],["Combustible","62800000"],["Material de oficina / papeleria","62900000"],["Limpieza","62900000"],["Aparcamiento y peajes","62900000"],["Otros servicios","62900000"]];
+  for(const [nombre,cuenta] of base){
+    const id=("tg_"+nombre.toLowerCase().replace(/[^a-z0-9]+/g,"_")).replace(/_+$/,"");
+    await fbS("iva_tgastos",id,{id,nombre,cuenta,creado:new Date().toISOString()});
+  }
+}
 
 function openImpC(){
   const sel=document.getElementById("impCD");
@@ -905,7 +992,7 @@ async function doImpF(){
         base1,pct1:String(pct1||""),base2,pct2:String(pct2||""),
         iva1:Math.round(iva1*100)/100,iva2:Math.round(iva2*100)/100,total:Math.round(total*100)/100,
         retPct:iRp>=0?txt(r[iRp]).replace("%","").trim():"",retImporte:iRi>=0?num(r[iRi]):0,
-        m347:"0",deducible:tipo==="IVS"?"1":"",creado:new Date().toISOString()});
+        m347:"1",deducible:tipo==="IVS"?"1":"",creado:new Date().toISOString()});
     }
     if(!regs.length){st.textContent="No se encontraron facturas validas en el archivo.";return;}
     st.textContent="Importando "+regs.length+" facturas...";document.getElementById("impfBtn").disabled=true;
