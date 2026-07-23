@@ -273,6 +273,17 @@ tr:last-child td{border-bottom:none;}
     </div>
     <div id="lqRes"></div>
   </div>
+  <div class="card">
+    <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:4px;">Modelo 347</div>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px;">Operaciones con terceros que superan 3.005,06 &euro; al ano (IVA incluido), desglosadas por trimestre.</div>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+      <div class="fg" style="min-width:220px;"><label class="fl">Cliente</label><select class="fi2" id="m3Cli"><option value="">Seleccionar...</option></select></div>
+      <div class="fg" style="width:120px;"><label class="fl">Ano</label><select class="fi2" id="m3Anio"><option>2025</option><option selected>2026</option><option>2027</option></select></div>
+      <button class="btn btn-primary" onclick="gen347()">Generar</button>
+      <button class="btn btn-success" id="m3Btn" onclick="exp347()" style="display:none;">Descargar Excel</button>
+    </div>
+    <div id="m3Res"></div>
+  </div>
 </div>
 
 </main>
@@ -887,7 +898,8 @@ async function doImpF(){
       const base2=iB2>=0?num(r[iB2]):0,pct2=iP2>=0?txt(r[iP2]).replace("%","").trim():"",iva2=iC2>=0&&txt(r[iC2])!==""?num(r[iC2]):base2*(parseFloat(pct2)||0)/100;
       const total=iTot>=0&&num(r[iTot])?num(r[iTot]):base1+iva1+base2+iva2;
       const numero=iNum>=0?txt(r[iNum]):"";
-      regs.push({id:"imp_"+cid+"_"+tipo+"_"+(numero||("f"+i))+"_"+fecha+"_"+Math.round(base1*100),
+      const rid=("imp_"+cid+"_"+tipo+"_"+(numero||("f"+i))+"_"+fecha+"_"+Math.round(base1*100)).replace(/[^A-Za-z0-9_-]/g,"_"); // Firestore no admite "/" ni otros
+      regs.push({id:rid,
         tipo,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",fecha,numero,
         nombre:iNom>=0?txt(r[iNom]):"",nif:iNif>=0?txt(r[iNif]):"",cuenta:"",
         base1,pct1:String(pct1||""),base2,pct2:String(pct2||""),
@@ -897,10 +909,11 @@ async function doImpF(){
     }
     if(!regs.length){st.textContent="No se encontraron facturas validas en el archivo.";return;}
     st.textContent="Importando "+regs.length+" facturas...";document.getElementById("impfBtn").disabled=true;
-    for(const rec of regs){await fbS("iva_facturas",rec.id,rec);}
+    let ok=0,fail=0;
+    for(const rec of regs){try{await fbS("iva_facturas",rec.id,rec);ok++;}catch(err){console.error("Error importando",rec,err);fail++;}}
     document.getElementById("impfBtn").disabled=false;
-    st.textContent="Importadas "+regs.length+" facturas correctamente.";
-    setTimeout(()=>closeM("impfModal"),1400);
+    st.textContent="Importadas "+ok+" facturas"+(fail?" ("+fail+" con error, revisa la consola)":" correctamente")+".";
+    if(!fail)setTimeout(()=>closeM("impfModal"),1400);
   }catch(e){console.error(e);document.getElementById("impfBtn").disabled=false;document.getElementById("impfStatus").textContent="Error al leer el archivo: "+(e.message||e);}
 }
 
@@ -924,6 +937,7 @@ function renderFiscal(){
   const opts="<option value=''>Seleccionar...</option>"+(window.WC||[]).slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es")).map(c=>"<option value='"+c.id+"'>"+(c.nombre||c.id)+"</option>").join("");
   const sel=document.getElementById("fiCli");if(sel){const cur=sel.value;sel.innerHTML=opts;sel.value=cur;renderFichaForm();}
   const lq=document.getElementById("lqCli");if(lq){const cur=lq.value;lq.innerHTML=opts;lq.value=cur;}
+  const m3=document.getElementById("m3Cli");if(m3){const cur=m3.value;m3.innerHTML=opts;m3.value=cur;}
 }
 
 // Liquidacion trimestral (Fase 2: estimacion directa)
@@ -988,6 +1002,66 @@ function calcLiq(){
   cont.innerHTML="<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA reperc.</th><th class='td-r'>IVA soport.</th><th class='td-r'>Resultado</th><th class='td-r'>IVA a pagar</th><th class='td-r'>Pdte. comp.</th><th class='td-r'>IRPF 130</th></tr></thead><tbody>"+
     q.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='color:"+(x.res>=0?"var(--gray-600)":"var(--success)")+";'>"+eur2(x.res)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.aPagar)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.pendFin)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td></tr>").join("")+"</tbody></table></div>"+
     "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado. Si es negativo queda pendiente de compensar y se aplica contra los trimestres siguientes que salgan a pagar (arrastre hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados desde enero, menos lo pagado antes.</div>";
+}
+
+// Modelo 347: operaciones con terceros > 3.005,06 EUR (IVA incl.), por clave y trimestre.
+window.W347=null;
+function gen347(){
+  const cid=document.getElementById("m3Cli").value,anio=String(document.getElementById("m3Anio").value);
+  const cont=document.getElementById("m3Res");
+  if(!cid){cont.innerHTML="<div style='color:var(--warning);font-size:12px;'>Selecciona un cliente.</div>";document.getElementById("m3Btn").style.display="none";return;}
+  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&String(f.fecha||"").slice(0,4)===anio&&String(f.m347)==="1");
+  const UMBRAL=3005.06;
+  const grp={};
+  let excl=0;
+  fs.forEach(f=>{
+    const clave=f.tipo==="IVR"?"B":"A"; // B=ventas/ingresos, A=compras/gastos
+    const nif=String(f.nif||"").trim();
+    const nom=String(f.nombre||"").trim();
+    if(!nif&&!nom){excl++;return;} // sin tercero identificado (consumidor final) no va al 347
+    const key=clave+"|"+(nif||nom.toLowerCase());
+    if(!grp[key])grp[key]={clave,nif,nombre:nom,t:[0,0,0,0],total:0};
+    const tot=parseFloat(f.total)||0;
+    grp[key].t[trimOf(f.fecha)-1]+=tot;
+    grp[key].total+=tot;
+    if(nif&&!grp[key].nif)grp[key].nif=nif;
+    if(nom&&!grp[key].nombre)grp[key].nombre=nom;
+  });
+  const rows=Object.values(grp).filter(g=>Math.abs(g.total)>UMBRAL)
+    .sort((a,b)=>a.clave.localeCompare(b.clave)||(b.total-a.total));
+  window.W347=rows;
+  if(!rows.length){
+    cont.innerHTML="<div style='font-size:12px;color:var(--gray-400);'>No hay terceros que superen 3.005,06 &euro; en "+anio+". "+
+      (excl?("("+excl+" factura(s) sin NIF/nombre excluidas.)"):"")+"</div>";
+    document.getElementById("m3Btn").style.display="none";return;
+  }
+  const clv=c=>c==="A"?"A - Adquisiciones (gastos)":"B - Entregas (ingresos)";
+  cont.innerHTML="<div class='tabla-wrapper'><table><thead><tr><th>Clave</th><th>NIF</th><th>Nombre</th><th class='td-r'>1T</th><th class='td-r'>2T</th><th class='td-r'>3T</th><th class='td-r'>4T</th><th class='td-r'>Total anual</th></tr></thead><tbody>"+
+    rows.map(g=>"<tr><td>"+g.clave+"</td><td>"+(g.nif||"<span style='color:var(--warning);'>sin NIF</span>")+"</td><td>"+(g.nombre||"")+"</td>"+
+      g.t.map(x=>"<td class='td-r'>"+eur2(x)+"</td>").join("")+"<td class='td-r' style='font-weight:600;'>"+eur2(g.total)+"</td></tr>").join("")+
+    "</tbody></table></div>"+
+    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Clave A = adquisiciones (facturas recibidas/gastos), B = entregas (facturas emitidas/ingresos). Importes con IVA incluido. Solo se incluyen facturas marcadas &laquo;Incluir en 347&raquo; y terceros que superan 3.005,06 &euro; anuales. "+
+    (excl?(excl+" factura(s) sin NIF/nombre excluidas. "):"")+"Revisa que cada tercero tenga NIF antes de presentar.</div>";
+  document.getElementById("m3Btn").style.display="";
+}
+function exp347(){
+  if(!window.W347||!window.W347.length){alert("Genera primero el 347.");return;}
+  const anio=String(document.getElementById("m3Anio").value);
+  const cn=(document.getElementById("m3Cli").options[document.getElementById("m3Cli").selectedIndex]||{}).text||"";
+  const headers=["Clave","NIF","Nombre","1T","2T","3T","4T","Total anual"];
+  const data=window.W347.map(g=>[g.clave,g.nif,g.nombre,round2(g.t[0]),round2(g.t[1]),round2(g.t[2]),round2(g.t[3]),round2(g.total)]);
+  try{
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet([headers,...data]);
+    ws["!cols"]=[{wch:6},{wch:12},{wch:34},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws,"347");
+    const u=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+    const b=new Blob([u],{type:"application/octet-stream"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(b);
+    a.download=("347_"+cn+"_"+anio).replace(/[^A-Za-z0-9_-]+/g,"_")+".xlsx";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }catch(e){console.error("Error 347:",e);alert("Error al generar el Excel: "+e.message);}
 }
 
 function openEpi(id){
