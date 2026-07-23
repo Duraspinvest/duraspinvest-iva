@@ -285,6 +285,18 @@ tr:last-child td{border-bottom:none;}
     </div>
     <div id="m3Res"></div>
   </div>
+
+  <div class="card">
+    <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:4px;">Desglose de gastos por cuenta (renta)</div>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px;">Agrupa las facturas recibidas por su cuenta de gasto, con base, IVA soportado y total. Util para desglosar los gastos en la declaracion de la renta.</div>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
+      <div class="fg" style="min-width:220px;"><label class="fl">Cliente</label><select class="fi2" id="dgCli"><option value="">Seleccionar...</option></select></div>
+      <div class="fg" style="width:120px;"><label class="fl">Ano</label><select class="fi2" id="dgAnio"><option>2025</option><option selected>2026</option><option>2027</option></select></div>
+      <button class="btn btn-primary" onclick="genDG()">Generar</button>
+      <button class="btn btn-success" id="dgBtn" onclick="expDG()" style="display:none;">Descargar Excel</button>
+    </div>
+    <div id="dgRes"></div>
+  </div>
 </div>
 
 </main>
@@ -350,6 +362,9 @@ tr:last-child td{border-bottom:none;}
       </div>
       <div class="fg"><label class="fl">NIF/CIF</label><input type="text" class="fi2" id="fNif" placeholder="B12345678"></div>
       <div class="fg"><label class="fl">Cuenta contable</label><input type="text" class="fi2" id="fCta" placeholder="43000001"></div>
+      <div class="fg"><label class="fl">Cuenta de gasto/venta</label><input type="text" class="fi2" id="fContra" placeholder="Vacio = se toma de la ficha"></div>
+      <div class="fg full"><label class="fl">Tipo de gasto <span style="color:var(--gray-400);font-weight:400;">(rellena la cuenta de gasto)</span></label>
+        <select class="fi2" id="fTG" onchange="fillContraFromTGF()"><option value="">- Manual / desde ficha del proveedor -</option></select></div>
     </div>
     <div class="iva-box">
       <div class="iva-box-title">Linea 1 de IVA</div>
@@ -588,7 +603,8 @@ function openFM(tipo){
   document.getElementById("fMTitle").textContent=tipo==="IVR"?"Nueva factura emitida":"Nueva factura recibida";
   document.getElementById("fNLbl").innerHTML=(tipo==="IVR"?"Nombre cliente":"Nombre proveedor")+" <span class='ob'>*</span>";
   document.getElementById("fDedG").style.display=tipo==="IVS"?"block":"none";
-  ["fNom","fNif","fCta","fNum","fB1","fB2","fI1","fI2","fTot","fRI"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
+  ["fNom","fNif","fCta","fContra","fNum","fB1","fB2","fI1","fI2","fTot","fRI"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
+  document.getElementById("fTG").value="";
   document.getElementById("fCD").value=window.lastCD||"";   // mantener el cliente del despacho fijo entre facturas
   document.getElementById("fFecha").value=window.lastFecha||new Date().toISOString().slice(0,10);
   document.getElementById("fP1").value="21";document.getElementById("fP2").value="";
@@ -611,6 +627,9 @@ function editF(id){
   document.getElementById("fNom").value=f.nombre||"";
   document.getElementById("fNif").value=f.nif||"";
   document.getElementById("fCta").value=f.cuenta||"";
+  document.getElementById("fContra").value=f.contrapartida||"";
+  const tgmf=(window.WTG||[]).find(t=>t.cuenta===f.contrapartida);
+  document.getElementById("fTG").value=tgmf?tgmf.id:"";
   document.getElementById("fB1").value=(f.base1!==undefined&&f.base1!==null&&f.base1!=="")?f.base1:"";
   document.getElementById("fP1").value=f.pct1||"21";
   document.getElementById("fI1").value=(f.iva1||f.iva1===0)?f.iva1:"";
@@ -646,8 +665,8 @@ function acNombre(v){
   });
   if(!ccs.length){lista.style.display="none";return;}
   lista.innerHTML=ccs.map(cc=>
-    "<div class='ac-item' data-n='"+cc.nombre+"' data-nif='"+(cc.nif||"")+"' data-cta='"+cc.cuenta+"' onclick='selCC(this)'>"+
-    cc.nombre+"<div class='ac-sub'>"+(cc.nif?cc.nif+" · ":"")+"Cta: "+cc.cuenta+"</div></div>"
+    "<div class='ac-item' data-n='"+cc.nombre+"' data-nif='"+(cc.nif||"")+"' data-cta='"+cc.cuenta+"' data-contra='"+(cc.contrapartida||"")+"' onclick='selCC(this)'>"+
+    cc.nombre+"<div class='ac-sub'>"+(cc.nif?cc.nif+" · ":"")+"Cta: "+cc.cuenta+(cc.contrapartida?" · Gasto: "+cc.contrapartida:"")+"</div></div>"
   ).join("");
   lista.style.display="block";
 }
@@ -656,6 +675,11 @@ function selCC(el){
   document.getElementById("fNom").value=el.dataset.n;
   document.getElementById("fNif").value=el.dataset.nif;
   document.getElementById("fCta").value=el.dataset.cta;
+  if(el.dataset.contra){                                   // toma la cuenta de gasto de la ficha (Endesa -> 628)
+    document.getElementById("fContra").value=el.dataset.contra;
+    const tg=(window.WTG||[]).find(t=>t.cuenta===el.dataset.contra);
+    document.getElementById("fTG").value=tg?tg.id:"";
+  }
   document.getElementById("acList").style.display="none";
 }
 
@@ -706,6 +730,7 @@ async function saveF(){
     fecha:fec,numero:numero,nombre:nom,
     nif:document.getElementById("fNif").value.trim(),
     cuenta:document.getElementById("fCta").value.trim(),
+    contrapartida:document.getElementById("fContra").value.trim(),
     base1:parseFloat(b1)||0,base2:parseFloat(document.getElementById("fB2").value)||0,
     pct1:document.getElementById("fP1").value,pct2:document.getElementById("fP2").value,
     iva1:parseFloat(document.getElementById("fI1").value)||0,iva2:parseFloat(document.getElementById("fI2").value)||0,
@@ -833,6 +858,12 @@ function renderTG(){
     sel.innerHTML="<option value=''>- Sin tipo / manual -</option>"+tgs.map(t=>"<option value='"+t.id+"'>"+(t.nombre||"")+" ("+(t.cuenta||"")+")</option>").join("");
     sel.value=cur;
   }
+  // Desplegable dentro del modal de factura
+  const selF=document.getElementById("fTG");
+  if(selF){const cur=selF.value;
+    selF.innerHTML="<option value=''>- Manual / desde ficha del proveedor -</option>"+tgs.map(t=>"<option value='"+t.id+"'>"+(t.nombre||"")+" ("+(t.cuenta||"")+")</option>").join("");
+    selF.value=cur;
+  }
   // Lista dentro del gestor
   const list=document.getElementById("tgList");
   if(list){
@@ -847,6 +878,11 @@ function fillContraFromTG(){
   const id=document.getElementById("cTG").value;
   const t=(window.WTG||[]).find(x=>x.id===id);
   if(t)document.getElementById("cContra").value=t.cuenta||"";
+}
+function fillContraFromTGF(){
+  const id=document.getElementById("fTG").value;
+  const t=(window.WTG||[]).find(x=>x.id===id);
+  if(t)document.getElementById("fContra").value=t.cuenta||"";
 }
 function openTGM(){
   document.getElementById("tgId").value="";
@@ -1025,6 +1061,7 @@ function renderFiscal(){
   const sel=document.getElementById("fiCli");if(sel){const cur=sel.value;sel.innerHTML=opts;sel.value=cur;renderFichaForm();}
   const lq=document.getElementById("lqCli");if(lq){const cur=lq.value;lq.innerHTML=opts;lq.value=cur;}
   const m3=document.getElementById("m3Cli");if(m3){const cur=m3.value;m3.innerHTML=opts;m3.value=cur;}
+  const dg=document.getElementById("dgCli");if(dg){const cur=dg.value;dg.innerHTML=opts;dg.value=cur;}
 }
 
 // Liquidacion trimestral (Fase 2: estimacion directa)
@@ -1151,6 +1188,57 @@ function exp347(){
   }catch(e){console.error("Error 347:",e);alert("Error al generar el Excel: "+e.message);}
 }
 
+// Desglose de gastos por cuenta contable (para la renta)
+window.WDG=null;
+function genDG(){
+  const cid=document.getElementById("dgCli").value,anio=String(document.getElementById("dgAnio").value);
+  const cont=document.getElementById("dgRes");
+  if(!cid){cont.innerHTML="<div style='color:var(--warning);font-size:12px;'>Selecciona un cliente.</div>";document.getElementById("dgBtn").style.display="none";return;}
+  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&f.tipo==="IVS"&&String(f.fecha||"").slice(0,4)===anio);
+  const grp={};
+  fs.forEach(f=>{
+    const cc=getCuentaParaFactura(f);
+    const cuenta=cc.contrapartida||"(sin cuenta de gasto)";
+    const tg=(window.WTG||[]).find(t=>t.cuenta===cc.contrapartida);
+    const base=(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
+    const iva=(parseFloat(f.iva1)||0)+(parseFloat(f.iva2)||0);
+    const ded=String(f.deducible)!=="0"; // en la app "1"/vacio = IVA deducible, "0" = no deducible
+    if(!grp[cuenta])grp[cuenta]={cuenta,nombre:tg?tg.nombre:"",base:0,ivaDed:0,ivaNoDed:0,n:0};
+    grp[cuenta].base+=base;
+    if(ded)grp[cuenta].ivaDed+=iva; else grp[cuenta].ivaNoDed+=iva;
+    grp[cuenta].n++;
+  });
+  const rows=Object.values(grp).sort((a,b)=>(a.cuenta||"").localeCompare(b.cuenta||""));
+  window.WDG=rows;
+  if(!rows.length){cont.innerHTML="<div style='font-size:12px;color:var(--gray-400);'>No hay facturas recibidas en "+anio+".</div>";document.getElementById("dgBtn").style.display="none";return;}
+  const tB=rows.reduce((s,g)=>s+g.base,0),tD=rows.reduce((s,g)=>s+g.ivaDed,0),tN=rows.reduce((s,g)=>s+g.ivaNoDed,0),tn=rows.reduce((s,g)=>s+g.n,0);
+  cont.innerHTML="<div class='tabla-wrapper'><table><thead><tr><th>Cuenta</th><th>Tipo de gasto</th><th class='td-r'>Facturas</th><th class='td-r'>Base</th><th class='td-r'>IVA deducible</th><th class='td-r'>IVA no deducible</th><th class='td-r'>Gasto total</th></tr></thead><tbody>"+
+    rows.map(g=>"<tr><td style='font-family:monospace;'>"+g.cuenta+"</td><td>"+(g.nombre||"")+"</td><td class='td-r'>"+g.n+"</td><td class='td-r'>"+eur2(g.base)+"</td><td class='td-r'>"+eur2(g.ivaDed)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(g.ivaNoDed)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(g.base+g.ivaNoDed)+"</td></tr>").join("")+
+    "<tr style='border-top:2px solid var(--gray-200);font-weight:600;'><td colspan='2'>TOTAL</td><td class='td-r'>"+tn+"</td><td class='td-r'>"+eur2(tB)+"</td><td class='td-r'>"+eur2(tD)+"</td><td class='td-r'>"+eur2(tN)+"</td><td class='td-r'>"+eur2(tB+tN)+"</td></tr>"+
+    "</tbody></table></div>"+
+    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>La columna &laquo;Gasto total&raquo; = base + IVA no deducible (el IVA deducible no es gasto, se recupera). En un ticket sin factura el IVA no se deduce, asi que suma como gasto. La cuenta de gasto sale de cada factura o, si esta vacia, de la ficha del proveedor.</div>";
+  document.getElementById("dgBtn").style.display="";
+}
+function expDG(){
+  if(!window.WDG||!window.WDG.length){alert("Genera primero el desglose.");return;}
+  const anio=String(document.getElementById("dgAnio").value);
+  const cn=(document.getElementById("dgCli").options[document.getElementById("dgCli").selectedIndex]||{}).text||"";
+  const headers=["Cuenta","Tipo de gasto","Facturas","Base","IVA deducible","IVA no deducible","Gasto total"];
+  const data=window.WDG.map(g=>[g.cuenta,g.nombre,g.n,round2(g.base),round2(g.ivaDed),round2(g.ivaNoDed),round2(g.base+g.ivaNoDed)]);
+  try{
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet([headers,...data]);
+    ws["!cols"]=[{wch:16},{wch:26},{wch:9},{wch:12},{wch:14},{wch:16},{wch:13}];
+    XLSX.utils.book_append_sheet(wb,ws,"Gastos");
+    const u=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+    const b=new Blob([u],{type:"application/octet-stream"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(b);
+    a.download=("gastos_"+cn+"_"+anio).replace(/[^A-Za-z0-9_-]+/g,"_")+".xlsx";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }catch(e){console.error("Error desglose:",e);alert("Error al generar el Excel: "+e.message);}
+}
+
 function openEpi(id){
   const e=(window.WM||{})[id]||{};
   document.getElementById("epiId").value=id||"";
@@ -1241,9 +1329,11 @@ function getTipoFactura(formato){
 }
 
 function getCuentaParaFactura(f){
-  return (window.WCC||[]).find(c=>
+  const cc=(window.WCC||[]).find(c=>
     c.clienteDespachoId===f.clienteDespachoId && c.nombre===f.nombre
   )||{cuenta:f.cuenta||"",contrapartida:"",domicilio:"",poblacion:"",cp:"",provincia:"",telefono:"",nif:""};
+  // La cuenta de gasto/venta de la propia factura manda sobre la de la ficha
+  return f.contrapartida?{...cc,contrapartida:f.contrapartida}:cc;
 }
 
 // Tipo de IVA de FactuSOL segun el porcentaje (config por defecto: 1=21%, 2=10%, 3=4%, 4=0%/exento)
