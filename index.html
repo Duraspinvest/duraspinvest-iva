@@ -469,8 +469,9 @@ tr:last-child td{border-bottom:none;}
 <div class="modal-overlay" id="impModal" onclick="closeMO(event,'impModal')">
   <div class="modal" style="max-width:460px;">
     <div class="modal-title">Importar clientes/proveedores desde Excel</div>
-    <div style="font-size:12px;color:var(--gray-600);margin-bottom:14px;">Sube el listado de clientes o proveedores exportado de Delsol (.xls o .xlsx). El tipo (cliente 430 / proveedor 400 / acreedor 410) se detecta por el código. Los datos que falten se dejan en blanco.</div>
-    <div class="fg" style="margin-bottom:12px;"><label class="fl">Cliente del despacho <span class="ob">*</span></label>
+    <div style="font-size:12px;color:var(--gray-600);margin-bottom:12px;">Dos formas: <b>1)</b> la <b>plantilla</b> de la app (recomendado), donde cada fila lleva su propio cliente del despacho, NIF y cuenta de gasto &mdash; sirve para varios clientes a la vez. <b>2)</b> el listado exportado de Delsol (codigo + descripcion), que se asigna al cliente que elijas abajo.</div>
+    <div style="margin-bottom:12px;"><button class="btn btn-secondary" onclick="plantillaCuentas()">Descargar plantilla</button></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Cliente del despacho <span style="color:var(--gray-400);font-weight:400;">(solo para el listado de Delsol; la plantilla lo trae por fila)</span></label>
       <select class="fi2" id="impCD"><option value="">Seleccionar...</option></select></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Archivo (.xls / .xlsx)</label>
       <input type="file" class="fi2" id="impFile" accept=".xls,.xlsx,.ods" style="padding:7px;"></div>
@@ -932,11 +933,36 @@ function openImpC(){
   document.getElementById("impModal").classList.add("open");
 }
 
+function plantillaCuentas(){
+  if(typeof XLSX==="undefined"){alert("Libreria Excel no disponible. Recarga la pagina.");return;}
+  const headers=["Cliente del despacho","Tipo (cliente/proveedor/acreedor)","Nombre","NIF/CIF","Cuenta (opcional)","Cuenta de gasto (opcional)","Domicilio","CP","Poblacion","Provincia","Telefono"];
+  const ej=(window.WC||[])[0];
+  const nomCli=ej?ej.nombre:"NOMBRE EXACTO DE TU CLIENTE";
+  const filas=[
+    [nomCli,"proveedor","ENDESA ENERGIA SA","A81948077","","62800000","Calle Ribera del Loira 60","28042","Madrid","Madrid","800000000"],
+    [nomCli,"proveedor","COMBUSTIBLE VARIOS","","","62900000","","","","",""],
+    [nomCli,"cliente","CLIENTE EJEMPLO SL","B12345678","","","","","","",""]
+  ];
+  try{
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet([headers,...filas]);
+    ws["!cols"]=[24,20,28,12,16,18,26,7,16,14,12].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb,ws,"Cuentas");
+    const cli=(window.WC||[]).slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es")).map(c=>[c.nombre||c.id]);
+    const ws2=XLSX.utils.aoa_to_sheet([["Clientes del despacho (copia el nombre EXACTO en la columna A)"],...cli]);
+    ws2["!cols"]=[{wch:42}];
+    XLSX.utils.book_append_sheet(wb,ws2,"Mis clientes");
+    const u=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+    const b=new Blob([u],{type:"application/octet-stream"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="plantilla_clientes_proveedores.xlsx";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }catch(e){console.error(e);alert("Error al generar la plantilla: "+e.message);}
+}
+
 async function doImpC(){
   const cid=document.getElementById("impCD").value;
   const file=document.getElementById("impFile").files[0];
   const st=document.getElementById("impStatus");
-  if(!cid){st.textContent="Selecciona el cliente del despacho.";return;}
   if(!file){st.textContent="Selecciona un archivo.";return;}
   if(typeof XLSX==="undefined"){st.textContent="Libreria Excel no disponible. Recarga la pagina.";return;}
   st.textContent="Leyendo archivo...";
@@ -945,38 +971,90 @@ async function doImpC(){
     const wb=XLSX.read(buf,{type:"array"});
     const ws=wb.Sheets[wb.SheetNames[0]];
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
-    let h=-1;
-    for(let i=0;i<rows.length;i++){
-      const r=(rows[i]||[]).map(x=>String(x).trim().toLowerCase());
-      if(r.some(x=>x.includes("digo"))&&r.some(x=>x.includes("descrip"))){h=i;break;}
-    }
-    if(h<0)h=0;
-    const cl=(window.WC||[]).find(c=>c.id===cid);
     const clean=x=>String(x==null?"":x).trim();
-    const regs=[];
-    for(let i=h+1;i<rows.length;i++){
-      const r=rows[i]||[];
-      const codigo=clean(r[0]),nombre=clean(r[1]);
-      if(!codigo&&!nombre)continue;
-      if(!/^\d/.test(codigo))continue; // solo filas cuyo codigo empieza por numero (subcuenta)
-      const tipo=codigo.startsWith("43")?"cliente":codigo.startsWith("40")?"proveedor":codigo.startsWith("41")?"acreedor":"otro";
-      let cp=clean(r[3]); if(/^\d+$/.test(cp)&&cp.length<5)cp=cp.padStart(5,"0");
-      regs.push({
-        id:cid+"-"+codigo,
-        clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",
-        nombre:nombre,nif:"",cuenta:codigo,tipo:tipo,contrapartida:"",
-        domicilio:clean(r[2]),cp:cp,poblacion:clean(r[4]),
-        provincia:clean(r[5]),telefono:clean(r[7]),
-        creado:new Date().toISOString()
-      });
+    const norm=x=>clean(x).toLowerCase();
+    // Detectar cabecera de PLANTILLA (columna "cliente del despacho")
+    let hIdx=-1;
+    for(let i=0;i<rows.length;i++){if((rows[i]||[]).map(norm).some(x=>x.includes("cliente del despacho"))){hIdx=i;break;}}
+    let regs=[],errs=[];
+    if(hIdx>=0){
+      const hdr=(rows[hIdx]||[]).map(norm);
+      const col=(...keys)=>hdr.findIndex(c=>keys.some(k=>c.includes(k)));
+      const cCli=col("cliente del despacho"),cTipo=col("tipo"),cNom=col("nombre","descrip"),
+        cNif=col("nif","cif"),cGasto=col("cuenta de gasto","contrapartida","gasto"),
+        cCta=hdr.findIndex(c=>c.includes("cuenta")&&!c.includes("gasto")),
+        cDir=col("domicilio","direccion"),cCP=col("cp","postal"),cPob=col("poblac"),
+        cProv=col("provinc"),cTel=col("tel");
+      const seq={};
+      for(let i=hIdx+1;i<rows.length;i++){
+        const r=rows[i]||[];
+        const cliNom=cCli>=0?clean(r[cCli]):"",nom=cNom>=0?clean(r[cNom]):"";
+        if(!cliNom&&!nom)continue;
+        const cl=(window.WC||[]).find(c=>norm(c.nombre)===norm(cliNom)||c.id===cliNom);
+        if(!cl){errs.push("Fila "+(i+1)+": cliente del despacho no encontrado (\""+cliNom+"\")");continue;}
+        if(!nom){errs.push("Fila "+(i+1)+": falta el nombre");continue;}
+        let tipo=cTipo>=0?norm(r[cTipo]):"";
+        tipo=tipo.includes("cliente")?"cliente":tipo.includes("acreedor")?"acreedor":tipo.includes("proveedor")?"proveedor":"";
+        let cta=cCta>=0?clean(r[cCta]):"";
+        if(!tipo)tipo=cta.startsWith("43")?"cliente":cta.startsWith("41")?"acreedor":"proveedor";
+        if(!cta){
+          const pref=tipo==="cliente"?"430":tipo==="proveedor"?"400":tipo==="acreedor"?"410":"";
+          if(pref){
+            const key=cl.id+"|"+pref;
+            if(seq[key]===undefined){
+              let max=0;
+              (window.WCC||[]).forEach(cc=>{const c=String(cc.cuenta||"");if(cc.clienteDespachoId===cl.id&&c.length>=4&&c.startsWith(pref)&&/^\d+$/.test(c)){const s=parseInt(c.slice(3),10)||0;if(s>max)max=s;}});
+              regs.forEach(rc=>{const c=String(rc.cuenta||"");if(rc.clienteDespachoId===cl.id&&c.startsWith(pref)){const s=parseInt(c.slice(3),10)||0;if(s>max)max=s;}});
+              seq[key]=max;
+            }
+            seq[key]++;cta=pref+String(seq[key]).padStart(5,"0");
+          }
+        }
+        if(!cta){errs.push("Fila "+(i+1)+": indica la cuenta (el tipo 'otro' no se autogenera)");continue;}
+        let cp=cCP>=0?clean(r[cCP]):"";if(/^\d+$/.test(cp)&&cp.length<5)cp=cp.padStart(5,"0");
+        regs.push({
+          id:cl.id+"-"+cta,
+          clienteDespachoId:cl.id,clienteDespachoNombre:cl.nombre||"",
+          nombre:nom,nif:cNif>=0?clean(r[cNif]):"",cuenta:cta,tipo,
+          contrapartida:cGasto>=0?clean(r[cGasto]):"",
+          domicilio:cDir>=0?clean(r[cDir]):"",cp,poblacion:cPob>=0?clean(r[cPob]):"",
+          provincia:cProv>=0?clean(r[cProv]):"",telefono:cTel>=0?clean(r[cTel]):"",
+          creado:new Date().toISOString()
+        });
+      }
+    } else {
+      // Listado exportado de Delsol (posicional): se asigna al cliente elegido
+      if(!cid){st.textContent="Para el listado de Delsol, selecciona el cliente del despacho.";return;}
+      let h=-1;
+      for(let i=0;i<rows.length;i++){const r=(rows[i]||[]).map(norm);if(r.some(x=>x.includes("digo"))&&r.some(x=>x.includes("descrip"))){h=i;break;}}
+      if(h<0)h=0;
+      const cl=(window.WC||[]).find(c=>c.id===cid);
+      for(let i=h+1;i<rows.length;i++){
+        const r=rows[i]||[];
+        const codigo=clean(r[0]),nombre=clean(r[1]);
+        if(!codigo&&!nombre)continue;
+        if(!/^\d/.test(codigo))continue;
+        const tipo=codigo.startsWith("43")?"cliente":codigo.startsWith("40")?"proveedor":codigo.startsWith("41")?"acreedor":"otro";
+        let cp=clean(r[3]);if(/^\d+$/.test(cp)&&cp.length<5)cp=cp.padStart(5,"0");
+        regs.push({
+          id:cid+"-"+codigo,
+          clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",
+          nombre:nombre,nif:"",cuenta:codigo,tipo:tipo,contrapartida:"",
+          domicilio:clean(r[2]),cp:cp,poblacion:clean(r[4]),
+          provincia:clean(r[5]),telefono:clean(r[7]),
+          creado:new Date().toISOString()
+        });
+      }
     }
-    if(!regs.length){st.textContent="No se encontraron registros validos en el archivo.";return;}
+    if(!regs.length){st.textContent="No se importo nada."+(errs.length?" "+errs.length+" fila(s) con problemas (ver consola).":"");if(errs.length)console.warn("Filas con problemas:\n"+errs.join("\n"));return;}
     st.textContent="Importando "+regs.length+" registros...";
     document.getElementById("impBtn").disabled=true;
-    for(const rec of regs){await fbS("iva_cuentas",rec.id,rec);}
+    let ok=0,fail=0;
+    for(const rec of regs){try{await fbS("iva_cuentas",rec.id,rec);ok++;}catch(err){console.error("Error importando",rec,err);fail++;}}
     document.getElementById("impBtn").disabled=false;
-    st.textContent="Importados "+regs.length+" registros correctamente.";
-    setTimeout(()=>closeM("impModal"),1400);
+    st.textContent="Importados "+ok+" registros"+(fail?" ("+fail+" con error)":"")+(errs.length?". "+errs.length+" fila(s) omitidas (ver consola)":"")+".";
+    if(errs.length)console.warn("Filas omitidas:\n"+errs.join("\n"));
+    if(!fail)setTimeout(()=>closeM("impModal"),1600);
   }catch(e){
     console.error(e);
     document.getElementById("impBtn").disabled=false;
