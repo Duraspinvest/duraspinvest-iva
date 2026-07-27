@@ -126,7 +126,7 @@ tr:last-child td{border-bottom:none;}
     <div class="logo-icon">
       <svg viewBox="0 0 36 36" width="32" height="32"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
     </div>
-    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.07.27e</div></div>
+    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.07.27f</div></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <span id="userBadge" style="color:var(--gold);font-size:11px;font-weight:600;padding:3px 9px;background:rgba(212,160,23,0.15);border-radius:20px;"></span>
@@ -1107,7 +1107,8 @@ async function doImpF(){
     const iTipo=idx("tipo"),iFe=idx("fecha"),iNum=idx("numero","número","nº","n factura"),iNom=idx("nombre"),iNif=idx("nif","nif/cif","cif"),
       iB1=idx("base 1","base","base imponible","base imponible 1"),iP1=idx("% iva 1","%iva 1","% iva","iva","% iva1"),iC1=idx("cuota iva 1","cuota iva","importe iva 1","cuota 1"),
       iB2=idx("base 2","base imponible 2"),iP2=idx("% iva 2","%iva 2"),iC2=idx("cuota iva 2","importe iva 2"),
-      iTot=idx("total"),iRp=idx("% retencion","%retencion","% retención"),iRi=idx("retencion","retención","importe retencion");
+      iTot=idx("total"),iRp=idx("% retencion","%retencion","% retención"),iRi=idx("retencion","retención","importe retencion"),
+      iDed=idx("deducible","iva deducible");
     const pFe=v=>{if(v instanceof Date)return v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
       const s=txt(v);let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+"-"+m[2]+"-"+m[3];
       m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);if(m)return m[3]+"-"+String(m[2]).padStart(2,"0")+"-"+String(m[1]).padStart(2,"0");return s;};
@@ -1127,7 +1128,7 @@ async function doImpF(){
         base1,pct1:String(pct1||""),base2,pct2:String(pct2||""),
         iva1:Math.round(iva1*100)/100,iva2:Math.round(iva2*100)/100,total:Math.round(total*100)/100,
         retPct:iRp>=0?txt(r[iRp]).replace("%","").trim():"",retImporte:iRi>=0?num(r[iRi]):0,
-        m347:"1",deducible:tipo==="IVS"?"1":"",creado:new Date().toISOString()});
+        m347:"1",deducible:tipo==="IVS"?(iDed>=0&&/^(no|0|n)/.test(txt(r[iDed]).toLowerCase())?"0":"1"):"",creado:new Date().toISOString()});
     }
     if(!regs.length){st.textContent="No se encontraron facturas validas en el archivo.";return;}
     st.textContent="Importando "+regs.length+" facturas...";document.getElementById("impfBtn").disabled=true;
