@@ -126,7 +126,7 @@ tr:last-child td{border-bottom:none;}
     <div class="logo-icon">
       <svg viewBox="0 0 36 36" width="32" height="32"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
     </div>
-    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.07.27i</div></div>
+    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.07.27j</div></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <span id="userBadge" style="color:var(--gold);font-size:11px;font-weight:600;padding:3px 9px;background:rgba(212,160,23,0.15);border-radius:20px;"></span>
@@ -1203,6 +1203,8 @@ function calcLiq(){
   if(!cid){cont.innerHTML="<div style='color:var(--warning);font-size:12px;'>Selecciona un cliente.</div>";return;}
   const ficha=(window.WFI||{})[cid]||{regimen:"directa"};
   const sinIva=!!ficha.sinIva;                                          // actividad exenta: no presenta 303
+  const modList=(Array.isArray(ficha.modelos)&&ficha.modelos.length)?ficha.modelos:modelosPropuestos(ficha.regimen||"directa",sinIva);
+  const modBanner="<div style='background:rgba(212,160,23,0.12);border-radius:7px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--navy);'><strong>Modelos que presenta:</strong> "+(modList.length?modList.join(" &middot; "):"&mdash;")+"</div>";
   const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&String(f.fecha||"").slice(0,4)===anio);
   const emit=fs.filter(f=>f.tipo==="IVR"),reci=fs.filter(f=>f.tipo==="IVS");
   const base=f=>(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
@@ -1231,7 +1233,7 @@ function calcLiq(){
     let pend=compAnt,q4Pagar;
     if(res4>=0){const usa=Math.min(res4,pend);q4Pagar=res4-usa;pend-=usa;}else{pend+=(-res4);q4Pagar=0;}
     const rows=[1,2,3,4].map(t=>"<tr><td>"+t+"T</td><td class='td-r'>"+eur2(t<4?ivaAc:q4Pagar)+"</td><td class='td-r'>"+eur2(irpfTrim)+"</td></tr>").join("");
-    cont.innerHTML="<div style='background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;'>"+
+    cont.innerHTML=modBanner+"<div style='background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;'>"+
       "<strong>Datos base (objetiva &middot; epigrafe "+e.id+")</strong><br>"+
       "Rendimiento modulos IRPF: "+eur2(rendPrevio)+" &nbsp;&rarr;&nbsp; base pagos fraccionados (x"+(1-(parseFloat(e.reduccionGralPct)||0)/100).toFixed(2)+" x indice "+indice+"): <strong>"+eur2(rendPF)+"</strong><br>"+
       "Cuota devengada IVA: "+eur2(cuotaDev)+" &nbsp;&middot;&nbsp; IVA soportado del ano: "+eur2(sopAnual)+"<br>"+
@@ -1264,7 +1266,7 @@ function calcLiq(){
   });
 
   if(sinIva){
-    cont.innerHTML="<div style='background:var(--gray-50);border-radius:7px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--gray-600);'>Actividad <strong>exenta de IVA</strong>: no presenta 303. Modelos: <strong>130</strong> (pago fraccionado IRPF), <strong>111</strong> (retenciones de profesionales) y <strong>115</strong> (retenciones de alquiler).</div>"+
+    cont.innerHTML=modBanner+"<div style='background:var(--gray-50);border-radius:7px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--gray-600);'>Actividad <strong>exenta de IVA</strong> (no presenta 303). El 130 es el pago fraccionado de IRPF; 111 y 115 son las retenciones que practica.</div>"+
       "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>Ingresos</th><th class='td-r'>Gastos</th><th class='td-r'>Rendimiento</th><th class='td-r'>Ret. soport.</th><th class='td-r'>IRPF 130</th><th class='td-r'>111 profes.</th><th class='td-r'>115 alquiler</th></tr></thead><tbody>"+
       q.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.ingAcum)+"</td><td class='td-r'>"+eur2(x.gasAcum)+"</td><td class='td-r'>"+eur2(x.rend)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.retSopAcum)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td><td class='td-r'>"+eur2(x.ret111)+"</td><td class='td-r'>"+eur2(x.ret115)+"</td></tr>").join("")+"</tbody></table></div>"+
       "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingresos por mes (arriba) o, si los dejas vacios, de las facturas emitidas. Gasto = total factura, salvo facturas con retencion (solo base). <strong>130 = 20% del rendimiento &minus; retenciones soportadas &minus; pagos anteriores.</strong> Si prefieres no restar las retenciones soportadas en el 130 (como en tu hoja), dimelo. 111 = retenciones a profesionales (7/15%); 115 = retenciones de alquiler (19%), del trimestre.</div>";
@@ -1280,7 +1282,7 @@ function calcLiq(){
     if(res>=0){const usa=Math.min(res,pend);aPagar=res-usa;pend-=usa;}else{pend+=(-res);aPagar=0;}
     return {...x,repIVA,sopIVA,res,aPagar,pendFin:pend};
   });
-  cont.innerHTML="<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA reperc.</th><th class='td-r'>IVA soport.</th><th class='td-r'>Resultado</th><th class='td-r'>IVA a pagar</th><th class='td-r'>Pdte. comp.</th><th class='td-r'>IRPF 130</th></tr></thead><tbody>"+
+  cont.innerHTML=modBanner+"<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA reperc.</th><th class='td-r'>IVA soport.</th><th class='td-r'>Resultado</th><th class='td-r'>IVA a pagar</th><th class='td-r'>Pdte. comp.</th><th class='td-r'>IRPF 130</th></tr></thead><tbody>"+
     q2.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='color:"+(x.res>=0?"var(--gray-600)":"var(--success)")+";'>"+eur2(x.res)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.aPagar)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.pendFin)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td></tr>").join("")+"</tbody></table></div>"+
     "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado (solo IVA deducible). Si es negativo queda pendiente de compensar y se arrastra (hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados &minus; retenciones soportadas, menos lo pagado antes.</div>";
 }
@@ -1445,9 +1447,22 @@ function renderFichaForm(){
     "<div class='fg'><label class='fl'>IVA</label><label style='display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--gray-600);height:38px;'><input type='checkbox' id='fiSinIva' style='width:16px;height:16px;'"+(f.sinIva?" checked":"")+"> Actividad exenta (no presenta 303; solo 130/111/115)</label></div>"+
     "<div class='fg' id='fiEpiWrap'><label class='fl'>Epigrafe</label><select class='fi2' id='fiEpi' onchange='renderFichaForm2()'><option value=''>Seleccionar...</option>"+
       eps.map(e=>"<option value='"+e.id+"'"+(f.epigrafe===e.id?" selected":"")+">"+e.id+" "+(e.nombre||"")+"</option>").join("")+"</select></div></div>"+
+    "<div style='margin-top:14px;'><div class='fl' style='margin-bottom:6px;'>Modelos que presenta <span style='color:var(--gray-400);font-weight:400;text-transform:none;letter-spacing:0;'>(se proponen segun regimen y exencion; ajusta lo que quieras)</span></div><div id='fiModelos' style='display:flex;flex-wrap:wrap;gap:6px 16px;'></div></div>"+
     "<div id='fiUnidades' style='margin-top:12px;'></div>"+
     "<div class='ma' style='justify-content:flex-start;'><button class='btn btn-primary' onclick='saveFicha()'>Guardar ficha fiscal</button></div>";
+  renderModelos(f);
   renderFichaForm2();
+}
+const MODELOS=[["130","130 IRPF"],["131","131 IRPF modulos"],["303","303 IVA"],["111","111 Retenc. trabajo/prof."],["115","115 Retenc. alquiler"],["349","349 Intracomunitario"],["347","347 Operac. terceros"],["390","390 Resumen IVA"],["180","180 Resumen alquiler"],["190","190 Resumen trab./prof."]];
+function modelosPropuestos(reg,sinIva){
+  const s=[]; s.push(reg==="objetiva"?"131":"130"); if(!sinIva){s.push("303");s.push("390");} return s;
+}
+function renderModelos(f){
+  const cont=document.getElementById("fiModelos");if(!cont)return;
+  const reg=(document.getElementById("fiReg")||{}).value||f.regimen||"directa";
+  const sinIva=(document.getElementById("fiSinIva")||{}).checked!=null?document.getElementById("fiSinIva").checked:!!f.sinIva;
+  const sel=new Set(Array.isArray(f.modelos)&&f.modelos.length?f.modelos:modelosPropuestos(reg,sinIva));
+  cont.innerHTML=MODELOS.map(([c,l])=>"<label style='display:flex;align-items:center;gap:5px;font-size:12px;font-weight:400;color:var(--gray-600);white-space:nowrap;'><input type='checkbox' id='fiMod_"+c+"' value='"+c+"'"+(sel.has(c)?" checked":"")+"> "+l+"</label>").join("");
 }
 function renderFichaForm2(){
   const cid=document.getElementById("fiCli").value;
@@ -1467,7 +1482,8 @@ function renderFichaForm2(){
 async function saveFicha(){
   const cid=document.getElementById("fiCli").value;if(!cid){alert("Selecciona un cliente.");return;}
   const reg=document.getElementById("fiReg").value;
-  const rec={id:cid,regimen:reg,epigrafe:"",unidadesIrpf:{},unidadesIva:{},indice:1,sinIva:!!(document.getElementById("fiSinIva")||{}).checked};
+  const modelos=MODELOS.map(m=>m[0]).filter(c=>{const el=document.getElementById("fiMod_"+c);return el&&el.checked;});
+  const rec={id:cid,regimen:reg,epigrafe:"",unidadesIrpf:{},unidadesIva:{},indice:1,sinIva:!!(document.getElementById("fiSinIva")||{}).checked,modelos};
   if(reg==="objetiva"){
     const epi=document.getElementById("fiEpi").value;rec.epigrafe=epi;
     const e=(window.WM||{})[epi]||{};
