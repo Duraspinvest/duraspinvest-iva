@@ -126,7 +126,7 @@ tr:last-child td{border-bottom:none;}
     <div class="logo-icon">
       <svg viewBox="0 0 36 36" width="32" height="32"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
     </div>
-    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.07.27f</div></div>
+    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.07.27i</div></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <span id="userBadge" style="color:var(--gold);font-size:11px;font-weight:600;padding:3px 9px;background:rgba(212,160,23,0.15);border-radius:20px;"></span>
@@ -277,11 +277,19 @@ tr:last-child td{border-bottom:none;}
     <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:4px;">Liquidacion trimestral</div>
     <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px;">IVA (303) por trimestre natural e IRPF (130) acumulado desde enero, segun el regimen del cliente.</div>
     <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
-      <div class="fg" style="min-width:220px;"><label class="fl">Cliente</label><select class="fi2" id="lqCli"><option value="">Seleccionar...</option></select></div>
-      <div class="fg" style="width:120px;"><label class="fl">Ano</label><select class="fi2" id="lqAnio"><option>2025</option><option selected>2026</option><option>2027</option></select></div>
+      <div class="fg" style="min-width:220px;"><label class="fl">Cliente</label><select class="fi2" id="lqCli" onchange="loadIngresos()"><option value="">Seleccionar...</option></select></div>
+      <div class="fg" style="width:120px;"><label class="fl">Ano</label><select class="fi2" id="lqAnio" onchange="loadIngresos()"><option>2025</option><option selected>2026</option><option>2027</option></select></div>
       <div class="fg" style="width:180px;"><label class="fl">IVA a compensar anos ant.</label><input type="number" step="0.01" class="fi2" id="lqComp" value="0"></div>
       <div class="fg" style="width:210px;"><label class="fl">Ing. a cuenta 1T-3T pagados (objetiva)</label><input type="number" step="0.01" class="fi2" id="lqIc" placeholder="vacio = usa el calculado"></div>
       <button class="btn btn-primary" onclick="calcLiq()">Calcular</button>
+    </div>
+    <div id="lqIngBox" style="background:var(--gray-50);border-radius:7px;padding:10px 12px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Ingresos por mes (para el 130)</div>
+        <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="guardarIngresos()">Guardar ingresos</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;" id="lqMesesGrid"></div>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:6px;">Total facturado de cada mes. Dejalo vacio y usara las facturas emitidas registradas. Util para exentas o quien no factura caso por caso.</div>
     </div>
     <div id="lqRes"></div>
   </div>
@@ -495,7 +503,7 @@ tr:last-child td{border-bottom:none;}
   const db=getFirestore(app),auth=getAuth(app);
   window.db=db;window.auth=auth;window.fsSignIn=signInWithEmailAndPassword;window.fsSignOut=signOut;
   window.fsDoc=doc;window.fsSetDoc=setDoc;window.fsDeleteDoc=deleteDoc;window.fsCollection=collection;
-  let u1,u2,u3,u4,u5,u6;
+  let u1,u2,u3,u4,u5,u6,u7;
   function act(){
     u1=onSnapshot(collection(db,"clients"),s=>{
       window.WC=s.docs.map(d=>({...d.data(),id:d.id})).filter(c=>(c.categoria||"despacho")!=="auxiliar");
@@ -516,11 +524,14 @@ tr:last-child td{border-bottom:none;}
     u6=onSnapshot(collection(db,"iva_tgastos"),s=>{
       window.WTG=s.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"));renderTG();
     });
+    u7=onSnapshot(collection(db,"iva_ingresos"),s=>{
+      window.WIN={};s.docs.forEach(d=>window.WIN[d.id]={...d.data(),id:d.id});if(typeof loadIngresos==="function")loadIngresos();
+    });
   }
-  function des(){[u1,u2,u3,u4,u5,u6].forEach(u=>{if(u)u();});}
+  function des(){[u1,u2,u3,u4,u5,u6,u7].forEach(u=>{if(u)u();});}
   onAuthStateChanged(auth,user=>{
     if(user){
-      window.WC=[];window.WF=[];window.WCC=[];window.WM={};window.WFI={};window.WTG=[];
+      window.WC=[];window.WF=[];window.WCC=[];window.WM={};window.WFI={};window.WTG=[];window.WIN={};
       document.getElementById("loginScreen").style.display="none";
       document.getElementById("appContent").style.display="flex";
       document.getElementById("userBadge").textContent=user.email.split("@")[0];
@@ -534,7 +545,7 @@ tr:last-child td{border-bottom:none;}
 </script>
 
 <script>
-window.WC=[];window.WF=[];window.WCC=[];window.WM={};window.WFI={};window.WTG=[];
+window.WC=[];window.WF=[];window.WCC=[];window.WM={};window.WFI={};window.WTG=[];window.WIN={};
 let expData=[];
 
 function showSection(id,btn){
@@ -1162,21 +1173,45 @@ function renderFiscal(){
   const lq=document.getElementById("lqCli");if(lq){const cur=lq.value;lq.innerHTML=opts;lq.value=cur;}
   const m3=document.getElementById("m3Cli");if(m3){const cur=m3.value;m3.innerHTML=opts;m3.value=cur;}
   const dg=document.getElementById("dgCli");if(dg){const cur=dg.value;dg.innerHTML=opts;dg.value=cur;}
+  if(typeof loadIngresos==="function")loadIngresos();
 }
 
 // Liquidacion trimestral (Fase 2: estimacion directa)
 function eur2(n){return (Math.round((n||0)*100)/100).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";}
 function trimOf(fecha){const m=parseInt(String(fecha||"").slice(5,7),10)||0;return m<=3?1:m<=6?2:m<=9?3:4;}
+const MESES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+function loadIngresos(){
+  const grid=document.getElementById("lqMesesGrid");if(!grid)return;
+  const cid=document.getElementById("lqCli").value,anio=String(document.getElementById("lqAnio").value);
+  const rec=(window.WIN||{})[cid+"_"+anio], meses=(rec&&rec.meses)||[];
+  grid.innerHTML=MESES.map((m,i)=>
+    "<div><label style='font-size:10px;color:var(--gray-400);display:block;'>"+m+"</label>"+
+    "<input type='number' step='0.01' id='lqM"+i+"' value='"+(meses[i]!=null&&meses[i]!==""?meses[i]:"")+"' style='width:100%;padding:5px;border:1px solid var(--gray-200);border-radius:5px;text-align:right;font-size:12px;'></div>"
+  ).join("");
+}
+async function guardarIngresos(){
+  const cid=document.getElementById("lqCli").value,anio=String(document.getElementById("lqAnio").value);
+  if(!cid){alert("Selecciona un cliente.");return;}
+  const meses=MESES.map((m,i)=>{const v=document.getElementById("lqM"+i);return v&&v.value!==""?(parseFloat(v.value)||0):"";});
+  await fbS("iva_ingresos",cid+"_"+anio,{id:cid+"_"+anio,cid,anio,meses});
+  const st=document.getElementById("lqRes");if(st)st.innerHTML="<div style='color:var(--success);font-size:12px;'>Ingresos guardados. Pulsa Calcular.</div>";
+}
 function calcLiq(){
   const cid=document.getElementById("lqCli").value,anio=String(document.getElementById("lqAnio").value);
   const compAnt=parseFloat(document.getElementById("lqComp").value)||0;
   const cont=document.getElementById("lqRes");
   if(!cid){cont.innerHTML="<div style='color:var(--warning);font-size:12px;'>Selecciona un cliente.</div>";return;}
   const ficha=(window.WFI||{})[cid]||{regimen:"directa"};
+  const sinIva=!!ficha.sinIva;                                          // actividad exenta: no presenta 303
   const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&String(f.fecha||"").slice(0,4)===anio);
   const emit=fs.filter(f=>f.tipo==="IVR"),reci=fs.filter(f=>f.tipo==="IVS");
   const base=f=>(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
   const iva=f=>(parseFloat(f.iva1)||0)+(parseFloat(f.iva2)||0);
+  const rp=f=>parseFloat(f.retPct)||0, ri=f=>parseFloat(f.retImporte)||0;
+  const retSop=f=>ri(f);                                                // retencion soportada (emitidas): sus clientes le retienen
+  const ivaDed=f=>(sinIva||String(f.deducible)==="0")?0:iva(f);         // IVA deducible (303); si exenta o "no deducible" no resta
+  // gasto IRPF. Exenta: total factura (base+IVA), salvo facturas CON retencion -> solo base imponible. General: base + IVA no deducible
+  const gasto=f=> sinIva ? (ri(f)>0 ? base(f) : base(f)+iva(f)) : base(f)+(String(f.deducible)==="0"?iva(f):0);
 
   if(ficha.regimen==="objetiva"){
     const e=(window.WM||{})[ficha.epigrafe];
@@ -1187,7 +1222,7 @@ function calcLiq(){
     const irpfTrim=rendPF*(parseFloat(e.pagoFraccIrpfPct)||0)/100;
     const cuotaDev=(e.modulosIva||[]).reduce((s,m)=>s+(m.valor||0)*(parseFloat(uIv[m.nombre])||0),0);
     const ivaAc=cuotaDev*(parseFloat(e.ingresoCuentaIvaPct)||0)/100;
-    const sopAnual=reci.reduce((s,f)=>s+iva(f),0);
+    const sopAnual=reci.reduce((s,f)=>s+ivaDed(f),0);
     const cuotaMin=cuotaDev*(parseFloat(e.cuotaMinIvaPct)||0)/100;
     const cuotaAnual=Math.max(cuotaDev-sopAnual,cuotaMin);
     const icCalc=3*ivaAc, icRaw=document.getElementById("lqIc").value;
@@ -1209,23 +1244,45 @@ function calcLiq(){
     return;
   }
 
-  // Directa: 303 con arrastre trimestral de compensaciones + 130 acumulado
-  let pagosPrev=0,pend=compAnt;
+  // Directa. 130 acumulado desde enero; retenciones soportadas (emitidas) descuentan del 130.
+  const ingMes=(window.WIN||{})[cid+"_"+anio], meses=ingMes&&(ingMes.meses||[]);
+  const usarMeses=meses&&meses.some(x=>(parseFloat(x)||0)>0);
+  let pagosPrev=0;
   const q=[1,2,3,4].map(t=>{
-    const repIVA=emit.filter(f=>trimOf(f.fecha)===t).reduce((s,f)=>s+iva(f),0);
-    const sopIVA=reci.filter(f=>trimOf(f.fecha)===t).reduce((s,f)=>s+iva(f),0);
-    const res=repIVA-sopIVA;
-    let aPagar=0;
-    if(res>=0){const usa=Math.min(res,pend);aPagar=res-usa;pend-=usa;}else{pend+=(-res);aPagar=0;}
-    const ingAcum=emit.filter(f=>trimOf(f.fecha)<=t).reduce((s,f)=>s+base(f),0);
-    const gasAcum=reci.filter(f=>trimOf(f.fecha)<=t).reduce((s,f)=>s+base(f),0);
-    const rend=ingAcum-gasAcum, pago130acum=Math.max(0,rend*0.20), pago130=Math.max(0,pago130acum-pagosPrev);
+    const ingAcum=usarMeses?meses.slice(0,t*3).reduce((s,x)=>s+(parseFloat(x)||0),0)
+                           :emit.filter(f=>trimOf(f.fecha)<=t).reduce((s,f)=>s+base(f),0);
+    const gasAcum=reci.filter(f=>trimOf(f.fecha)<=t).reduce((s,f)=>s+gasto(f),0);
+    const retSopAcum=emit.filter(f=>trimOf(f.fecha)<=t).reduce((s,f)=>s+retSop(f),0);
+    const rend=ingAcum-gasAcum;
+    const pago130acum=Math.max(0,rend*0.20-retSopAcum), pago130=Math.max(0,pago130acum-pagosPrev);
     pagosPrev+=pago130;
-    return {t,repIVA,sopIVA,res,aPagar,pendFin:pend,pago130};
+    // 111 (retenciones de profesionales practicadas) y 115 (alquileres), por trimestre
+    const rt=reci.filter(f=>trimOf(f.fecha)===t);
+    const ret115=rt.filter(f=>rp(f)===19).reduce((s,f)=>s+ri(f),0);
+    const ret111=rt.filter(f=>rp(f)!==19&&ri(f)>0).reduce((s,f)=>s+ri(f),0);
+    return {t,ingAcum,gasAcum,rend,retSopAcum,pago130,ret111,ret115};
+  });
+
+  if(sinIva){
+    cont.innerHTML="<div style='background:var(--gray-50);border-radius:7px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--gray-600);'>Actividad <strong>exenta de IVA</strong>: no presenta 303. Modelos: <strong>130</strong> (pago fraccionado IRPF), <strong>111</strong> (retenciones de profesionales) y <strong>115</strong> (retenciones de alquiler).</div>"+
+      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>Ingresos</th><th class='td-r'>Gastos</th><th class='td-r'>Rendimiento</th><th class='td-r'>Ret. soport.</th><th class='td-r'>IRPF 130</th><th class='td-r'>111 profes.</th><th class='td-r'>115 alquiler</th></tr></thead><tbody>"+
+      q.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.ingAcum)+"</td><td class='td-r'>"+eur2(x.gasAcum)+"</td><td class='td-r'>"+eur2(x.rend)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.retSopAcum)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td><td class='td-r'>"+eur2(x.ret111)+"</td><td class='td-r'>"+eur2(x.ret115)+"</td></tr>").join("")+"</tbody></table></div>"+
+      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingresos por mes (arriba) o, si los dejas vacios, de las facturas emitidas. Gasto = total factura, salvo facturas con retencion (solo base). <strong>130 = 20% del rendimiento &minus; retenciones soportadas &minus; pagos anteriores.</strong> Si prefieres no restar las retenciones soportadas en el 130 (como en tu hoja), dimelo. 111 = retenciones a profesionales (7/15%); 115 = retenciones de alquiler (19%), del trimestre.</div>";
+    return;
+  }
+
+  // Directa con IVA: 303 con arrastre trimestral de compensaciones + 130
+  let pend=compAnt;
+  const q2=q.map(x=>{
+    const repIVA=emit.filter(f=>trimOf(f.fecha)===x.t).reduce((s,f)=>s+iva(f),0);
+    const sopIVA=reci.filter(f=>trimOf(f.fecha)===x.t).reduce((s,f)=>s+ivaDed(f),0);
+    const res=repIVA-sopIVA;let aPagar=0;
+    if(res>=0){const usa=Math.min(res,pend);aPagar=res-usa;pend-=usa;}else{pend+=(-res);aPagar=0;}
+    return {...x,repIVA,sopIVA,res,aPagar,pendFin:pend};
   });
   cont.innerHTML="<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA reperc.</th><th class='td-r'>IVA soport.</th><th class='td-r'>Resultado</th><th class='td-r'>IVA a pagar</th><th class='td-r'>Pdte. comp.</th><th class='td-r'>IRPF 130</th></tr></thead><tbody>"+
-    q.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='color:"+(x.res>=0?"var(--gray-600)":"var(--success)")+";'>"+eur2(x.res)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.aPagar)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.pendFin)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td></tr>").join("")+"</tbody></table></div>"+
-    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado. Si es negativo queda pendiente de compensar y se aplica contra los trimestres siguientes que salgan a pagar (arrastre hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados desde enero, menos lo pagado antes.</div>";
+    q2.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='color:"+(x.res>=0?"var(--gray-600)":"var(--success)")+";'>"+eur2(x.res)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.aPagar)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.pendFin)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td></tr>").join("")+"</tbody></table></div>"+
+    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado (solo IVA deducible). Si es negativo queda pendiente de compensar y se arrastra (hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados &minus; retenciones soportadas, menos lo pagado antes.</div>";
 }
 
 // Modelo 347: operaciones con terceros > 3.005,06 EUR (IVA incl.), por clave y trimestre.
@@ -1385,6 +1442,7 @@ function renderFichaForm(){
     "<div class='fg'><label class='fl'>Regimen</label><select class='fi2' id='fiReg' onchange='renderFichaForm2()'>"+
       "<option value='directa'"+(f.regimen==="directa"?" selected":"")+">Estimacion directa</option>"+
       "<option value='objetiva'"+(f.regimen==="objetiva"?" selected":"")+">Estimacion objetiva (modulos)</option></select></div>"+
+    "<div class='fg'><label class='fl'>IVA</label><label style='display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--gray-600);height:38px;'><input type='checkbox' id='fiSinIva' style='width:16px;height:16px;'"+(f.sinIva?" checked":"")+"> Actividad exenta (no presenta 303; solo 130/111/115)</label></div>"+
     "<div class='fg' id='fiEpiWrap'><label class='fl'>Epigrafe</label><select class='fi2' id='fiEpi' onchange='renderFichaForm2()'><option value=''>Seleccionar...</option>"+
       eps.map(e=>"<option value='"+e.id+"'"+(f.epigrafe===e.id?" selected":"")+">"+e.id+" "+(e.nombre||"")+"</option>").join("")+"</select></div></div>"+
     "<div id='fiUnidades' style='margin-top:12px;'></div>"+
@@ -1409,7 +1467,7 @@ function renderFichaForm2(){
 async function saveFicha(){
   const cid=document.getElementById("fiCli").value;if(!cid){alert("Selecciona un cliente.");return;}
   const reg=document.getElementById("fiReg").value;
-  const rec={id:cid,regimen:reg,epigrafe:"",unidadesIrpf:{},unidadesIva:{},indice:1};
+  const rec={id:cid,regimen:reg,epigrafe:"",unidadesIrpf:{},unidadesIva:{},indice:1,sinIva:!!(document.getElementById("fiSinIva")||{}).checked};
   if(reg==="objetiva"){
     const epi=document.getElementById("fiEpi").value;rec.epigrafe=epi;
     const e=(window.WM||{})[epi]||{};
