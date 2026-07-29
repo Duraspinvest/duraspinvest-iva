@@ -126,7 +126,7 @@ tr:last-child td{border-bottom:none;}
     <div class="logo-icon">
       <svg viewBox="0 0 36 36" width="32" height="32"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
     </div>
-    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.07.27j</div></div>
+    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.07.29b</div></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <span id="userBadge" style="color:var(--gold);font-size:11px;font-weight:600;padding:3px 9px;background:rgba(212,160,23,0.15);border-radius:20px;"></span>
@@ -162,6 +162,7 @@ tr:last-child td{border-bottom:none;}
         <select class="fi" id="fFQ" onchange="renderF()"><option value="">Todos</option><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
     </div>
     <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary" onclick="delFiltradas()" style="color:#b91c1c;border-color:#f0c4c4;">Borrar filtradas</button>
       <button class="btn btn-secondary" onclick="openImpF()">Importar facturas</button>
       <button class="btn btn-primary" onclick="openFM('IVR')">+ Emitida</button>
       <button class="btn btn-ivs" onclick="openFM('IVS')">+ Recibida</button>
@@ -767,6 +768,26 @@ async function saveF(){
 }
 
 async function delF(id){if(!confirm("Eliminar esta factura?"))return;await fbD("iva_facturas",id);}
+async function delFiltradas(){
+  const fc=document.getElementById("fFC").value,ft=document.getElementById("fFT").value;
+  const fa=document.getElementById("fFA").value,fq=document.getElementById("fFQ").value;
+  if(!fc){alert("Selecciona primero un cliente en el filtro. Por seguridad, «Borrar filtradas» exige un cliente concreto (no borra «Todos»).");return;}
+  const fs=(window.WF||[]).filter(f=>{
+    if(f.clienteDespachoId!==fc)return false;
+    if(ft&&f.tipo!==ft)return false;
+    if(fa&&f.fecha&&new Date(f.fecha+"T12:00:00").getFullYear()!==parseInt(fa))return false;
+    if(fq&&f.fecha&&q(f.fecha)!==fq)return false;
+    return true;});
+  if(!fs.length){alert("No hay facturas con esos filtros.");return;}
+  const cl=(window.WC||[]).find(c=>c.id===fc);
+  const det=[fa?("ano "+fa):"todos los anos", fq?(fq+"T"):"", ft==="IVR"?"solo emitidas":ft==="IVS"?"solo recibidas":""].filter(Boolean).join(", ");
+  if(!confirm("Vas a BORRAR "+fs.length+" factura(s) de "+(cl?cl.nombre:fc)+" ("+det+").\n\nEsta accion no se puede deshacer. Continuar?"))return;
+  const btn=event&&event.target; if(btn){btn.disabled=true;btn.textContent="Borrando...";}
+  let ok=0,fail=0;
+  for(const f of fs){try{await fbD("iva_facturas",f.id);ok++;}catch(e){console.error(e);fail++;}}
+  if(btn){btn.disabled=false;btn.textContent="Borrar filtradas";}
+  alert("Borradas "+ok+" factura(s)"+(fail?" ("+fail+" con error)":"")+".");
+}
 
 function renderC(){
   const tb=document.getElementById("cTbody");if(!tb)return;
@@ -1212,8 +1233,11 @@ function calcLiq(){
   const rp=f=>parseFloat(f.retPct)||0, ri=f=>parseFloat(f.retImporte)||0;
   const retSop=f=>ri(f);                                                // retencion soportada (emitidas): sus clientes le retienen
   const ivaDed=f=>(sinIva||String(f.deducible)==="0")?0:iva(f);         // IVA deducible (303); si exenta o "no deducible" no resta
-  // gasto IRPF. Exenta: total factura (base+IVA), salvo facturas CON retencion -> solo base imponible. General: base + IVA no deducible
-  const gasto=f=> sinIva ? (ri(f)>0 ? base(f) : base(f)+iva(f)) : base(f)+(String(f.deducible)==="0"?iva(f):0);
+  const regGasto=ficha.regGasto||"exenta";                             // regla de gasto para actividades sin IVA
+  // gasto IRPF. Recargo equiv.: base+IVA siempre (todo es coste, incl. alquiler). Exenta (art.20): base+IVA salvo facturas CON retencion -> solo base. General: base + IVA no deducible
+  const gasto=f=> sinIva
+        ? (regGasto==="recargo" ? base(f)+iva(f) : (ri(f)>0 ? base(f) : base(f)+iva(f)))
+        : base(f)+(String(f.deducible)==="0"?iva(f):0);
 
   if(ficha.regimen==="objetiva"){
     const e=(window.WM||{})[ficha.epigrafe];
@@ -1266,10 +1290,10 @@ function calcLiq(){
   });
 
   if(sinIva){
-    cont.innerHTML=modBanner+"<div style='background:var(--gray-50);border-radius:7px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--gray-600);'>Actividad <strong>exenta de IVA</strong> (no presenta 303). El 130 es el pago fraccionado de IRPF; 111 y 115 son las retenciones que practica.</div>"+
+    cont.innerHTML=modBanner+"<div style='background:var(--gray-50);border-radius:7px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--gray-600);'>"+(regGasto==="recargo"?"Actividad en <strong>recargo de equivalencia</strong> (no presenta 303; el IVA y el recargo soportados son coste).":"Actividad <strong>exenta de IVA</strong> (no presenta 303).")+" El 130 es el pago fraccionado de IRPF; 111 y 115 son las retenciones que practica.</div>"+
       "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>Ingresos</th><th class='td-r'>Gastos</th><th class='td-r'>Rendimiento</th><th class='td-r'>Ret. soport.</th><th class='td-r'>IRPF 130</th><th class='td-r'>111 profes.</th><th class='td-r'>115 alquiler</th></tr></thead><tbody>"+
       q.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.ingAcum)+"</td><td class='td-r'>"+eur2(x.gasAcum)+"</td><td class='td-r'>"+eur2(x.rend)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.retSopAcum)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td><td class='td-r'>"+eur2(x.ret111)+"</td><td class='td-r'>"+eur2(x.ret115)+"</td></tr>").join("")+"</tbody></table></div>"+
-      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingresos por mes (arriba) o, si los dejas vacios, de las facturas emitidas. Gasto = total factura, salvo facturas con retencion (solo base). <strong>130 = 20% del rendimiento &minus; retenciones soportadas &minus; pagos anteriores.</strong> Si prefieres no restar las retenciones soportadas en el 130 (como en tu hoja), dimelo. 111 = retenciones a profesionales (7/15%); 115 = retenciones de alquiler (19%), del trimestre.</div>";
+      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingresos por mes (arriba) o, si los dejas vacios, de las facturas emitidas. "+(regGasto==="recargo"?"Gasto = base + IVA (todo es coste, tambien el alquiler; la retencion no reduce el gasto)":"Gasto = total factura, salvo facturas con retencion (solo base)")+". <strong>130 = 20% del rendimiento &minus; retenciones soportadas &minus; pagos anteriores.</strong> Si prefieres no restar las retenciones soportadas en el 130 (como en tu hoja), dimelo. 111 = retenciones a profesionales (7/15%); 115 = retenciones de alquiler (19%), del trimestre.</div>";
     return;
   }
 
@@ -1444,7 +1468,11 @@ function renderFichaForm(){
     "<div class='fg'><label class='fl'>Regimen</label><select class='fi2' id='fiReg' onchange='renderFichaForm2()'>"+
       "<option value='directa'"+(f.regimen==="directa"?" selected":"")+">Estimacion directa</option>"+
       "<option value='objetiva'"+(f.regimen==="objetiva"?" selected":"")+">Estimacion objetiva (modulos)</option></select></div>"+
-    "<div class='fg'><label class='fl'>IVA</label><label style='display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--gray-600);height:38px;'><input type='checkbox' id='fiSinIva' style='width:16px;height:16px;'"+(f.sinIva?" checked":"")+"> Actividad exenta (no presenta 303; solo 130/111/115)</label></div>"+
+    "<div class='fg'><label class='fl'>IVA</label><label style='display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--gray-600);height:38px;'><input type='checkbox' id='fiSinIva' onchange='renderFichaForm2()' style='width:16px;height:16px;'"+(f.sinIva?" checked":"")+"> Actividad exenta / sin IVA (no presenta 303; solo 130/111/115)</label></div>"+
+    "<div class='fg' id='fiRegGastoWrap'><label class='fl'>Regla de gasto (sin IVA)</label><select class='fi2' id='fiRegGasto'>"+
+      "<option value='exenta'"+((f.regGasto||'exenta')==='exenta'?" selected":"")+">Exenta art.20 &mdash; base+IVA, salvo con retencion (solo base)</option>"+
+      "<option value='recargo'"+(f.regGasto==='recargo'?" selected":"")+">Recargo de equivalencia &mdash; base+IVA siempre (incl. alquiler)</option>"+
+      "</select></div>"+
     "<div class='fg' id='fiEpiWrap'><label class='fl'>Epigrafe</label><select class='fi2' id='fiEpi' onchange='renderFichaForm2()'><option value=''>Seleccionar...</option>"+
       eps.map(e=>"<option value='"+e.id+"'"+(f.epigrafe===e.id?" selected":"")+">"+e.id+" "+(e.nombre||"")+"</option>").join("")+"</select></div></div>"+
     "<div style='margin-top:14px;'><div class='fl' style='margin-bottom:6px;'>Modelos que presenta <span style='color:var(--gray-400);font-weight:400;text-transform:none;letter-spacing:0;'>(se proponen segun regimen y exencion; ajusta lo que quieras)</span></div><div id='fiModelos' style='display:flex;flex-wrap:wrap;gap:6px 16px;'></div></div>"+
@@ -1468,6 +1496,8 @@ function renderFichaForm2(){
   const cid=document.getElementById("fiCli").value;
   const f=(window.WFI||{})[cid]||{indice:1};
   const reg=document.getElementById("fiReg").value;
+  const sinIvaChk=(document.getElementById("fiSinIva")||{}).checked;
+  const rgw=document.getElementById("fiRegGastoWrap"); if(rgw)rgw.style.display=sinIvaChk?"":"none";
   document.getElementById("fiEpiWrap").style.display=(reg==="objetiva")?"":"none";
   const u=document.getElementById("fiUnidades");
   if(reg!=="objetiva"){u.innerHTML="<div style='font-size:12px;color:var(--gray-400);'>En estimacion directa no hay modulos: la liquidacion saldra de los ingresos y gastos registrados.</div>";return;}
@@ -1483,7 +1513,7 @@ async function saveFicha(){
   const cid=document.getElementById("fiCli").value;if(!cid){alert("Selecciona un cliente.");return;}
   const reg=document.getElementById("fiReg").value;
   const modelos=MODELOS.map(m=>m[0]).filter(c=>{const el=document.getElementById("fiMod_"+c);return el&&el.checked;});
-  const rec={id:cid,regimen:reg,epigrafe:"",unidadesIrpf:{},unidadesIva:{},indice:1,sinIva:!!(document.getElementById("fiSinIva")||{}).checked,modelos};
+  const rec={id:cid,regimen:reg,epigrafe:"",unidadesIrpf:{},unidadesIva:{},indice:1,sinIva:!!(document.getElementById("fiSinIva")||{}).checked,regGasto:(document.getElementById("fiRegGasto")||{}).value||"exenta",modelos};
   if(reg==="objetiva"){
     const epi=document.getElementById("fiEpi").value;rec.epigrafe=epi;
     const e=(window.WM||{})[epi]||{};
