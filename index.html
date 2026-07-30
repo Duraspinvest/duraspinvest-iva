@@ -126,7 +126,7 @@ tr:last-child td{border-bottom:none;}
     <div class="logo-icon">
       <svg viewBox="0 0 36 36" width="32" height="32"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
     </div>
-    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.07.29b</div></div>
+    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.07.30a</div></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <span id="userBadge" style="color:var(--gold);font-size:11px;font-weight:600;padding:3px 9px;background:rgba(212,160,23,0.15);border-radius:20px;"></span>
@@ -1243,8 +1243,11 @@ function calcLiq(){
     const e=(window.WM||{})[ficha.epigrafe];
     if(!e){cont.innerHTML="<div style='font-size:12px;color:var(--warning);'>El cliente es objetiva pero su ficha no tiene epigrafe/modulos definidos.</div>";return;}
     const uIr=ficha.unidadesIrpf||{},uIv=ficha.unidadesIva||{},indice=parseFloat(ficha.indice)||1;
+    const incEmpleo=parseFloat(ficha.incentivoEmpleo)||0, incInver=parseFloat(ficha.incentivoInversion)||0;
     const rendPrevio=(e.modulosIrpf||[]).reduce((s,m)=>s+(m.valor||0)*(parseFloat(uIr[m.nombre])||0),0);
-    const rendPF=rendPrevio*(1-(parseFloat(e.reduccionGralPct)||0)/100)*indice;
+    const rendMinorado=Math.max(0,rendPrevio-incEmpleo-incInver);        // - incentivos al empleo y a la inversion
+    const redFactor=1-(parseFloat(e.reduccionGralPct)||0)/100;
+    const rendPF=rendMinorado*indice*redFactor;                          // rend. minorado x indice corrector x (1 - reduccion 5%) = rend. a efectos pagos fraccionados
     const irpfTrim=rendPF*(parseFloat(e.pagoFraccIrpfPct)||0)/100;
     const cuotaDev=(e.modulosIva||[]).reduce((s,m)=>s+(m.valor||0)*(parseFloat(uIv[m.nombre])||0),0);
     const ivaAc=cuotaDev*(parseFloat(e.ingresoCuentaIvaPct)||0)/100;
@@ -1259,7 +1262,8 @@ function calcLiq(){
     const rows=[1,2,3,4].map(t=>"<tr><td>"+t+"T</td><td class='td-r'>"+eur2(t<4?ivaAc:q4Pagar)+"</td><td class='td-r'>"+eur2(irpfTrim)+"</td></tr>").join("");
     cont.innerHTML=modBanner+"<div style='background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;'>"+
       "<strong>Datos base (objetiva &middot; epigrafe "+e.id+")</strong><br>"+
-      "Rendimiento modulos IRPF: "+eur2(rendPrevio)+" &nbsp;&rarr;&nbsp; base pagos fraccionados (x"+(1-(parseFloat(e.reduccionGralPct)||0)/100).toFixed(2)+" x indice "+indice+"): <strong>"+eur2(rendPF)+"</strong><br>"+
+      "Rend. modulos IRPF: "+eur2(rendPrevio)+((incEmpleo||incInver)?(" &minus; incentivos "+eur2(incEmpleo+incInver)+" = minorado "+eur2(rendMinorado)):"")+" &nbsp;&rarr;&nbsp; x indice "+indice+" x reduc. "+redFactor.toFixed(2)+" = base pagos fraccionados <strong>"+eur2(rendPF)+"</strong><br>"+
+      "Pago fraccionado 131 ("+(e.pagoFraccIrpfPct||0)+"%): <strong>"+eur2(irpfTrim)+"</strong>/trim<br>"+
       "Cuota devengada IVA: "+eur2(cuotaDev)+" &nbsp;&middot;&nbsp; IVA soportado del ano: "+eur2(sopAnual)+"<br>"+
       "Cuota minima ("+(e.cuotaMinIvaPct||0)+"%): "+eur2(cuotaMin)+" &nbsp;&middot;&nbsp; cuota anual IVA: <strong>"+eur2(cuotaAnual)+"</strong><br>"+
       "Ing. a cuenta 1T-3T "+(icRaw!==""&&icRaw!=null?"(introducidos)":"(calculados)")+": "+eur2(icReal)+" &nbsp;&middot;&nbsp; resultado 4T: <strong>"+eur2(res4)+"</strong>"+
@@ -1507,7 +1511,12 @@ function renderFichaForm2(){
   const tbl=(arr,mapObj,pref)=>"<table style='width:100%;font-size:12px;margin-bottom:6px;'><thead><tr><th style='text-align:left;'>Modulo</th><th style='text-align:right;'>Valor/ud</th><th style='text-align:right;'>Unidades</th></tr></thead><tbody>"+
     arr.map((m,i)=>"<tr><td>"+m.nombre+"</td><td style='text-align:right;color:var(--gray-400);'>"+m.valor+"</td><td style='text-align:right;'><input type='number' step='0.01' style='width:88px;padding:4px;border:1px solid var(--gray-200);border-radius:5px;text-align:right;' id='"+pref+i+"' value='"+(mapObj[m.nombre]!=null?mapObj[m.nombre]:"")+"'></td></tr>").join("")+"</tbody></table>";
   u.innerHTML="<div class='mg2'><div><div class='fl' style='margin-bottom:6px;'>Unidades IRPF</div>"+tbl(e.modulosIrpf||[],ui,"uir")+"</div><div><div class='fl' style='margin-bottom:6px;'>Unidades IVA</div>"+tbl(e.modulosIva||[],uv,"uiv")+"</div></div>"+
-    "<div class='fg' style='max-width:280px;margin-top:8px;'><label class='fl'>Indice corrector (0,8 pequena dimension; 1 si ninguno)</label><input type='number' step='0.01' class='fi2' id='fiIndice' value='"+(f.indice!=null?f.indice:1)+"'></div>";
+    "<div class='mg2' style='max-width:600px;margin-top:8px;'>"+
+      "<div class='fg'><label class='fl'>Indice corrector (0,90 pequena dimension; 1 si ninguno)</label><input type='number' step='0.01' class='fi2' id='fiIndice' value='"+(f.indice!=null?f.indice:1)+"'></div>"+
+      "<div class='fg'><label class='fl'>Incentivo al empleo (minoracion, EUR)</label><input type='number' step='0.01' class='fi2' id='fiIncEmpleo' value='"+(f.incentivoEmpleo!=null?f.incentivoEmpleo:"")+"' placeholder='0'></div>"+
+      "<div class='fg'><label class='fl'>Incentivo a la inversion (amortizaciones, EUR)</label><input type='number' step='0.01' class='fi2' id='fiIncInver' value='"+(f.incentivoInversion!=null?f.incentivoInversion:"")+"' placeholder='0'></div>"+
+    "</div>"+
+    "<div style='font-size:11px;color:var(--gray-400);margin-top:4px;max-width:600px;'>Cadena 131: rendimiento modulos &minus; incentivos = minorado &times; indice corrector &times; (1 &minus; reduccion 5%) = base pagos fraccionados &times; % del epigrafe. El % (2/3/4) se ajusta en el epigrafe.</div>";
 }
 async function saveFicha(){
   const cid=document.getElementById("fiCli").value;if(!cid){alert("Selecciona un cliente.");return;}
@@ -1520,6 +1529,8 @@ async function saveFicha(){
     (e.modulosIrpf||[]).forEach((m,i)=>{const inp=document.getElementById("uir"+i);if(inp&&inp.value!==""){const v=parseFloat(inp.value);if(!isNaN(v))rec.unidadesIrpf[m.nombre]=v;}});
     (e.modulosIva||[]).forEach((m,i)=>{const inp=document.getElementById("uiv"+i);if(inp&&inp.value!==""){const v=parseFloat(inp.value);if(!isNaN(v))rec.unidadesIva[m.nombre]=v;}});
     const ind=document.getElementById("fiIndice");rec.indice=ind?(parseFloat(ind.value)||1):1;
+    const ie=document.getElementById("fiIncEmpleo");rec.incentivoEmpleo=ie&&ie.value!==""?(parseFloat(ie.value)||0):0;
+    const ii=document.getElementById("fiIncInver");rec.incentivoInversion=ii&&ii.value!==""?(parseFloat(ii.value)||0):0;
   }
   await fbS("iva_fiscal",cid,rec);alert("Ficha fiscal guardada.");
 }
