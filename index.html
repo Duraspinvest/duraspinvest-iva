@@ -126,11 +126,15 @@ tr:last-child td{border-bottom:none;}
     <div class="logo-icon">
       <svg viewBox="0 0 36 36" width="32" height="32"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
     </div>
-    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.08.01a</div></div>
+    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.08.01c</div></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <span id="userBadge" style="color:var(--gold);font-size:11px;font-weight:600;padding:3px 9px;background:rgba(212,160,23,0.15);border-radius:20px;"></span>
-    <a href="https://duraspinvest.github.io/duraspinvest/" title="Ir a la aplicacion de Tareas" style="text-decoration:none;background:rgba(212,160,23,0.15);color:var(--gold);border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;white-space:nowrap;">&#8599; Tareas</a>
+    <span style="display:inline-flex;gap:5px;background:rgba(0,0,0,0.22);border-radius:8px;padding:3px;">
+      <a href="https://duraspinvest.github.io/duraspinvest/" style="text-decoration:none;color:#cdd7e8;font-size:12px;font-weight:600;padding:5px 11px;border-radius:6px;">Tareas</a>
+      <a style="text-decoration:none;background:var(--gold);color:var(--navy);font-size:12px;font-weight:600;padding:5px 11px;border-radius:6px;">IVA</a>
+      <a href="https://duraspinvest.github.io/duraspinvest-nominas/" style="text-decoration:none;color:#cdd7e8;font-size:12px;font-weight:600;padding:5px 11px;border-radius:6px;">Nóminas</a>
+    </span>
     <button onclick="doLogout()" style="background:rgba(255,255,255,0.1);color:var(--gray-400);border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Salir</button>
   </div>
 </header>
@@ -163,6 +167,7 @@ tr:last-child td{border-bottom:none;}
     </div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-secondary" onclick="delFiltradas()" style="color:#b91c1c;border-color:#f0c4c4;">Borrar filtradas</button>
+      <button class="btn btn-secondary" onclick="exportRegistro()">Exportar registro</button>
       <button class="btn btn-secondary" onclick="openImpF()">Importar facturas</button>
       <button class="btn btn-primary" onclick="openFM('IVR')">+ Emitida</button>
       <button class="btn btn-ivs" onclick="openFM('IVS')">+ Recibida</button>
@@ -413,7 +418,8 @@ tr:last-child td{border-bottom:none;}
         <select class="fi2" id="fDed"><option value="1">Si</option><option value="0">No</option></select></div>
     </div>
     <div class="ma">
-      <button class="btn btn-secondary" onclick="closeM('fModal')">Cancelar</button>
+      <span id="fSaveMsg" style="font-size:12px;color:var(--success);align-self:center;margin-right:auto;"></span>
+      <button class="btn btn-secondary" onclick="closeM('fModal')">Salir</button>
       <button class="btn btn-primary" onclick="saveF()">Guardar factura</button>
     </div>
   </div>
@@ -747,6 +753,7 @@ async function saveF(){
     numero=String(maxn+1);
   }
   window.lastCD=cid;window.lastFecha=fec;   // recordar cliente y fecha para la siguiente factura
+  const editando=!!document.getElementById("fId").value;
   const id=document.getElementById("fId").value||String(Date.now());
   const prev=(window.WF||[]).find(x=>x.id===id);
   await fbS("iva_facturas",id,{
@@ -764,7 +771,17 @@ async function saveF(){
     deducible:tipo==="IVS"?document.getElementById("fDed").value:"",
     creado:prev&&prev.creado?prev.creado:new Date().toISOString()
   });
-  closeM("fModal");
+  if(editando){closeM("fModal");return;}
+  // Nueva factura: mantener la ventana abierta para seguir introduciendo (conserva cliente y fecha)
+  document.getElementById("fId").value="";
+  ["fNom","fNif","fCta","fContra","fNum","fB1","fB2","fI1","fI2","fTot","fRI"].forEach(x=>{const e=document.getElementById(x);if(e)e.value="";});
+  document.getElementById("fTG").value="";
+  document.getElementById("fP1").value="21";document.getElementById("fP2").value="";
+  document.getElementById("fRP").value="";document.getElementById("f347").value="1";
+  if(tipo==="IVS")document.getElementById("fDed").value="1";
+  document.getElementById("acList").style.display="none";
+  const msg=document.getElementById("fSaveMsg");if(msg){msg.textContent="Guardada nº "+numero+". Puedes introducir otra.";setTimeout(()=>{if(msg)msg.textContent="";},3000);}
+  const foco=document.getElementById("fNom");if(foco)foco.focus();
 }
 
 async function delF(id){if(!confirm("Eliminar esta factura?"))return;await fbD("iva_facturas",id);}
@@ -1335,6 +1352,62 @@ function calcLiq(){
   cont.innerHTML=modBanner+"<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA reperc.</th><th class='td-r'>IVA soport.</th><th class='td-r'>Resultado</th><th class='td-r'>IVA a pagar</th><th class='td-r'>Pdte. comp.</th><th class='td-r'>IRPF 130</th></tr></thead><tbody>"+
     q2.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='color:"+(x.res>=0?"var(--gray-600)":"var(--success)")+";'>"+eur2(x.res)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.aPagar)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.pendFin)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td></tr>").join("")+"</tbody></table></div>"+
     "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado (solo IVA deducible). Si es negativo queda pendiente de compensar y se arrastra (hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados &minus; retenciones soportadas, menos lo pagado antes."+(usarMeses?" Los ingresos por mes se toman CON IVA incluido ("+ivaVen+"%): la base va al 130 y el IVA repercutido al 303.":"")+"</div>";
+}
+
+// Exportar el registro (libro) de facturas del cliente/ano filtrado, desde los datos de la app (incluye las metidas a mano).
+function exportRegistro(){
+  const cid=document.getElementById("fFC").value, fa=document.getElementById("fFA").value;
+  if(!cid){alert("Selecciona un cliente en el filtro para exportar su registro.");return;}
+  const anio=fa||String(new Date().getFullYear());
+  const cn=(document.getElementById("fFC").options[document.getElementById("fFC").selectedIndex]||{}).text||"cliente";
+  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&String(f.fecha||"").slice(0,4)===anio)
+                          .sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")||String(a.numero||"").localeCompare(String(b.numero||"")));
+  if(!fs.length){alert("No hay facturas de "+cn+" en "+anio+".");return;}
+  const lineasDe=f=>{
+    const b1=parseFloat(f.base1)||0,i1=parseFloat(f.iva1)||0,b2=parseFloat(f.base2)||0,i2=parseFloat(f.iva2)||0;
+    const L=[]; if(b1||i1||!(b2||i2))L.push([f.pct1||"",b1,i1]); if(b2||i2)L.push([f.pct2||"",b2,i2]); return L;
+  };
+  const mkRows=(arr,recibida)=>{
+    const rows=[]; let tB=0,tC=0,tT=0;
+    arr.forEach(f=>{
+      const mes=parseInt(String(f.fecha||"").slice(5,7),10)||"", tri=f.fecha?trimOf(f.fecha):"";
+      let tg="";
+      if(recibida){const cc=getCuentaParaFactura(f);const t=(window.WTG||[]).find(x=>x.cuenta===cc.contrapartida);tg=t?t.nombre:(cc.contrapartida||"");}
+      lineasDe(f).forEach(([p,b,c])=>{
+        tB+=b;tC+=c;tT+=b+c;
+        const base=[f.fecha||"",mes,tri];
+        if(recibida)base.push(tg);
+        base.push(f.nombre||"",f.nif||"",f.numero||"",(p!==""?Number(p):""),round2(b),round2(c),round2(b+c));
+        if(recibida)base.push(String(f.deducible)==="0"?"No":"Si");
+        else base.push(f.retPct||"",round2(parseFloat(f.retImporte)||0));
+        rows.push(base);
+      });
+    });
+    return {rows,tot:[round2(tB),round2(tC),round2(tT)]};
+  };
+  try{
+    const wb=XLSX.utils.book_new();
+    const rec=fs.filter(f=>f.tipo==="IVS"), emi=fs.filter(f=>f.tipo==="IVR");
+    if(rec.length){
+      const H=["FECHA","MES","TRIM","TIPO GASTO","PROVEEDOR","NIF","Nº FACTURA","% IVA","BASE","CUOTA IVA","TOTAL LINEA","DEDUCIBLE"];
+      const {rows,tot}=mkRows(rec,true);
+      const ws=XLSX.utils.aoa_to_sheet([H,...rows,[],["","","","","","","TOTALES","",tot[0],tot[1],tot[2]]]);
+      ws["!cols"]=[{wch:11},{wch:5},{wch:5},{wch:22},{wch:30},{wch:13},{wch:16},{wch:7},{wch:11},{wch:11},{wch:12},{wch:9}];
+      XLSX.utils.book_append_sheet(wb,ws,"Recibidas");
+    }
+    if(emi.length){
+      const H=["FECHA","MES","TRIM","CLIENTE","NIF","Nº FACTURA","% IVA","BASE","CUOTA IVA","TOTAL LINEA","% RET","RETENCION"];
+      const {rows,tot}=mkRows(emi,false);
+      const ws=XLSX.utils.aoa_to_sheet([H,...rows,[],["","","","","","TOTALES","",tot[0],tot[1],tot[2]]]);
+      ws["!cols"]=[{wch:11},{wch:5},{wch:5},{wch:30},{wch:13},{wch:16},{wch:7},{wch:11},{wch:11},{wch:12},{wch:7},{wch:11}];
+      XLSX.utils.book_append_sheet(wb,ws,"Emitidas");
+    }
+    const u=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+    const bl=new Blob([u],{type:"application/octet-stream"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(bl);
+    a.download=("registro_"+cn+"_"+anio).replace(/[^A-Za-z0-9_-]+/g,"_")+".xlsx";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }catch(e){console.error(e);alert("Error al exportar: "+(e.message||e));}
 }
 
 // Modelo 347: operaciones con terceros > 3.005,06 EUR (IVA incl.), por clave y trimestre.
