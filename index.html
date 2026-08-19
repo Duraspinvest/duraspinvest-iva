@@ -126,7 +126,7 @@ tr:last-child td{border-bottom:none;}
     <div class="logo-icon">
       <svg viewBox="0 0 36 36" width="32" height="32"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
     </div>
-    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.08.01c</div></div>
+    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol · v2026.08.05b</div></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <span id="userBadge" style="color:var(--gold);font-size:11px;font-weight:600;padding:3px 9px;background:rgba(212,160,23,0.15);border-radius:20px;"></span>
@@ -1241,6 +1241,24 @@ function tramoIncentivoEmpleo(units){
   for(const [top,coef] of tr){ if(units<=prev)break; acc+=(Math.min(units,top)-prev)*coef; prev=top; }
   return acc;
 }
+// Periodo de actividad en el ano (para alta/baja a mitad de ano en objetiva): dias de alta por trimestre y factores de prorrateo.
+function periodoActividad(anio,fInicio,fCese){
+  const y=parseInt(anio,10);
+  const D=s=>Date.parse(s+"T00:00:00");
+  const jan1=y+"-01-01",dec31=y+"-12-31";
+  const ok=s=>s&&/^\d{4}-\d{2}-\d{2}$/.test(s);
+  let ini=jan1,ces=dec31;
+  if(ok(fInicio)&&D(fInicio)>D(jan1)&&D(fInicio)<=D(dec31))ini=fInicio;   // alta durante el ano
+  if(ok(fCese)&&D(fCese)>=D(jan1)&&D(fCese)<D(dec31))ces=fCese;           // cese durante el ano
+  const qb=[[y+"-01-01",y+"-03-31"],[y+"-04-01",y+"-06-30"],[y+"-07-01",y+"-09-30"],[y+"-10-01",y+"-12-31"]];
+  const factors=qb.map(([qs,qe])=>{const s=Math.max(D(qs),D(ini)),e=Math.min(D(qe),D(ces));
+    const act=e>=s?Math.round((e-s)/86400000)+1:0,tot=Math.round((D(qe)-D(qs))/86400000)+1;return {act,tot,f:tot?act/tot:0};});
+  const activo=D(ces)>=D(ini);
+  const diasAnio=Math.round((D(dec31)-D(jan1))/86400000)+1;
+  const diasAct=activo?Math.round((D(ces)-D(ini))/86400000)+1:0;
+  let firstQ=0,lastQ=0;factors.forEach((x,i)=>{if(x.f>0){if(!firstQ)firstQ=i+1;lastQ=i+1;}});
+  return {ini,ces,factors,factorAnual:diasAnio?diasAct/diasAnio:0,firstQ,lastQ,diasAnio,diasAct,parcial:(ini!==jan1||ces!==dec31)};
+}
 function calcLiq(){
   const cid=document.getElementById("lqCli").value,anio=String(document.getElementById("lqAnio").value);
   const compAnt=parseFloat(document.getElementById("lqComp").value)||0;
@@ -1262,6 +1280,36 @@ function calcLiq(){
   const gasto=f=> sinIva
         ? (regGasto==="recargo" ? base(f)+iva(f) : (ri(f)>0 ? base(f) : base(f)+iva(f)))
         : base(f)+(String(f.deducible)==="0"?iva(f):0);
+
+  // ---------- 115 / 180: retenciones de alquiler urbano (19%) ----------
+  const arr=ficha.arrendadores||{};
+  const alq=reci.filter(f=>rp(f)===19);                                 // facturas de alquiler con retencion 19%
+  const pkey=f=>String(f.nif||f.nombre||"?").trim().toUpperCase();
+  let b115="";
+  if(modList.includes("115")||alq.length>0){
+    const tr=[1,2,3,4].map(t=>{const fq=alq.filter(f=>trimOf(f.fecha)===t);
+      return {t,nP:new Set(fq.map(pkey)).size,b:fq.reduce((s,f)=>s+base(f),0),r:fq.reduce((s,f)=>s+ri(f),0)};});
+    const byP={};
+    alq.forEach(f=>{const k=pkey(f);(byP[k]=byP[k]||{nif:f.nif||"",nombre:f.nombre||"",b:0,r:0,n:0,key:k});byP[k].b+=base(f);byP[k].r+=ri(f);byP[k].n++;});
+    const percs=Object.values(byP);
+    const totB=alq.reduce((s,f)=>s+base(f),0),totR=alq.reduce((s,f)=>s+ri(f),0);
+    const nPerAnual=new Set(alq.map(pkey)).size;
+    b115="<div style='margin-top:24px;border-top:2px solid var(--gold);padding-top:14px;'>"+
+      "<div style='font-weight:700;color:var(--navy);font-size:14px;'>Retenciones de alquiler &mdash; modelo 115 (trimestral) y 180 (anual)</div>"+
+      "<div style='font-size:11px;color:var(--gray-400);margin:2px 0 10px;'>Como arrendatario/a, practica el 19% de retencion sobre el alquiler y lo ingresa con el 115 cada trimestre. El 180 es el resumen anual por arrendador. Base de retencion = importe del alquiler sin IVA.</div>"+
+      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre (115)</th><th class='td-r'>N&ordm; perceptores</th><th class='td-r'>Base retenciones</th><th class='td-r'>Retencion a ingresar</th></tr></thead><tbody>"+
+      tr.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+(x.nP||"&mdash;")+"</td><td class='td-r'>"+eur2(x.b)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.r)+"</td></tr>").join("")+
+      "<tr style='background:var(--gray-50);font-weight:700;'><td>Total a&ntilde;o</td><td class='td-r'>"+nPerAnual+"</td><td class='td-r'>"+eur2(totB)+"</td><td class='td-r'>"+eur2(totR)+"</td></tr>"+
+      "</tbody></table></div>"+
+      "<div style='font-weight:700;color:var(--navy);font-size:12px;margin:14px 0 4px;'>Modelo 180 &mdash; detalle por arrendador</div>"+
+      "<div class='tabla-wrapper'><table><thead><tr><th>NIF</th><th>Arrendador</th><th class='td-r'>Base</th><th class='td-r'>Retenci&oacute;n</th><th>Municipio inmueble</th><th>Ref. catastral</th></tr></thead><tbody>"+
+      percs.map((p,i)=>{const ex=arr[p.key]||{};return "<tr><td>"+(p.nif||"<span style='color:var(--warning);'>(falta NIF)</span>")+"</td><td>"+(p.nombre||"")+"</td><td class='td-r'>"+eur2(p.b)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(p.r)+"</td>"+
+        "<td><input type='text' id='a180m_"+i+"' data-key=\""+p.key+"\" value=\""+(ex.municipio||"")+"\" style='width:120px;font-size:11px;padding:3px 5px;border:1px solid var(--gray-200);border-radius:5px;'></td>"+
+        "<td><input type='text' id='a180r_"+i+"' value=\""+(ex.refCatastral||"")+"\" style='width:150px;font-size:11px;padding:3px 5px;border:1px solid var(--gray-200);border-radius:5px;'></td></tr>";}).join("")+
+      "</tbody></table></div>"+
+      "<div style='margin-top:8px;'><button class='btn btn-secondary' onclick=\"save180('"+cid+"',"+percs.length+")\">Guardar datos del 180</button> <span style='font-size:11px;color:var(--gray-400);'>El municipio y la referencia catastral del inmueble son obligatorios en el 180; se guardan por arrendador.</span></div>"+
+      "</div>";
+  }
 
   if(ficha.regimen==="objetiva"){
     const e=(window.WM||{})[ficha.epigrafe];
@@ -1288,24 +1336,32 @@ function calcLiq(){
     const ivaAc=cuotaDev*(parseFloat(e.ingresoCuentaIvaPct)||0)/100;
     const sopAnual=reci.reduce((s,f)=>s+ivaDed(f),0);
     const cuotaMin=cuotaDev*(parseFloat(e.cuotaMinIvaPct)||0)/100;
-    const cuotaAnual=Math.max(cuotaDev-sopAnual,cuotaMin);
-    const icCalc=3*ivaAc, icRaw=document.getElementById("lqIc").value;
-    const icReal=(icRaw!==""&&icRaw!=null)?(parseFloat(icRaw)||0):icCalc;   // ingresos a cuenta realmente pagados en 1T-3T
+    const per=periodoActividad(anio,ficha.fechaInicio,ficha.fechaCese);   // alta/baja durante el ano
+    const fac=per.factors, regQ=per.lastQ||4;                             // regQ = ultimo trimestre de alta (regularizacion IVA); 4T si todo el ano
+    const cuotaDevPr=cuotaDev*per.factorAnual, cuotaMinPr=cuotaMin*per.factorAnual; // cuota anual IVA prorrateada por dias de actividad
+    const cuotaAnual=Math.max(cuotaDevPr-sopAnual,cuotaMinPr);
+    const icCalc=[1,2,3,4].reduce((s,t)=>s+((t<regQ&&fac[t-1].f>0)?ivaAc*fac[t-1].f:0),0); // ingresos a cuenta de los trimestres de alta previos al de regularizacion
+    const icRaw=document.getElementById("lqIc").value;
+    const icReal=(icRaw!==""&&icRaw!=null)?(parseFloat(icRaw)||0):icCalc;
     const res4=cuotaAnual-icReal;
     let pend=compAnt,q4Pagar;
     if(res4>=0){const usa=Math.min(res4,pend);q4Pagar=res4-usa;pend-=usa;}else{pend+=(-res4);q4Pagar=0;}
-    const rows=[1,2,3,4].map(t=>"<tr><td>"+t+"T</td><td class='td-r'>"+eur2(t<4?ivaAc:q4Pagar)+"</td><td class='td-r'>"+eur2(irpfTrim)+"</td></tr>").join("");
+    const rows=[1,2,3,4].map(t=>{const ft=fac[t-1].f;
+      if(ft<=0)return "<tr style='color:var(--gray-300);'><td>"+t+"T</td><td class='td-r'>&mdash;</td><td class='td-r'>&mdash;</td></tr>";
+      const ivaT=(t<regQ)?ivaAc*ft:q4Pagar;                              // el trimestre de regularizacion lleva cuota anual - ingresos a cuenta
+      const nota=ft<1?" <span style='font-size:10px;color:var(--gray-400);'>("+fac[t-1].act+"/"+fac[t-1].tot+" dias)</span>":"";
+      return "<tr><td>"+t+"T"+nota+"</td><td class='td-r'>"+eur2(ivaT)+"</td><td class='td-r'>"+eur2(irpfTrim*ft)+"</td></tr>";}).join("");
     cont.innerHTML=modBanner+"<div style='background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;'>"+
-      "<strong>Datos base (objetiva &middot; epigrafe "+e.id+")</strong><br>"+
+      "<strong>Datos base (objetiva &middot; epigrafe "+e.id+")</strong>"+(per.parcial?" <span style='color:var(--gold);font-weight:600;'>&middot; alta parcial "+per.ini.split('-').reverse().join('/')+" &rarr; "+per.ces.split('-').reverse().join('/')+" ("+per.diasAct+"/"+per.diasAnio+" dias, "+(per.factorAnual*100).toFixed(1)+"%)</span>":"")+"<br>"+
       "Rend. modulos IRPF: "+eur2(rendPrevio)+(incEmpleo?(" &minus; inc. empleo "+eur2(incEmpleo)):"")+(incInver?(" &minus; inc. inversion "+eur2(incInver)):"")+((incEmpleo||incInver)?(" = minorado "+eur2(rendMinorado)):"")+" &nbsp;&rarr;&nbsp; x indice "+indice+" x reduc. "+redFactor.toFixed(2)+" = base pagos fraccionados <strong>"+eur2(rendPF)+"</strong><br>"+
       "Pago fraccionado 131 ("+pfPct+"%): <strong>"+eur2(irpfTrim)+"</strong>/trim<br>"+
-      "Cuota devengada IVA: "+eur2(cuotaDev)+" &nbsp;&middot;&nbsp; IVA soportado del ano: "+eur2(sopAnual)+"<br>"+
-      "Cuota minima ("+(e.cuotaMinIvaPct||0)+"%): "+eur2(cuotaMin)+" &nbsp;&middot;&nbsp; cuota anual IVA: <strong>"+eur2(cuotaAnual)+"</strong><br>"+
-      "Ing. a cuenta 1T-3T "+(icRaw!==""&&icRaw!=null?"(introducidos)":"(calculados)")+": "+eur2(icReal)+" &nbsp;&middot;&nbsp; resultado 4T: <strong>"+eur2(res4)+"</strong>"+
+      "Cuota devengada IVA: "+eur2(cuotaDev)+(per.parcial?" &times; "+(per.factorAnual*100).toFixed(1)+"% = "+eur2(cuotaDevPr):"")+" &nbsp;&middot;&nbsp; IVA soportado del ano: "+eur2(sopAnual)+"<br>"+
+      "Cuota minima ("+(e.cuotaMinIvaPct||0)+"%): "+eur2(per.parcial?cuotaMinPr:cuotaMin)+" &nbsp;&middot;&nbsp; cuota anual IVA: <strong>"+eur2(cuotaAnual)+"</strong><br>"+
+      "Ingresos a cuenta previos "+(icRaw!==""&&icRaw!=null?"(introducidos)":"(calculados)")+": "+eur2(icReal)+" &nbsp;&middot;&nbsp; resultado "+regQ+"T (regularizacion): <strong>"+eur2(res4)+"</strong>"+
       (res4<0?" &rarr; <span style='color:var(--success);'>a compensar</span>":"")+
-      ((compAnt>0||res4<0)?"<br>Pendiente de compensar tras el 4T: <strong>"+eur2(pend)+"</strong>":"")+"</div>"+
+      ((compAnt>0||res4<0)?"<br>Pendiente de compensar tras el "+regQ+"T: <strong>"+eur2(pend)+"</strong>":"")+"</div>"+
       "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA (reg. simplificado)</th><th class='td-r'>IRPF (131)</th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
-      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>1T-3T = ingreso a cuenta ("+(e.ingresoCuentaIvaPct||0)+"% de la cuota devengada). El 4T = cuota anual [max(cuota devengada &minus; soportado, cuota minima)] &minus; los ingresos a cuenta pagados en 1T-3T. Si dejas el campo de ingresos a cuenta vacio uso el calculado; metelo a mano si lo real fue distinto (como en tu hoja).</div>";
+      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingreso a cuenta = "+(e.ingresoCuentaIvaPct||0)+"% de la cuota devengada, en cada trimestre de alta salvo el ultimo. El ultimo trimestre de alta ("+regQ+"T) regulariza: cuota anual [max(cuota devengada &minus; soportado, cuota minima)] &minus; ingresos a cuenta previos."+(per.parcial?" <strong>Alta/baja durante el ano:</strong> los trimestres sin actividad no se pagan, el de inicio/cese se prorratea por dias, y la cuota anual de IVA se prorratea al "+(per.factorAnual*100).toFixed(1)+"% de los dias.":"")+" Si dejas el campo de ingresos a cuenta vacio uso el calculado; metelo a mano si lo real fue distinto.</div>"+b115;
     return;
   }
 
@@ -1335,7 +1391,7 @@ function calcLiq(){
     cont.innerHTML=modBanner+"<div style='background:var(--gray-50);border-radius:7px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--gray-600);'>"+(regGasto==="recargo"?"Actividad en <strong>recargo de equivalencia</strong> (no presenta 303; el IVA y el recargo soportados son coste).":"Actividad <strong>exenta de IVA</strong> (no presenta 303).")+" El 130 es el pago fraccionado de IRPF; 111 y 115 son las retenciones que practica.</div>"+
       "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>Ingresos</th><th class='td-r'>Gastos</th><th class='td-r'>Rendimiento</th><th class='td-r'>Ret. soport.</th><th class='td-r'>IRPF 130</th><th class='td-r'>111 profes.</th><th class='td-r'>115 alquiler</th></tr></thead><tbody>"+
       q.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.ingAcum)+"</td><td class='td-r'>"+eur2(x.gasAcum)+"</td><td class='td-r'>"+eur2(x.rend)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.retSopAcum)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td><td class='td-r'>"+eur2(x.ret111)+"</td><td class='td-r'>"+eur2(x.ret115)+"</td></tr>").join("")+"</tbody></table></div>"+
-      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingresos por mes (arriba) o, si los dejas vacios, de las facturas emitidas. "+(regGasto==="recargo"?"Gasto = base + IVA (todo es coste, tambien el alquiler; la retencion no reduce el gasto)":"Gasto = total factura, salvo facturas con retencion (solo base)")+". <strong>130 = 20% del rendimiento &minus; retenciones soportadas &minus; pagos anteriores.</strong> Si prefieres no restar las retenciones soportadas en el 130 (como en tu hoja), dimelo. 111 = retenciones a profesionales (7/15%); 115 = retenciones de alquiler (19%), del trimestre.</div>";
+      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingresos por mes (arriba) o, si los dejas vacios, de las facturas emitidas. "+(regGasto==="recargo"?"Gasto = base + IVA (todo es coste, tambien el alquiler; la retencion no reduce el gasto)":"Gasto = total factura, salvo facturas con retencion (solo base)")+". <strong>130 = 20% del rendimiento &minus; retenciones soportadas &minus; pagos anteriores.</strong> Si prefieres no restar las retenciones soportadas en el 130 (como en tu hoja), dimelo. 111 = retenciones a profesionales (7/15%); 115 = retenciones de alquiler (19%), del trimestre.</div>"+b115;
     return;
   }
 
@@ -1351,7 +1407,7 @@ function calcLiq(){
   });
   cont.innerHTML=modBanner+"<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA reperc.</th><th class='td-r'>IVA soport.</th><th class='td-r'>Resultado</th><th class='td-r'>IVA a pagar</th><th class='td-r'>Pdte. comp.</th><th class='td-r'>IRPF 130</th></tr></thead><tbody>"+
     q2.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='color:"+(x.res>=0?"var(--gray-600)":"var(--success)")+";'>"+eur2(x.res)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.aPagar)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.pendFin)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td></tr>").join("")+"</tbody></table></div>"+
-    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado (solo IVA deducible). Si es negativo queda pendiente de compensar y se arrastra (hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados &minus; retenciones soportadas, menos lo pagado antes."+(usarMeses?" Los ingresos por mes se toman CON IVA incluido ("+ivaVen+"%): la base va al 130 y el IVA repercutido al 303.":"")+"</div>";
+    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado (solo IVA deducible). Si es negativo queda pendiente de compensar y se arrastra (hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados &minus; retenciones soportadas, menos lo pagado antes."+(usarMeses?" Los ingresos por mes se toman CON IVA incluido ("+ivaVen+"%): la base va al 130 y el IVA repercutido al 303.":"")+"</div>"+b115;
 }
 
 // Exportar el registro (libro) de facturas del cliente/ano filtrado, desde los datos de la app (incluye las metidas a mano).
@@ -1613,7 +1669,10 @@ function renderFichaForm2(){
       "<div class='fg'><label class='fl'>Indice corrector (0,90 pequena dimension; 1 si ninguno)</label><input type='number' step='0.01' class='fi2' id='fiIndice' value='"+(f.indice!=null?f.indice:1)+"'></div>"+
       "<div class='fg'><label class='fl'>Incremento unidades asalariados vs ano anterior (parte 0,40)</label><input type='number' step='0.01' class='fi2' id='fiIncrAsal' value='"+(f.incrementoAsalariados!=null&&f.incrementoAsalariados!==""?f.incrementoAsalariados:"")+"' placeholder='0 si no aumento'></div>"+
       "<div class='fg'><label class='fl'>Incentivo a la inversion (amortizaciones, EUR)</label><input type='number' step='0.01' class='fi2' id='fiIncInver' value='"+(f.incentivoInversion!=null?f.incentivoInversion:"")+"' placeholder='0'></div>"+
+      "<div class='fg'><label class='fl'>Fecha inicio de actividad (solo si es alta a mitad de ano)</label><input type='date' class='fi2' id='fiFechaInicio' value='"+(f.fechaInicio||"")+"'></div>"+
+      "<div class='fg'><label class='fl'>Fecha de cese (solo si causa baja durante el ano)</label><input type='date' class='fi2' id='fiFechaCese' value='"+(f.fechaCese||"")+"'></div>"+
     "</div>"+
+    "<div style='font-size:11px;color:var(--gray-400);margin-top:2px;max-width:620px;'>Deja las fechas <strong>en blanco</strong> si el cliente esta de alta todo el ano. Si hay alta o baja a mitad de ano, la liquidacion solo calcula los trimestres de actividad, prorratea por dias el trimestre de inicio/cese, y prorratea la cuota anual de IVA por los dias de alta.</div>"+
     "<div style='font-size:11px;color:var(--gray-400);margin-top:4px;max-width:620px;'>El <strong>incentivo al empleo</strong> lo calcula la app sola: coge las unidades del modulo &laquo;personal asalariado&raquo;, aplica el coeficiente por tramos (0,10 hasta 1; 0,15 hasta 3; 0,20 hasta 5; 0,25 hasta 8; 0,30 mas) y lo multiplica por el valor/ud. Solo metes arriba el <strong>incremento</strong> de plantilla respecto al ano anterior (si lo hubo), que lleva el 0,40. Cadena 131: modulos &minus; incentivos = minorado &times; indice &times; (1&minus;reduccion) &times; % pago fraccionado.</div>";
 }
 async function saveFicha(){
@@ -1631,9 +1690,20 @@ async function saveFicha(){
     const pf=document.getElementById("fiPagoFracc");rec.pagoFraccIrpfPct=pf&&pf.value!==""?(parseFloat(pf.value)||0):"";
     const ia=document.getElementById("fiIncrAsal");rec.incrementoAsalariados=ia&&ia.value!==""?(parseFloat(ia.value)||0):0;
     const ii=document.getElementById("fiIncInver");rec.incentivoInversion=ii&&ii.value!==""?(parseFloat(ii.value)||0):0;
+    const fi=document.getElementById("fiFechaInicio");rec.fechaInicio=fi&&fi.value?fi.value:"";
+    const fc=document.getElementById("fiFechaCese");rec.fechaCese=fc&&fc.value?fc.value:"";
   }
+  const prevF=(window.WFI||{})[cid];if(prevF&&prevF.arrendadores)rec.arrendadores=prevF.arrendadores; // preserva datos del 180
   await fbS("iva_fiscal",cid,rec);alert("Ficha fiscal guardada.");
 }
+async function save180(cid,n){
+  const prev=(window.WFI||{})[cid]||{id:cid};
+  const arrd={...(prev.arrendadores||{})};
+  for(let i=0;i<n;i++){const mi=document.getElementById("a180m_"+i);if(!mi)continue;const key=mi.getAttribute("data-key");const re=document.getElementById("a180r_"+i);arrd[key]={municipio:(mi.value||"").trim(),refCatastral:re?(re.value||"").trim():""};}
+  await fbS("iva_fiscal",cid,{...prev,id:cid,arrendadores:arrd});
+  alert("Datos del 180 guardados.");
+}
+window.save180=save180;
 
 function onExpTipoChange(){
   document.getElementById("apuCfg").style.display=(document.getElementById("eT").value==="APU")?"block":"none";
