@@ -90,12 +90,14 @@ tr:last-child td{border-bottom:none;}
 /* VISOR LATERAL */
 #visorOverlay{display:none;position:fixed;inset:0;z-index:150;background:rgba(10,37,64,0.4);}
 #visorPanel{position:fixed;top:0;left:0;width:50%;height:100%;background:white;z-index:151;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,0.2);}
-#visorHeader{background:var(--navy);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-#visorHeader span{color:white;font-size:13px;font-weight:600;}
-#visorContent{flex:1;overflow:auto;background:#525659;}
-#visorContent img{max-width:100%;display:block;margin:0 auto;}
+#visorHeader{background:var(--navy);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;}
+#visorHeader span{color:white;font-size:13px;font-weight:600;flex:1;}
+#visorContent{flex:1;overflow:auto;background:#525659;position:relative;cursor:zoom-in;}
+#visorContent.zoomed{cursor:zoom-out;}
+#visorContent img{max-width:100%;display:block;margin:0 auto;transition:transform 0.2s;transform-origin:top left;}
 #visorContent embed{width:100%;height:100%;min-height:calc(100vh - 44px);}
-/* Modal desplazado a la derecha cuando visor está activo */
+.zoom-btn{background:rgba(255,255,255,0.15);border:none;color:white;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;font-weight:600;}
+.zoom-btn:hover{background:rgba(255,255,255,0.25);}
 body.visor-open .modal-overlay{left:50%;width:50%;}
 body.visor-open .modal-overlay.open{display:flex;}
 </style>
@@ -337,9 +339,12 @@ body.visor-open .modal-overlay.open{display:flex;}
 <div id="visorPanel" style="display:none;">
   <div id="visorHeader">
     <span id="visorTitle">Documento</span>
-    <button onclick="cerrarVisor()" style="background:rgba(255,255,255,0.15);border:none;color:white;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;">✕ Cerrar</button>
+    <button class="zoom-btn" onclick="zoomVisor(-1)" title="Reducir">−</button>
+    <button class="zoom-btn" onclick="zoomVisor(0)" title="Ajustar">⊡</button>
+    <button class="zoom-btn" onclick="zoomVisor(1)" title="Ampliar">+</button>
+    <button onclick="cerrarVisor()" style="background:rgba(255,255,255,0.15);border:none;color:white;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;">✕</button>
   </div>
-  <div id="visorContent"></div>
+  <div id="visorContent" ondblclick="zoomVisor(1)"></div>
 </div>
 
 <!-- MODAL FACTURA -->
@@ -991,6 +996,23 @@ function renderPortal() {
       "</div>" +
     "</div>";
   }).join("");
+}
+
+let _visorZoom = 1;
+
+function zoomVisor(dir) {
+  const content = document.getElementById('visorContent');
+  const img = content ? content.querySelector('img') : null;
+  if(!img) return;
+  if(dir === 0) {
+    _visorZoom = 1;
+  } else {
+    _visorZoom = Math.min(Math.max(_visorZoom + dir * 0.3, 0.5), 4);
+  }
+  img.style.transformOrigin = 'top center';
+  img.style.transform = 'scale(' + _visorZoom + ')';
+  img.style.maxWidth = _visorZoom <= 1 ? '100%' : 'none';
+  content.style.cursor = _visorZoom >= 4 ? 'zoom-out' : 'zoom-in';
 }
 
 function abrirVisor(d) {
