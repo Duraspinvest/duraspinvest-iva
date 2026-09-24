@@ -224,9 +224,6 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
-
-</div>
-
 <!-- FISCAL -->
 <div id="fiscal" class="section">
   <div class="card">
@@ -373,7 +370,8 @@ tr:last-child td{border-bottom:none;}
     </div>
     <div class="ma">
       <button class="btn btn-secondary" onclick="closeM('fModal')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveF()">Guardar factura</button>
+      <button class="btn btn-secondary" onclick="saveF(true)">+ Guardar y otra</button>
+      <button class="btn btn-primary" onclick="saveF(false)">Guardar y cerrar</button>
     </div>
   </div>
 </div>
@@ -614,7 +612,7 @@ function calcRet(){
   calcTot();
 }
 
-async function saveF(){
+async function saveF(mantenerAbierto){
   const cid=document.getElementById("fCD").value;
   const nom=document.getElementById("fNom").value.trim();
   const fec=document.getElementById("fFecha").value;
