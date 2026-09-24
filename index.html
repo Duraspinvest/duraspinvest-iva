@@ -86,6 +86,18 @@ tr:last-child td{border-bottom:none;}
 .empty{text-align:center;padding:40px 20px;color:var(--gray-400);}
 .empty-icon{font-size:28px;margin-bottom:8px;}
 @media(max-width:700px){.mg2{grid-template-columns:1fr;}.fg.full{grid-column:span 1;}.iva-row{grid-template-columns:1fr 1fr;}}
+
+/* VISOR LATERAL */
+#visorOverlay{display:none;position:fixed;inset:0;z-index:150;background:rgba(10,37,64,0.4);}
+#visorPanel{position:fixed;top:0;left:0;width:50%;height:100%;background:white;z-index:151;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,0.2);}
+#visorHeader{background:var(--navy);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+#visorHeader span{color:white;font-size:13px;font-weight:600;}
+#visorContent{flex:1;overflow:auto;background:#525659;}
+#visorContent img{max-width:100%;display:block;margin:0 auto;}
+#visorContent embed{width:100%;height:100%;min-height:calc(100vh - 44px);}
+/* Modal desplazado a la derecha cuando visor está activo */
+body.visor-open .modal-overlay{left:50%;width:50%;}
+body.visor-open .modal-overlay.open{display:flex;}
 </style>
 </head>
 <body>
@@ -289,9 +301,6 @@ tr:last-child td{border-bottom:none;}
   </div>
 </div>
 
-</main>
-</div>
-
 <!-- PORTAL CLIENTES -->
 <div id="portal" class="section">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
@@ -321,6 +330,16 @@ tr:last-child td{border-bottom:none;}
 </div>
 
 </main>
+</div>
+
+<!-- VISOR LATERAL -->
+<div id="visorOverlay" onclick="cerrarVisor()"></div>
+<div id="visorPanel" style="display:none;">
+  <div id="visorHeader">
+    <span id="visorTitle">Documento</span>
+    <button onclick="cerrarVisor()" style="background:rgba(255,255,255,0.15);border:none;color:white;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;">✕ Cerrar</button>
+  </div>
+  <div id="visorContent"></div>
 </div>
 
 <!-- MODAL FACTURA -->
@@ -974,110 +993,46 @@ function renderPortal() {
   }).join("");
 }
 
-async function registrarFacturaPortal(id) {
+function abrirVisor(d) {
+  const panel = document.getElementById('visorPanel');
+  const content = document.getElementById('visorContent');
+  const title = document.getElementById('visorTitle');
+  if(!panel || !content) return;
+  title.textContent = d.descripcion || d.nombreArchivo || 'Documento';
+  if(d.tipo === 'application/pdf') {
+    content.innerHTML = '<embed src="'+d.datos+'" width="100%" height="100%" style="min-height:calc(100vh - 44px);">';
+  } else {
+    content.innerHTML = '<img src="'+d.datos+'" style="max-width:100%;display:block;margin:0 auto;">';
+  }
+  panel.style.display = 'flex';
+  document.getElementById('visorOverlay').style.display = 'block';
+  document.body.classList.add('visor-open');
+}
+
+function cerrarVisor() {
+  const panel = document.getElementById('visorPanel');
+  const overlay = document.getElementById('visorOverlay');
+  if(panel) panel.style.display = 'none';
+  if(overlay) overlay.style.display = 'none';
+  document.body.classList.remove('visor-open');
+  const content = document.getElementById('visorContent');
+  if(content) content.innerHTML = '';
+}
+
+function registrarFacturaPortal(id) {
   const d = (window.portalDocs||[]).find(x => x.id === id);
   if(!d || !d.datos) { alert("No hay datos en este documento."); return; }
 
-  // Determinar tipo de factura por defecto según el email del cliente
-  // Las facturas que sube el cliente son recibidas (el cliente las recibe y las paga)
-  const tipo = "IVS";
+  // Abrir el documento en el visor lateral
+  abrirVisor(d);
 
-  // Abrir modal primero con cliente pre-seleccionado
-  // Buscar cliente por email
-  const clienteMatch = (window.WCC||[]).find(cc => {
-    return (window.WCC||[]).some(x => x.userEmail === d.userEmail);
-  });
+  // Abrir modal de factura (recibida por defecto)
+  openFM('IVS');
 
-  // Abrir modal de factura
-  const btnEl = document.querySelector("[data-id='"+id+"']");
-  openFM(tipo);
+  // Guardar ID para marcarlo procesado al guardar
+  window._portalDocId = id;
 
-  // Indicar que estamos extrayendo
-  const btnSubir = document.getElementById("btnSubir2") || null;
-  showToast("Extrayendo datos con IA...", 5000);
-
-  try {
-    // Preparar el contenido para la API
-    const promptIA = 'Extrae los datos de esta factura y devuelve SOLO un JSON con estos campos: numero, fecha (DD/MM/AAAA), nombre, nif, base1, pct1, iva1, base2, pct2, iva2, total, retPct. Si no encuentras un dato pon 0 o cadena vacia. Solo el JSON, sin explicaciones.';
-    let messages;
-    if(d.tipo === "application/pdf") {
-      messages = [{
-        role: "user",
-        content: [
-          { type: "document", source: { type: "base64", media_type: "application/pdf", data: d.datos.split(",")[1] } },
-          { type: "text", text: promptIA }
-        ]
-      }];
-    } else {
-      messages = [{
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: d.tipo || "image/jpeg", data: d.datos.split(",")[1] } },
-          { type: "text", text: promptIA }
-        ]
-      }];
-    }
-
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        messages
-      })
-    });
-
-    const data = await resp.json();
-    const text = data.content && data.content[0] ? data.content[0].text : "";
-
-    // Parsear JSON
-    const clean = text.replace(/```json|```/g, "").trim();
-    const factura = JSON.parse(clean);
-
-    // Rellenar el modal con los datos extraídos
-    if(factura.numero) document.getElementById("fNum").value = factura.numero;
-    if(factura.fecha) {
-      // Convertir DD/MM/AAAA a AAAA-MM-DD para el input date
-      const parts = factura.fecha.split("/");
-      if(parts.length === 3) {
-        document.getElementById("fFecha").value = parts[2]+"-"+parts[1].padStart(2,"0")+"-"+parts[0].padStart(2,"0");
-      }
-    }
-    if(factura.nombre) document.getElementById("fNom").value = factura.nombre;
-    if(factura.nif) document.getElementById("fNif").value = factura.nif;
-    if(factura.base1) document.getElementById("fB1").value = factura.base1;
-    if(factura.pct1) document.getElementById("fP1").value = factura.pct1;
-    if(factura.iva1) document.getElementById("fI1").value = factura.iva1;
-    if(factura.base2) document.getElementById("fB2").value = factura.base2;
-    if(factura.pct2) document.getElementById("fP2").value = factura.pct2;
-    if(factura.iva2) document.getElementById("fI2").value = factura.iva2;
-    if(factura.total) document.getElementById("fTot").value = factura.total;
-    if(factura.retPct) document.getElementById("fRP").value = factura.retPct;
-
-    // Guardar ID del documento portal para marcarlo procesado al guardar
-    window._portalDocId = id;
-
-    showToast("Datos extraídos. Revisa y completa el cliente.");
-
-    // Buscar cuenta en tabla por nombre extraído
-    if(factura.nombre) {
-      const cuentaMatch = (window.WCC||[]).find(cc =>
-        (cc.nombre||"").toLowerCase().includes((factura.nombre||"").toLowerCase().slice(0,10))
-      );
-      if(cuentaMatch) {
-        document.getElementById("fNif").value = cuentaMatch.nif || factura.nif || "";
-        document.getElementById("fCta").value = cuentaMatch.cuenta || "";
-        // Pre-seleccionar cliente del despacho
-        const sel = document.getElementById("fCD");
-        if(sel) sel.value = cuentaMatch.clienteDespachoId || "";
-      }
-    }
-
-  } catch(err) {
-    console.error("Error extrayendo datos:", err);
-    showToast("No se pudieron extraer datos automáticamente. Rellena manualmente.");
-  }
+  showToast("Rellena los datos de la factura mirando el documento.");
 }
 
 function verDocumento(id) {
