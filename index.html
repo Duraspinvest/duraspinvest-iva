@@ -2010,6 +2010,22 @@ function doExport(){
   }
 }
 
+function showToast(msg, duration) {
+  duration = duration || 3000;
+  // Crear o reusar el toast
+  let t = document.getElementById('ivaToast');
+  if(!t) {
+    t = document.createElement('div');
+    t.id = 'ivaToast';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:white;padding:10px 20px;border-radius:20px;font-size:13px;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, duration);
+}
+
 function doLogin(){
   const e=document.getElementById("loginEmail").value.trim(),p=document.getElementById("loginPassword").value;
   document.getElementById("loginError").style.display="none";
