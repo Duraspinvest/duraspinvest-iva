@@ -963,14 +963,121 @@ function renderPortal() {
       "</div>" +
       "<div style='display:flex;flex-direction:column;align-items:flex-end;gap:6px;'>" +
         "<span style='font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;background:"+estadoBg+";color:"+estadoColor+";'>"+estadoLabel+"</span>" +
-        "<div style='display:flex;gap:4px;'>" +
+        "<div style='display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;'>" +
           (d.datos ? "<button class='btn btn-sm' style='background:#EFF6FF;color:#1B4F8A;font-size:11px;' data-id='"+d.id+"' onclick='verDocumento(this.dataset.id)'>Ver</button>" : "") +
+          (d.estado !== "procesada" ? "<button class='btn btn-sm' style='background:#FFF7ED;color:#C2410C;font-size:11px;' data-id='"+d.id+"' onclick='registrarFacturaPortal(this.dataset.id)'>&#128203; Registrar</button>" : "") +
           (d.estado !== "procesada" ? "<button class='btn btn-sm' style='background:#D1FAE5;color:#065F46;font-size:11px;' data-id='"+d.id+"' onclick='marcarProcesada(this.dataset.id)'>Procesada</button>" : "") +
           "<button class='btn btn-sm' style='background:#FEF2F2;color:#EF4444;font-size:11px;' data-id='"+d.id+"' onclick='eliminarPortalDoc(this.dataset.id)'>&#215;</button>" +
         "</div>" +
       "</div>" +
     "</div>";
   }).join("");
+}
+
+async function registrarFacturaPortal(id) {
+  const d = (window.portalDocs||[]).find(x => x.id === id);
+  if(!d || !d.datos) { alert("No hay datos en este documento."); return; }
+
+  // Determinar tipo de factura por defecto según el email del cliente
+  // Las facturas que sube el cliente son recibidas (el cliente las recibe y las paga)
+  const tipo = "IVS";
+
+  // Abrir modal primero con cliente pre-seleccionado
+  // Buscar cliente por email
+  const clienteMatch = (window.WCC||[]).find(cc => {
+    return (window.WCC||[]).some(x => x.userEmail === d.userEmail);
+  });
+
+  // Abrir modal de factura
+  const btnEl = document.querySelector("[data-id='"+id+"']");
+  openFM(tipo);
+
+  // Indicar que estamos extrayendo
+  const btnSubir = document.getElementById("btnSubir2") || null;
+  showToast("Extrayendo datos con IA...", 5000);
+
+  try {
+    // Preparar el contenido para la API
+    const promptIA = 'Extrae los datos de esta factura y devuelve SOLO un JSON con estos campos: numero, fecha (DD/MM/AAAA), nombre, nif, base1, pct1, iva1, base2, pct2, iva2, total, retPct. Si no encuentras un dato pon 0 o cadena vacia. Solo el JSON, sin explicaciones.';
+    let messages;
+    if(d.tipo === "application/pdf") {
+      messages = [{
+        role: "user",
+        content: [
+          { type: "document", source: { type: "base64", media_type: "application/pdf", data: d.datos.split(",")[1] } },
+          { type: "text", text: promptIA }
+        ]
+      }];
+    } else {
+      messages = [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: d.tipo || "image/jpeg", data: d.datos.split(",")[1] } },
+          { type: "text", text: promptIA }
+        ]
+      }];
+    }
+
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages
+      })
+    });
+
+    const data = await resp.json();
+    const text = data.content && data.content[0] ? data.content[0].text : "";
+
+    // Parsear JSON
+    const clean = text.replace(/```json|```/g, "").trim();
+    const factura = JSON.parse(clean);
+
+    // Rellenar el modal con los datos extraídos
+    if(factura.numero) document.getElementById("fNum").value = factura.numero;
+    if(factura.fecha) {
+      // Convertir DD/MM/AAAA a AAAA-MM-DD para el input date
+      const parts = factura.fecha.split("/");
+      if(parts.length === 3) {
+        document.getElementById("fFecha").value = parts[2]+"-"+parts[1].padStart(2,"0")+"-"+parts[0].padStart(2,"0");
+      }
+    }
+    if(factura.nombre) document.getElementById("fNom").value = factura.nombre;
+    if(factura.nif) document.getElementById("fNif").value = factura.nif;
+    if(factura.base1) document.getElementById("fB1").value = factura.base1;
+    if(factura.pct1) document.getElementById("fP1").value = factura.pct1;
+    if(factura.iva1) document.getElementById("fI1").value = factura.iva1;
+    if(factura.base2) document.getElementById("fB2").value = factura.base2;
+    if(factura.pct2) document.getElementById("fP2").value = factura.pct2;
+    if(factura.iva2) document.getElementById("fI2").value = factura.iva2;
+    if(factura.total) document.getElementById("fTot").value = factura.total;
+    if(factura.retPct) document.getElementById("fRP").value = factura.retPct;
+
+    // Guardar ID del documento portal para marcarlo procesado al guardar
+    window._portalDocId = id;
+
+    showToast("Datos extraídos. Revisa y completa el cliente.");
+
+    // Buscar cuenta en tabla por nombre extraído
+    if(factura.nombre) {
+      const cuentaMatch = (window.WCC||[]).find(cc =>
+        (cc.nombre||"").toLowerCase().includes((factura.nombre||"").toLowerCase().slice(0,10))
+      );
+      if(cuentaMatch) {
+        document.getElementById("fNif").value = cuentaMatch.nif || factura.nif || "";
+        document.getElementById("fCta").value = cuentaMatch.cuenta || "";
+        // Pre-seleccionar cliente del despacho
+        const sel = document.getElementById("fCD");
+        if(sel) sel.value = cuentaMatch.clienteDespachoId || "";
+      }
+    }
+
+  } catch(err) {
+    console.error("Error extrayendo datos:", err);
+    showToast("No se pudieron extraer datos automáticamente. Rellena manualmente.");
+  }
 }
 
 function verDocumento(id) {
