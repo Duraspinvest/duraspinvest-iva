@@ -1082,18 +1082,20 @@ async function marcarProcesada(id) {
 }
 
 async function eliminarPortalDoc(id) {
-  if(!confirm("Eliminar este documento?")) return;
   const d = (window.portalDocs||[]).find(x => x.id === id);
   if(!d) return;
   if(d.estado === "procesada") {
-    // Ya procesada: solo marcarla como archivada para que desaparezca de tu vista
-    // pero el cliente la sigue viendo como "Procesada"
-    const docActualizado = Object.assign({}, d, { archivada: true });
-    await fbS("portal_documentos", id, docActualizado);
+    // Procesada: archivar (desaparece de tu vista, cliente la sigue viendo como Procesada)
+    if(!confirm("Archivar este documento procesado?")) return;
+    await fbS("portal_documentos", id, Object.assign({}, d, { archivada: true }));
+  } else if(d.estado === "eliminada") {
+    // Ya marcada como eliminada: borrar definitivamente de Firebase
+    if(!confirm("Borrar definitivamente este documento?")) return;
+    await fbD("portal_documentos", id);
   } else {
-    // No procesada: marcar como eliminada para que el cliente sepa que la reenvíe
-    const docActualizado = Object.assign({}, d, { estado: "eliminada", eliminada: new Date().toISOString() });
-    await fbS("portal_documentos", id, docActualizado);
+    // Pendiente: marcar como eliminada para avisar al cliente que reenvíe
+    if(!confirm("Marcar como eliminada? El cliente verá que debe reenviarla.")) return;
+    await fbS("portal_documentos", id, Object.assign({}, d, { estado: "eliminada", eliminada: new Date().toISOString() }));
   }
   renderPortal();
 }
