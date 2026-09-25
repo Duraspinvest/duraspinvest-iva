@@ -956,14 +956,15 @@ function renderPortal() {
     if(filtroCliente && d.userEmail !== filtroCliente) return false;
     if(filtroEstado && d.estado !== filtroEstado) return false;
     return true;
-  }).sort((a,b) => (b.creado||"").localeCompare(a.creado||""));
+  }).filter(d => !d.archivada).sort((a,b) => (b.creado||"").localeCompare(a.creado||""));
 
   const elPend = document.getElementById("portalPend");
   const elProc = document.getElementById("portalProc");
   const elTotal = document.getElementById("portalTotal");
-  if(elPend) elPend.textContent = (window.portalDocs||[]).filter(d=>d.estado==="pendiente").length;
-  if(elProc) elProc.textContent = (window.portalDocs||[]).filter(d=>d.estado==="procesada").length;
-  if(elTotal) elTotal.textContent = (window.portalDocs||[]).length;
+  const docsNoArch = (window.portalDocs||[]).filter(d=>!d.archivada);
+  if(elPend) elPend.textContent = docsNoArch.filter(d=>d.estado==="pendiente").length;
+  if(elProc) elProc.textContent = docsNoArch.filter(d=>d.estado==="procesada").length;
+  if(elTotal) elTotal.textContent = docsNoArch.length;
 
   const el = document.getElementById("portalDocs");
   if(!el) return;
@@ -1085,8 +1086,10 @@ async function eliminarPortalDoc(id) {
   const d = (window.portalDocs||[]).find(x => x.id === id);
   if(!d) return;
   if(d.estado === "procesada") {
-    // Ya procesada: borrar de Firebase (queda en historial del cliente como procesada)
-    await fbD("portal_documentos", id);
+    // Ya procesada: solo marcarla como archivada para que desaparezca de tu vista
+    // pero el cliente la sigue viendo como "Procesada"
+    const docActualizado = Object.assign({}, d, { archivada: true });
+    await fbS("portal_documentos", id, docActualizado);
   } else {
     // No procesada: marcar como eliminada para que el cliente sepa que la reenvíe
     const docActualizado = Object.assign({}, d, { estado: "eliminada", eliminada: new Date().toISOString() });
