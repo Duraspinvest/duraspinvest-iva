@@ -1074,8 +1074,9 @@ function verDocumento(id) {
 async function marcarProcesada(id) {
   const d = (window.portalDocs||[]).find(x => x.id === id);
   if(!d) return;
-  d.estado = "procesada";
-  await fbS("portal_documentos", id, d);
+  // Solo actualizar el estado, sin tocar datos/thumbnail para no perder la imagen
+  const docActualizado = Object.assign({}, d, { estado: "procesada", procesada: new Date().toISOString() });
+  await fbS("portal_documentos", id, docActualizado);
   renderPortal();
 }
 
