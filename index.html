@@ -2,9 +2,11 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Duraspinvest · Registros IVA</title>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#0A2540">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Duraspinvest · Portal Cliente</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -13,2036 +15,520 @@
   --white:#FFFFFF;--gray-50:#F8FAFC;--gray-100:#EEF2F7;
   --gray-200:#D6DEE8;--gray-400:#8A9BB0;--gray-600:#4A5A6B;--gray-800:#1E2C3A;
   --success:#10B981;--danger:#EF4444;--warning:#F59E0B;
-  --radius:10px;--shadow:0 1px 3px rgba(10,37,64,0.08),0 4px 12px rgba(10,37,64,0.06);
-  --shadow-lg:0 8px 32px rgba(10,37,64,0.14);
+  --radius:12px;--shadow:0 2px 8px rgba(10,37,64,0.10);
+  --shadow-lg:0 8px 32px rgba(10,37,64,0.16);
 }
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--gray-50);color:var(--gray-800);min-height:100vh;}
-header{background:var(--navy);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2);}
-.logo{display:flex;align-items:center;gap:10px;}
-.logo-icon{width:32px;height:32px;background:var(--navy-mid);border-radius:7px;display:flex;align-items:center;justify-content:center;}
+
+/* LOGIN */
+#loginScreen{display:none;position:fixed;inset:0;background:var(--navy);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:20px;padding:20px;}
+
+/* HEADER */
+header{background:var(--navy);padding:0 20px;height:54px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(0,0,0,0.2);}
 .logo-name{color:white;font-size:14px;font-weight:600;}
 .logo-sub{color:var(--gray-400);font-size:10px;}
-nav{background:var(--navy-mid);display:flex;overflow-x:auto;scrollbar-width:none;}
-nav::-webkit-scrollbar{display:none;}
-.nav-btn{padding:11px 18px;color:var(--gray-400);font-size:13px;font-weight:500;border:none;background:none;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:all 0.2s;}
-.nav-btn:hover{color:white;}
-.nav-btn.active{color:white;border-bottom-color:var(--accent);}
-main{padding:20px;max-width:1400px;margin:0 auto;}
-.section{display:none;}
-.section.active{display:block;}
+
+/* MAIN */
+main{padding:16px;max-width:600px;margin:0 auto;}
+
+/* CARDS */
 .card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:14px;}
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
-.stat-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;border-left:3px solid var(--accent);}
-.stat-num{font-size:22px;font-weight:700;color:var(--navy);}
-.stat-label{font-size:11px;color:var(--gray-400);margin-top:2px;}
-.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end;}
-.filtro-group{display:flex;flex-direction:column;gap:4px;}
-.filtro-label{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;}
-.fi{padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:7px;font-size:13px;color:var(--gray-800);outline:none;font-family:inherit;background:white;}
-.fi:focus{border-color:var(--accent);}
-.tabla-wrapper{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--gray-200);}
-table{border-collapse:collapse;width:100%;font-size:12px;}
-thead{position:sticky;top:0;z-index:5;}
-th{background:var(--navy);color:white;padding:10px 8px;text-align:left;white-space:nowrap;font-size:11px;font-weight:600;}
-th:first-child{padding-left:14px;}
-td{padding:9px 8px;border-bottom:1px solid var(--gray-100);vertical-align:middle;}
-td:first-child{padding-left:14px;}
-tr:hover td{background:var(--gray-50);}
-tr:last-child td{border-bottom:none;}
-.td-r{text-align:right;font-variant-numeric:tabular-nums;}
-.td-c{text-align:center;}
-.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;}
-.badge-ivr{background:#EFF6FF;color:#1B4F8A;}
-.badge-ivs{background:#FFF7ED;color:#C2410C;}
-.btn{padding:8px 16px;border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:inherit;transition:all 0.15s;}
+
+/* UPLOAD AREA */
+.upload-area{border:2px dashed var(--gray-200);border-radius:var(--radius);padding:32px 20px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--gray-50);}
+.upload-area:hover,.upload-area.drag{border-color:var(--accent);background:#EFF6FF;}
+.upload-icon{font-size:40px;margin-bottom:12px;}
+.upload-title{font-size:15px;font-weight:600;color:var(--navy);margin-bottom:6px;}
+.upload-sub{font-size:13px;color:var(--gray-400);}
+
+/* BOTONES CAMARA */
+.btn-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+.btn{padding:12px 16px;border-radius:9px;font-size:14px;font-weight:500;cursor:pointer;border:none;font-family:inherit;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:8px;}
 .btn-primary{background:var(--navy);color:white;}
 .btn-primary:hover{background:var(--navy-light);}
+.btn-camera{background:#EFF6FF;color:var(--navy-light);border:1.5px solid #BFDBFE;}
+.btn-pdf{background:#FFF7ED;color:#C2410C;border:1.5px solid #FED7AA;}
 .btn-secondary{background:var(--gray-100);color:var(--gray-600);}
-.btn-success{background:#F0FDF4;color:#059669;border:1px solid #BBF7D0;}
-.btn-ivs{background:#FFF7ED;color:#C2410C;border:1px solid #FED7AA;}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:7px;}
+.btn-danger{background:#FEF2F2;color:var(--danger);border:1px solid #FECACA;}
+
+/* LISTA DOCUMENTOS */
+.doc-item{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--gray-200);border-radius:9px;margin-bottom:8px;background:white;}
+.doc-thumb{width:52px;height:52px;border-radius:7px;object-fit:cover;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.doc-info{flex:1;min-width:0;}
+.doc-nombre{font-size:13px;font-weight:500;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.doc-meta{font-size:11px;color:var(--gray-400);margin-top:2px;}
+.doc-estado{font-size:10px;padding:2px 8px;border-radius:20px;font-weight:500;white-space:nowrap;}
+.estado-pendiente{background:#FEF3C7;color:#92400E;}
+.estado-procesada{background:#D1FAE5;color:#065F46;}
+.estado-eliminada{background:#FEE2E2;color:#991B1B;}
+
+/* STATS */
+.stats-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;}
+.stat{background:white;border-radius:var(--radius);padding:14px;text-align:center;box-shadow:var(--shadow);}
+.stat-num{font-size:24px;font-weight:700;color:var(--navy);}
+.stat-label{font-size:11px;color:var(--gray-400);margin-top:2px;}
+
+/* PROGRESS */
+.progress-wrap{margin:10px 0;}
+.progress-bar{height:4px;background:var(--gray-100);border-radius:2px;overflow:hidden;}
+.progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width 0.3s;}
+.progress-text{font-size:11px;color:var(--gray-400);margin-top:4px;text-align:center;}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:white;padding:10px 20px;border-radius:20px;font-size:13px;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+
+/* MODAL */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(10,37,64,0.5);z-index:200;align-items:center;justify-content:center;padding:16px;}
 .modal-overlay.open{display:flex;}
-.modal{background:white;border-radius:14px;padding:22px;width:100%;max-width:640px;box-shadow:var(--shadow-lg);max-height:92vh;overflow-y:auto;}
-.modal-title{font-size:15px;font-weight:600;color:var(--navy);margin-bottom:18px;}
-.mg2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.fg{display:flex;flex-direction:column;gap:5px;}
-.fg.full{grid-column:span 2;}
-.fl{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;}
-.fl .ob{color:var(--danger);}
-.fi2{padding:9px 11px;border:1.5px solid var(--gray-200);border-radius:7px;font-size:13px;color:var(--gray-800);outline:none;font-family:inherit;width:100%;}
-.fi2:focus{border-color:var(--accent);}
-.ma{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--gray-100);}
-.ac-wrap{position:relative;}
-.ac-list{position:absolute;top:100%;left:0;right:0;background:white;border:1px solid var(--gray-200);border-radius:7px;box-shadow:var(--shadow-lg);z-index:300;max-height:200px;overflow-y:auto;margin-top:2px;display:none;}
-.ac-item{padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--gray-100);}
-.ac-item:last-child{border-bottom:none;}
-.ac-item:hover{background:var(--gray-50);}
-.ac-sub{font-size:11px;color:var(--gray-400);margin-top:2px;}
-.iva-box{background:var(--gray-50);border-radius:7px;padding:12px;margin-top:10px;}
-.iva-box-title{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}
-.iva-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;}
-.icon-btn{background:none;border:none;cursor:pointer;padding:4px;color:var(--gray-400);font-size:14px;border-radius:4px;}
-.icon-btn:hover{color:var(--gray-800);background:var(--gray-100);}
-.empty{text-align:center;padding:40px 20px;color:var(--gray-400);}
-.empty-icon{font-size:28px;margin-bottom:8px;}
-@media(max-width:700px){.mg2{grid-template-columns:1fr;}.fg.full{grid-column:span 1;}.iva-row{grid-template-columns:1fr 1fr;}}
+.modal{background:white;border-radius:14px;padding:22px;width:100%;max-width:440px;box-shadow:var(--shadow-lg);}
+.modal-title{font-size:15px;font-weight:600;color:var(--navy);margin-bottom:14px;}
+.form-group{margin-bottom:12px;}
+.form-label{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;}
+.form-input{width:100%;padding:10px 12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;outline:none;font-family:inherit;}
+.form-input:focus{border-color:var(--accent);}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid var(--gray-100);}
 
-/* VISOR LATERAL */
-#visorOverlay{display:none;position:fixed;inset:0;z-index:150;background:rgba(10,37,64,0.4);}
-#visorPanel{position:fixed;top:0;left:0;width:50%;height:100%;background:white;z-index:151;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,0.2);}
-#visorHeader{background:var(--navy);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;}
-#visorHeader span{color:white;font-size:13px;font-weight:600;flex:1;}
-#visorContent{flex:1;overflow:auto;background:#525659;position:relative;cursor:zoom-in;}
-#visorContent.zoomed{cursor:zoom-out;}
-#visorContent img{max-width:100%;display:block;transition:transform 0.15s;transform-origin:top left;}
-#visorContent embed{width:100%;height:100%;min-height:calc(100vh - 44px);}
-.zoom-btn{background:rgba(255,255,255,0.15);border:none;color:white;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;font-weight:600;}
-.zoom-btn:hover{background:rgba(255,255,255,0.25);}
-body.visor-open .modal-overlay{left:50%;width:50%;}
-body.visor-open .modal-overlay.open{display:flex;}
+.empty{text-align:center;padding:30px 20px;color:var(--gray-400);}
+.empty-icon{font-size:32px;margin-bottom:8px;}
+
+@media(max-width:400px){.btn-row{grid-template-columns:1fr;}.stats-row{grid-template-columns:1fr 1fr;}}
 </style>
 </head>
 <body>
 
 <!-- LOGIN -->
-<div id="loginScreen" style="display:none;position:fixed;inset:0;background:var(--navy);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:20px;">
+<div id="loginScreen" style="display:flex;position:fixed;inset:0;background:var(--navy);z-index:1000;align-items:center;justify-content:center;flex-direction:column;gap:20px;padding:20px;">
   <div style="text-align:center;">
-    <div style="width:68px;height:68px;background:var(--navy-mid);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
-      <svg viewBox="0 0 36 36" width="68" height="68"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
+    <div style="width:64px;height:64px;background:var(--navy-mid);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+      <svg viewBox="0 0 36 36" width="64" height="64"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
     </div>
     <div style="color:white;font-size:18px;font-weight:600;">Duraspinvest</div>
-    <div style="color:var(--gray-400);font-size:11px;margin-top:3px;letter-spacing:1px;text-transform:uppercase;">Registros IVA · Exportacion Delsol</div>
+    <div style="color:var(--gray-400);font-size:11px;margin-top:3px;letter-spacing:1px;">Portal del cliente</div>
   </div>
-  <div style="background:white;border-radius:14px;padding:24px 28px;width:100%;max-width:320px;box-shadow:var(--shadow-lg);">
-    <div style="font-size:14px;font-weight:600;color:var(--navy);margin-bottom:16px;text-align:center;">Acceder</div>
-    <div style="margin-bottom:10px;"><label style="font-size:11px;font-weight:600;color:#4A5A6B;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Email</label>
-      <input type="email" id="loginEmail" placeholder="tu@email.com" style="width:100%;padding:9px 11px;border:1.5px solid #D6DEE8;border-radius:7px;font-size:13px;outline:none;font-family:inherit;"></div>
-    <div style="margin-bottom:14px;"><label style="font-size:11px;font-weight:600;color:#4A5A6B;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Contrasena</label>
-      <input type="password" id="loginPassword" placeholder="..."  style="width:100%;padding:9px 11px;border:1.5px solid #D6DEE8;border-radius:7px;font-size:13px;outline:none;font-family:inherit;"></div>
+  <div style="background:white;border-radius:14px;padding:24px;width:100%;max-width:340px;box-shadow:var(--shadow-lg);">
+    <div style="font-size:14px;font-weight:600;color:var(--navy);margin-bottom:16px;text-align:center;">Accede a tu portal</div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:11px;font-weight:600;color:#4A5A6B;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Email</label>
+      <input type="email" id="loginEmail" placeholder="tu@email.com" style="width:100%;padding:10px 12px;border:1.5px solid #D6DEE8;border-radius:8px;font-size:14px;outline:none;font-family:inherit;">
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="font-size:11px;font-weight:600;color:#4A5A6B;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Contrasena</label>
+      <input type="password" id="loginPassword" placeholder="..." style="width:100%;padding:10px 12px;border:1.5px solid #D6DEE8;border-radius:8px;font-size:14px;outline:none;font-family:inherit;">
+    </div>
     <div id="loginError" style="color:#EF4444;font-size:12px;margin-bottom:10px;display:none;">Email o contrasena incorrectos</div>
-    <button onclick="doLogin()" style="width:100%;padding:11px;background:#0A2540;color:white;border:none;border-radius:7px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;">Entrar</button>
+    <button onclick="doLogin()" style="width:100%;padding:12px;background:#0A2540;color:white;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;">Entrar</button>
+    <div style="font-size:11px;color:var(--gray-400);text-align:center;margin-top:12px;">Si no tienes acceso, contacta con tu asesor.</div>
   </div>
 </div>
 
 <div id="appContent" style="display:none;flex-direction:column;min-height:100vh;">
 <header>
-  <div class="logo">
-    <div class="logo-icon">
-      <svg viewBox="0 0 36 36" width="32" height="32"><text x="3" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.9">E</text><text x="14" y="23" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.3">D</text><text x="8" y="34" font-family="Georgia,serif" font-size="20" font-weight="700" fill="white" opacity="0.6">G</text></svg>
-    </div>
-    <div><div class="logo-name">Duraspinvest · Registros IVA</div><div class="logo-sub">Libros de IVA · Exportacion Delsol</div></div>
+  <div>
+    <div class="logo-name">Portal del cliente</div>
+    <div class="logo-sub">Duraspinvest · Asesoria fiscal</div>
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
-    <span id="userBadge" style="color:var(--gold);font-size:11px;font-weight:600;padding:3px 9px;background:rgba(212,160,23,0.15);border-radius:20px;"></span>
-    <a href="https://duraspinvest.github.io/duraspinvest" target="_blank" style="background:rgba(255,255,255,0.1);color:#8A9BB0;border:none;border-radius:6px;padding:4px 10px;font-size:12px;text-decoration:none;white-space:nowrap;">🏠 Duraspinvest</a>
+    <span id="clienteBadge" style="color:var(--gold);font-size:11px;font-weight:600;padding:3px 9px;background:rgba(212,160,23,0.15);border-radius:20px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
     <button onclick="doLogout()" style="background:rgba(255,255,255,0.1);color:var(--gray-400);border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">Salir</button>
   </div>
 </header>
-<nav>
-  <button class="nav-btn active" onclick="showSection('facturas',this)">Facturas</button>
-  <button class="nav-btn" onclick="showSection('cuentas',this)">Cuentas contables</button>
-  <button class="nav-btn" onclick="showSection('exportar',this)">Exportar a Delsol</button>
-  <button class="nav-btn" onclick="showSection('fiscal',this)">&#128203; Fiscal / Liquidacion</button>
-  <button class="nav-btn" onclick="showSection('portal',this)">&#128229; Portal clientes</button>
-</nav>
+
 <main>
-
-<!-- FACTURAS -->
-<div id="facturas" class="section active">
+  <!-- STATS -->
   <div class="stats-row">
-    <div class="stat-card" style="border-left-color:#1B4F8A;"><div class="stat-num" id="stE">0</div><div class="stat-label">Facturas emitidas</div></div>
-    <div class="stat-card" style="border-left-color:#C2410C;"><div class="stat-num" id="stR">0</div><div class="stat-label">Facturas recibidas</div></div>
-    <div class="stat-card" style="border-left-color:var(--success);"><div class="stat-num" id="stBE">0 EUR</div><div class="stat-label">Base total emitidas</div></div>
-    <div class="stat-card" style="border-left-color:var(--warning);"><div class="stat-num" id="stBR">0 EUR</div><div class="stat-label">Base total recibidas</div></div>
+    <div class="stat"><div class="stat-num" id="stTotal">0</div><div class="stat-label">Enviadas</div></div>
+    <div class="stat"><div class="stat-num" id="stPend" style="color:var(--warning);">0</div><div class="stat-label">Pendientes</div></div>
+    <div class="stat"><div class="stat-num" id="stProc" style="color:var(--success);">0</div><div class="stat-label">Procesadas</div></div>
+    <div class="stat"><div class="stat-num" id="stElim" style="color:#EF4444;">0</div><div class="stat-label">Reenviar</div></div>
   </div>
-  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-    <div class="filtros" style="margin-bottom:0;">
-      <div class="filtro-group"><span class="filtro-label">Cliente</span>
-        <select class="fi" id="fFC" onchange="renderF()" style="min-width:180px;"><option value="">Todos</option></select></div>
-      <div class="filtro-group"><span class="filtro-label">Tipo</span>
-        <select class="fi" id="fFT" onchange="renderF()"><option value="">Todos</option><option value="IVR">Emitidas</option><option value="IVS">Recibidas</option></select></div>
-      <div class="filtro-group"><span class="filtro-label">Ano</span>
-        <select class="fi" id="fFA" onchange="renderF()"><option value="">Todos</option><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select></div>
-      <div class="filtro-group"><span class="filtro-label">Trimestre</span>
-        <select class="fi" id="fFQ" onchange="renderF()"><option value="">Todos</option><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button class="btn btn-primary" onclick="openFM('IVR')">+ Emitida</button>
-      <button class="btn btn-ivs" onclick="openFM('IVS')">+ Recibida</button>
-    </div>
-  </div>
-  <div class="tabla-wrapper">
-    <table><thead><tr>
-      <th>Tipo</th><th>Cliente despacho</th><th>Fecha</th><th>N Factura</th><th>Nombre</th><th>NIF/CIF</th><th>Cuenta</th>
-      <th class="td-r">Base 1</th><th class="td-c">%IVA</th><th class="td-r">Cuota</th><th class="td-r">Total</th><th class="td-c">Ret.</th><th class="td-c">347</th><th></th>
-    </tr></thead>
-    <tbody id="fTbody"><tr><td colspan="14"><div class="empty"><div class="empty-icon">&#128203;</div><div>No hay facturas.</div></div></td></tr></tbody></table>
-  </div>
-</div>
 
-<!-- CUENTAS -->
-<div id="cuentas" class="section">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-    <div><div style="font-size:16px;font-weight:600;color:var(--navy);">Cuentas contables</div>
-    <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Por cliente del despacho. El mismo proveedor puede tener cuentas distintas para cada cliente.</div></div>
-    <button class="btn btn-primary" onclick="openCM()">+ Anadir cuenta</button>
-  </div>
-  <div class="filtros">
-    <div class="filtro-group"><span class="filtro-label">Cliente</span>
-      <select class="fi" id="fCC" onchange="renderC()" style="min-width:180px;"><option value="">Todos</option></select></div>
-    <div class="filtro-group"><span class="filtro-label">Tipo</span>
-      <select class="fi" id="fCT" onchange="renderC()"><option value="">Todos</option><option value="proveedor">Proveedores (40x/41x)</option><option value="cliente">Clientes (43x)</option></select></div>
-    <div class="filtro-group"><span class="filtro-label">Buscar</span>
-      <input type="text" class="fi" id="fCB" placeholder="Nombre o cuenta..." oninput="renderC()"></div>
-  </div>
-  <div class="tabla-wrapper">
-    <table><thead><tr>
-      <th>Cliente despacho</th><th>Nombre</th><th>NIF/CIF</th><th>Cuenta</th><th>Tipo</th><th></th>
-    </tr></thead>
-    <tbody id="cTbody"><tr><td colspan="6"><div class="empty"><div class="empty-icon">&#128218;</div><div>No hay cuentas.</div></div></td></tr></tbody></table>
-  </div>
-</div>
-
-<!-- EXPORTAR -->
-<div id="exportar" class="section">
+  <!-- SUBIR DOCUMENTO -->
   <div class="card">
-    <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:14px;">Exportar a Delsol</div>
-    <div style="font-size:13px;color:var(--gray-600);margin-bottom:14px;">Filtra por cliente y periodo para generar el archivo IVR.xlsx o IVS.xlsx listo para importar en Delsol.</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:14px;">
-      <div class="fg"><label class="fl">Cliente <span class="ob">*</span></label><select class="fi2" id="eC"><option value="">Seleccionar...</option></select></div>
-      <div class="fg"><label class="fl">Formato <span class="ob">*</span></label>
-        <select class="fi2" id="eT" onchange="onExpTipoChange()">
-          <option value="IVR">IVR - Emitidas contabilidad (sociedades)</option>
-          <option value="IVS">IVS - Recibidas contabilidad (sociedades)</option>
-          <option value="FAC">FAC - Emitidas gestion (autonomos)</option>
-          <option value="FRE">FRE - Recibidas gestion (autonomos)</option>
-        </select>
+    <div style="font-size:14px;font-weight:600;color:var(--navy);margin-bottom:4px;">Enviar factura</div>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:14px;">Fotografía o adjunta las facturas que quieres que gestione tu asesor.</div>
+
+    <div class="btn-row">
+      <button class="btn btn-camera" onclick="document.getElementById('inputImagen').click()">
+        📷 Foto / Imagen
+      </button>
+      <button class="btn btn-pdf" onclick="document.getElementById('inputArchivo').click()">
+        📎 Adjuntar PDF
+      </button>
+    </div>
+    <input type="file" id="inputImagen" accept="image/*" multiple style="display:none" onchange="procesarArchivos(this)">
+    <input type="file" id="inputArchivo" accept="image/*,application/pdf" multiple style="display:none" onchange="procesarArchivos(this)">
+
+    <!-- Cola de archivos -->
+    <div id="previewArea" style="display:none;margin-top:14px;">
+      <div style="font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Archivos a enviar</div>
+      <div id="colaLista" style="margin-bottom:10px;"></div>
+      <div id="progressWrap" style="display:none;" class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="progress-text" id="progressText">Subiendo...</div>
       </div>
-      <div class="fg"><label class="fl">Ano <span class="ob">*</span></label><select class="fi2" id="eA"><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select></div>
-      <div class="fg"><label class="fl">Periodo</label><select class="fi2" id="eP"><option value="">Todo el ano</option><option value="1">1T Ene-Mar</option><option value="2">2T Abr-Jun</option><option value="3">3T Jul-Sep</option><option value="4">4T Oct-Dic</option></select></div>
-    </div>
-    <div id="eRes" style="background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:13px;display:none;"></div>
-    <div style="display:flex;gap:8px;">
-      <button class="btn btn-primary" onclick="prevExp()">Vista previa</button>
-      <button class="btn btn-success" id="btnExp" onclick="doExport()" style="display:none;">Descargar archivo Delsol</button>
+      <button class="btn btn-primary" style="width:100%;" onclick="subirDocumento()" id="btnSubir">
+        &#128229; Enviar al asesor
+      </button>
     </div>
   </div>
-  <div id="ePrev" style="display:none;">
-    <div class="card">
-      <div id="ePrevTitle" style="font-size:13px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;"></div>
-      <div class="tabla-wrapper"><table>
-        <thead><tr id="ePrevH"></tr></thead>
-        <tbody id="ePrevB"></tbody>
-      </table></div>
-    </div>
-  </div>
-</div>
 
-<!-- FISCAL -->
-<div id="fiscal" class="section">
+  <!-- LISTA DE DOCUMENTOS -->
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div><div style="font-size:15px;font-weight:600;color:var(--navy);">Módulos por epígrafe</div>
-      <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Valores anuales de Hacienda (rendimiento IRPF y cuota IVA por unidad). Los comparten todos los clientes del mismo epígrafe.</div></div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn btn-secondary" onclick="seedEpi673()">Cargar ejemplo bares (673.2)</button>
-        <button class="btn btn-primary" onclick="openEpi()">+ Anadir epigrafe</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:14px;font-weight:600;color:var(--navy);">Mis documentos enviados</div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="filtrarDocs('')" id="filtTodos" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--navy);background:var(--navy);color:white;font-size:12px;cursor:pointer;font-family:inherit;">Todos</button>
+        <button onclick="filtrarDocs('pendiente')" id="filtPend" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--warning);background:white;color:var(--warning);font-size:12px;cursor:pointer;font-family:inherit;">Pendientes</button>
+        <button onclick="filtrarDocs('procesada')" id="filtProc" style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--success);background:white;color:var(--success);font-size:12px;cursor:pointer;font-family:inherit;">Procesadas</button>
+        <button onclick="filtrarDocs('eliminada')" id="filtElim" style="padding:5px 12px;border-radius:20px;border:1.5px solid #EF4444;background:white;color:#EF4444;font-size:12px;cursor:pointer;font-family:inherit;">Reenviar</button>
       </div>
     </div>
-    <div id="epiList"></div>
-  </div>
-  <div class="card">
-    <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:4px;">Ficha fiscal del cliente</div>
-    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px;">Regimen y, si es objetiva, epigrafe y unidades de cada modulo.</div>
-    <div class="fg" style="max-width:320px;margin-bottom:12px;"><label class="fl">Cliente del despacho</label>
-      <select class="fi2" id="fiCli" onchange="renderFichaForm()"><option value="">Seleccionar...</option></select></div>
-    <div id="fichaForm"></div>
-  </div>
-  <div class="card">
-    <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:4px;">Liquidacion trimestral</div>
-    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px;">IVA (303) por trimestre natural e IRPF (130) acumulado desde enero, segun el regimen del cliente.</div>
-    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
-      <div class="fg" style="min-width:220px;"><label class="fl">Cliente</label><select class="fi2" id="lqCli" onchange="loadIngresos()"><option value="">Seleccionar...</option></select></div>
-      <div class="fg" style="width:120px;"><label class="fl">Ano</label><select class="fi2" id="lqAnio" onchange="loadIngresos()"><option>2025</option><option selected>2026</option><option>2027</option></select></div>
-      <div class="fg" style="width:180px;"><label class="fl">IVA a compensar anos ant.</label><input type="number" step="0.01" class="fi2" id="lqComp" value="0"></div>
-      <div class="fg" style="width:210px;"><label class="fl">Ing. a cuenta 1T-3T pagados (objetiva)</label><input type="number" step="0.01" class="fi2" id="lqIc" placeholder="vacio = usa el calculado"></div>
-      <button class="btn btn-primary" onclick="calcLiq()">Calcular</button>
-    </div>
-    <div id="lqIngBox" style="background:var(--gray-50);border-radius:7px;padding:10px 12px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;">Ingresos por mes (para el 130)</div>
-        <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="guardarIngresos()">Guardar ingresos</button>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;" id="lqMesesGrid"></div>
-      <div style="font-size:11px;color:var(--gray-400);margin-top:6px;">Total facturado de cada mes. Dejalo vacio y usara las facturas emitidas registradas. Util para exentas o quien no factura caso por caso.</div>
-    </div>
-    <div id="lqRes"></div>
-  </div>
-  <div class="card">
-    <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:4px;">Modelo 347</div>
-    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px;">Operaciones con terceros que superan 3.005,06 &euro; al ano (IVA incluido), desglosadas por trimestre.</div>
-    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
-      <div class="fg" style="min-width:220px;"><label class="fl">Cliente</label><select class="fi2" id="m3Cli"><option value="">Seleccionar...</option></select></div>
-      <div class="fg" style="width:120px;"><label class="fl">Ano</label><select class="fi2" id="m3Anio"><option>2025</option><option selected>2026</option><option>2027</option></select></div>
-      <button class="btn btn-primary" onclick="gen347()">Generar</button>
-      <button class="btn btn-success" id="m3Btn" onclick="exp347()" style="display:none;">Descargar Excel</button>
-    </div>
-    <div id="m3Res"></div>
-  </div>
-
-  <div class="card">
-    <div style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:4px;">Desglose de gastos por cuenta (renta)</div>
-    <div style="font-size:12px;color:var(--gray-400);margin-bottom:12px;">Agrupa las facturas recibidas por su cuenta de gasto, con base, IVA soportado y total. Util para desglosar los gastos en la declaracion de la renta.</div>
-    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;">
-      <div class="fg" style="min-width:220px;"><label class="fl">Cliente</label><select class="fi2" id="dgCli"><option value="">Seleccionar...</option></select></div>
-      <div class="fg" style="width:120px;"><label class="fl">Ano</label><select class="fi2" id="dgAnio"><option>2025</option><option selected>2026</option><option>2027</option></select></div>
-      <button class="btn btn-primary" onclick="genDG()">Generar</button>
-      <button class="btn btn-success" id="dgBtn" onclick="expDG()" style="display:none;">Descargar Excel</button>
-    </div>
-    <div id="dgRes"></div>
-  </div>
-</div>
-
-<!-- PORTAL CLIENTES -->
-<div id="portal" class="section">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-    <div>
-      <div style="font-size:16px;font-weight:600;color:var(--navy);">Documentos del portal</div>
-      <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Facturas enviadas por los clientes desde su portal</div>
-    </div>
-    <div style="display:flex;gap:8px;">
-      <select class="filtro-input" id="filtroPortalCliente" onchange="renderPortal()" style="min-width:180px;">
-        <option value="">Todos los clientes</option>
-      </select>
-      <select class="filtro-input" id="filtroPortalEstado" onchange="renderPortal()">
-        <option value="">Todos</option>
-        <option value="pendiente">Pendientes</option>
-        <option value="procesada">Procesadas</option>
-      </select>
+    <div id="docsList">
+      <div class="empty"><div class="empty-icon">📂</div><div>Aún no has enviado ningún documento.</div></div>
     </div>
   </div>
-
-  <div class="stats-row" style="margin-bottom:16px;">
-    <div class="stat-card" style="border-left-color:var(--warning);"><div class="stat-num" id="portalPend">0</div><div class="stat-label">Pendientes de revisar</div></div>
-    <div class="stat-card" style="border-left-color:var(--success);"><div class="stat-num" id="portalProc">0</div><div class="stat-label">Procesadas</div></div>
-    <div class="stat-card" style="border-left-color:var(--accent);"><div class="stat-num" id="portalTotal">0</div><div class="stat-label">Total recibidas</div></div>
-  </div>
-
-  <div id="portalDocs"></div>
-</div>
-
 </main>
 </div>
 
-<!-- VISOR LATERAL -->
-<div id="visorOverlay" onclick="cerrarVisor()"></div>
-<div id="visorPanel" style="display:none;">
-  <div id="visorHeader">
-    <span id="visorTitle">Documento</span>
-    <button class="zoom-btn" onclick="zoomVisor(-1)" title="Reducir">−</button>
-    <button class="zoom-btn" onclick="zoomVisor(0)" title="Ajustar">⊡</button>
-    <button class="zoom-btn" onclick="zoomVisor(1)" title="Ampliar">+</button>
-    <button class="zoom-btn" onclick="zoomVisor(99)" title="Abrir a tamaño completo">&#x26F6;</button>
-    <button onclick="cerrarVisor()" style="background:rgba(255,255,255,0.15);border:none;color:white;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;">✕</button>
-  </div>
-  <div id="visorContent" ondblclick="zoomVisor(1)"></div>
-</div>
-
-<!-- MODAL FACTURA -->
-<div class="modal-overlay" id="fModal" onclick="closeMO(event,'fModal')">
-  <div class="modal">
-    <div class="modal-title" id="fMTitle">Nueva factura emitida</div>
-    <input type="hidden" id="fId"><input type="hidden" id="fTipo">
-    <div class="mg2">
-      <div class="fg full"><label class="fl">Cliente del despacho <span class="ob">*</span></label>
-        <select class="fi2" id="fCD" onchange="onFCDChange()"><option value="">Seleccionar...</option></select></div>
-      <div class="fg"><label class="fl">Fecha <span class="ob">*</span></label><input type="date" class="fi2" id="fFecha"></div>
-      <div class="fg"><label class="fl">N Factura <span class="ob">*</span></label><input type="text" class="fi2" id="fNum" placeholder="2026/001"></div>
-      <div class="fg full"><label class="fl" id="fNLbl">Nombre cliente <span class="ob">*</span></label>
-        <div class="ac-wrap">
-          <input type="text" class="fi2" id="fNom" placeholder="Escribe para buscar..." oninput="acNombre(this.value)" autocomplete="off">
-          <div id="acList" class="ac-list"></div>
-        </div>
-      </div>
-      <div class="fg"><label class="fl">NIF/CIF</label><input type="text" class="fi2" id="fNif" placeholder="B12345678"></div>
-      <div class="fg"><label class="fl">Cuenta contable</label><input type="text" class="fi2" id="fCta" placeholder="43000001"></div>
-    </div>
-    <div class="iva-box">
-      <div class="iva-box-title">Linea 1 de IVA</div>
-      <div class="iva-row">
-        <div class="fg"><label class="fl">Base imponible <span class="ob">*</span></label><input type="number" step="0.01" class="fi2" id="fB1" placeholder="0.00" oninput="calcIVA(1)"></div>
-        <div class="fg"><label class="fl">% IVA <span class="ob">*</span></label><select class="fi2" id="fP1" onchange="calcIVA(1)"><option value="21">21%</option><option value="10">10%</option><option value="4">4%</option><option value="0">0% Exento</option></select></div>
-        <div class="fg"><label class="fl">Cuota IVA</label><input type="number" step="0.01" class="fi2" id="fI1" placeholder="0.00"></div>
-      </div>
-    </div>
-    <div class="iva-box" style="margin-top:8px;">
-      <div class="iva-box-title">Linea 2 de IVA (opcional)</div>
-      <div class="iva-row">
-        <div class="fg"><label class="fl">Base 2</label><input type="number" step="0.01" class="fi2" id="fB2" placeholder="0.00" oninput="calcIVA(2)"></div>
-        <div class="fg"><label class="fl">% IVA</label><select class="fi2" id="fP2" onchange="calcIVA(2)"><option value="">-</option><option value="21">21%</option><option value="10">10%</option><option value="4">4%</option><option value="0">0%</option></select></div>
-        <div class="fg"><label class="fl">Cuota IVA 2</label><input type="number" step="0.01" class="fi2" id="fI2" placeholder="0.00"></div>
-      </div>
-    </div>
-    <div class="mg2" style="margin-top:12px;">
-      <div class="fg"><label class="fl">Total factura <span class="ob">*</span></label><input type="number" step="0.01" class="fi2" id="fTot" placeholder="0.00"></div>
-      <div class="fg"><label class="fl">% Retencion</label>
-        <select class="fi2" id="fRP" onchange="calcRet()"><option value="">Sin retencion</option><option value="7">7%</option><option value="15">15%</option><option value="19">19%</option><option value="21">21%</option></select></div>
-      <div class="fg"><label class="fl">Importe retencion</label><input type="number" step="0.01" class="fi2" id="fRI" placeholder="0.00"></div>
-      <div class="fg"><label class="fl">Modelo 347</label>
-        <select class="fi2" id="f347"><option value="0">No incluir</option><option value="1">Incluir</option></select></div>
-      <div class="fg full" id="fDedG" style="display:none;"><label class="fl">IVA deducible</label>
-        <select class="fi2" id="fDed"><option value="1">Si</option><option value="0">No</option></select></div>
-    </div>
-    <div class="ma">
-      <button class="btn btn-secondary" onclick="closeM('fModal')">Cancelar</button>
-      <button class="btn btn-secondary" onclick="saveF(true)">+ Guardar y otra</button>
-      <button class="btn btn-primary" onclick="saveF(false)">Guardar y cerrar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL CUENTA -->
-<div class="modal-overlay" id="cModal" onclick="closeMO(event,'cModal')">
-  <div class="modal" style="max-width:460px;">
-    <div class="modal-title" id="cMTitle">Nueva cuenta contable</div>
-    <input type="hidden" id="cId">
-    <div class="fg" style="margin-bottom:12px;"><label class="fl">Cliente del despacho <span class="ob">*</span></label>
-      <select class="fi2" id="cCD"><option value="">Seleccionar...</option></select></div>
-    <div class="fg" style="margin-bottom:12px;"><label class="fl">Nombre cliente/proveedor <span class="ob">*</span></label>
-      <input type="text" class="fi2" id="cNom" placeholder="ENDESA ENERGIA, S.A."></div>
-    <div class="fg" style="margin-bottom:12px;"><label class="fl">NIF/CIF</label>
-      <input type="text" class="fi2" id="cNif" placeholder="A81948077"></div>
-    <div class="fg" style="margin-bottom:12px;"><label class="fl">Codigo / Cuenta <span class="ob">*</span></label>
-      <input type="text" class="fi2" id="cCta" placeholder="41000001 o numero correlativo"></div>
-    <div class="fg" style="margin-bottom:12px;"><label class="fl">Tipo</label>
-      <select class="fi2" id="cTip"><option value="proveedor">Proveedor (40x/41x)</option><option value="cliente">Cliente (43x)</option><option value="otro">Otro</option></select></div>
-    <div class="fg" style="margin-bottom:12px;"><label class="fl">Domicilio</label>
-      <input type="text" class="fi2" id="cDir" placeholder="Calle Mayor 1"></div>
-    <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:12px;">
-      <div class="fg"><label class="fl">Poblacion</label><input type="text" class="fi2" id="cPob" placeholder="Madrid"></div>
-      <div class="fg"><label class="fl">CP</label><input type="text" class="fi2" id="cCP" placeholder="28001"></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-      <div class="fg"><label class="fl">Provincia</label><input type="text" class="fi2" id="cProv" placeholder="Madrid"></div>
-      <div class="fg"><label class="fl">Telefono</label><input type="text" class="fi2" id="cTel" placeholder="600000000"></div>
-    </div>
-    <div class="ma">
-      <button class="btn btn-secondary" onclick="closeM('cModal')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveC()">Guardar</button>
-    </div>
-  </div>
-</div>
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
 
 <!-- FIREBASE -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  const app = initializeApp({apiKey:"AIzaSyCVK3yF15Udps1l046kv6M1TASIwVEPcVs",authDomain:"duraspinvest.firebaseapp.com",projectId:"duraspinvest",storageBucket:"duraspinvest.firebasestorage.app",messagingSenderId:"280764832749",appId:"1:280764832749:web:a1fa6c44cf59518541a5e4"});
-  const db=getFirestore(app),auth=getAuth(app);
-  window.db=db;window.auth=auth;window.fsSignIn=signInWithEmailAndPassword;window.fsSignOut=signOut;
-  window.fsDoc=doc;window.fsSetDoc=setDoc;window.fsDeleteDoc=deleteDoc;window.fsCollection=collection;
-  let u1,u2,u3;
-  function act(){
-    u1=onSnapshot(collection(db,"clients"),s=>{
-      window.WC=s.docs.map(d=>({...d.data(),id:d.id})).filter(c=>(c.categoria||"despacho")!=="auxiliar");
-      poblarSel();renderF();
-    });
-    u2=onSnapshot(collection(db,"iva_facturas"),s=>{
-      window.WF=s.docs.map(d=>({...d.data(),id:d.id}));renderF();renderSt();
-    });
-    u3=onSnapshot(collection(db,"iva_cuentas"),s=>{
-      window.WCC=s.docs.map(d=>({...d.data(),id:d.id}));renderC();
-    });
-    onSnapshot(collection(db,"epigrafes"),s=>{
-      window.WEP=s.docs.map(d=>({...d.data(),id:d.id}));
-      if(typeof renderEpis==="function") renderEpis();
-    });
-    onSnapshot(collection(db,"fichas_fiscales"),s=>{
-      window.WFF=s.docs.map(d=>({...d.data(),id:d.id}));
-    });
-    onSnapshot(collection(db,"ingresos_fiscal"),s=>{
-      window.WIN=s.docs.map(d=>({...d.data(),id:d.id}));
-    });
-    // Portal documentos
-    onSnapshot(collection(db,"portal_documentos"),s=>{
-      window.portalDocs=s.docs.map(d=>({...d.data(),id:d.id}));
-      // Usar setTimeout para asegurar que el script principal ya cargó
-      setTimeout(function(){
-        if(typeof poblarFiltroPortalClientes === "function") poblarFiltroPortalClientes();
-        if(typeof renderPortal === "function") renderPortal();
-        const pend=(window.portalDocs||[]).filter(d=>d.estado==="pendiente").length;
-        const navBtn=document.querySelector(".nav-btn[onclick*=portal]");
-        if(navBtn)navBtn.innerHTML="&#128229; Portal"+(pend>0?" <span style='background:#EF4444;color:white;border-radius:10px;padding:1px 6px;font-size:10px;'>"+pend+"</span>":"");
-      }, 100);
-    });
-  }
-  function des(){if(u1)u1();if(u2)u2();if(u3)u3();}
-  onAuthStateChanged(auth,user=>{
-    if(user){
-      window.WC=[];window.WF=[];window.WCC=[];
-      document.getElementById("loginScreen").style.display="none";
-      document.getElementById("appContent").style.display="flex";
-      document.getElementById("userBadge").textContent=user.email.split("@")[0];
-      act();
+  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+  const app = initializeApp({
+    apiKey: "AIzaSyCVK3yF15Udps1l046kv6M1TASIwVEPcVs",
+    authDomain: "duraspinvest.firebaseapp.com",
+    projectId: "duraspinvest",
+    storageBucket: "duraspinvest.firebasestorage.app",
+    messagingSenderId: "280764832749",
+    appId: "1:280764832749:web:a1fa6c44cf59518541a5e4"
+  });
+
+  const db = getFirestore(app);
+  const storage = getStorage(app);
+  const auth = getAuth(app);
+  window.db = db; window.auth = auth; window.storage = storage;
+  window.fsSignIn = signInWithEmailAndPassword;
+  window.fsRef = ref; window.fsUploadBytes = uploadBytes; window.fsGetDownloadURL = getDownloadURL; window.fsDeleteObject = deleteObject;
+  window.fsSignOut = signOut;
+  window.fsDoc = doc; window.fsSetDoc = setDoc; window.fsDeleteDoc = deleteDoc;
+  window.fsCollection = collection;
+
+  let unsubDocs;
+
+  onAuthStateChanged(auth, user => {
+    if(user) {
+      window.currentUser = user;
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appContent').style.display = 'flex';
+      document.getElementById('clienteBadge').textContent = user.email.split('@')[0];
+
+      // Escuchar documentos de este usuario
+      const q = query(
+        collection(db, 'portal_documentos'),
+        where('userEmail', '==', user.email),
+        orderBy('creado', 'desc')
+      );
+      unsubDocs = onSnapshot(q, snap => {
+        window.misDocumentos = snap.docs.map(d => ({...d.data(), id: d.id}));
+        renderDocumentos();
+        renderStats();
+      });
     } else {
-      des();
-      document.getElementById("loginScreen").style.display="flex";
-      document.getElementById("appContent").style.display="none";
+      if(unsubDocs) unsubDocs();
+      window.currentUser = null;
+      document.getElementById('loginScreen').style.display = 'flex';
+      document.getElementById('appContent').style.display = 'none';
     }
   });
 </script>
 
 <script>
-window.WC=[];window.WF=[];window.WCC=[];
-let expData=[];
+window.misDocumentos = [];
+window.archivoActual = null;
 
-function showSection(id,btn){
-  document.querySelectorAll(".section").forEach(s=>s.classList.remove("active"));
-  document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-  if(btn)btn.classList.add("active");
-}
-function closeM(id){document.getElementById(id).classList.remove("open");}
-function closeMO(e,id){if(e.target===document.getElementById(id))closeM(id);}
-async function fbS(col,id,d){try{await window.fsSetDoc(window.fsDoc(window.db,col,String(id)),d);}catch(e){console.error(e);}}
-async function fbD(col,id){try{await window.fsDeleteDoc(window.fsDoc(window.db,col,String(id)));}catch(e){console.error(e);}}
-function eur(n){if(n===undefined||n===null||n==="")return"";return parseFloat(n).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" EUR";}
-function q(f){const m=new Date(f+"T12:00:00").getMonth()+1;if(m<=3)return"1";if(m<=6)return"2";if(m<=9)return"3";return"4";}
-
-function poblarSel(){
-  const cl=window.WC||[];
-  ["fFC","fCC","fCD","cCD","eC","fiCli","lqCli"].forEach(id=>{
-    const s=document.getElementById(id);if(!s)return;
-    const v=s.value,f=s.options[0];
-    s.innerHTML="";s.appendChild(f);
-    cl.sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es")).forEach(c=>{
-      const o=document.createElement("option");o.value=c.id;o.textContent=c.nombre;s.appendChild(o);
-    });
-    s.value=v;
-  });
-}
-
-function renderSt(){
-  const fs=window.WF||[];
-  const ivr=fs.filter(f=>f.tipo==="IVR"),ivs=fs.filter(f=>f.tipo==="IVS");
-  document.getElementById("stE").textContent=ivr.length;
-  document.getElementById("stR").textContent=ivs.length;
-  const be=ivr.reduce((s,f)=>s+parseFloat(f.base1||0)+parseFloat(f.base2||0),0);
-  const br=ivs.reduce((s,f)=>s+parseFloat(f.base1||0)+parseFloat(f.base2||0),0);
-  document.getElementById("stBE").textContent=be.toLocaleString("es-ES",{minimumFractionDigits:2})+" EUR";
-  document.getElementById("stBR").textContent=br.toLocaleString("es-ES",{minimumFractionDigits:2})+" EUR";
-}
-
-function renderF(){
-  const tb=document.getElementById("fTbody");if(!tb)return;
-  const fc=document.getElementById("fFC").value,ft=document.getElementById("fFT").value;
-  const fa=document.getElementById("fFA").value,fq=document.getElementById("fFQ").value;
-  let fs=(window.WF||[]).filter(f=>{
-    if(fc&&f.clienteDespachoId!==fc)return false;
-    if(ft&&f.tipo!==ft)return false;
-    if(fa&&f.fecha&&new Date(f.fecha+"T12:00:00").getFullYear()!==parseInt(fa))return false;
-    if(fq&&f.fecha&&q(f.fecha)!==fq)return false;
-    return true;
-  }).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
-  if(!fs.length){tb.innerHTML="<tr><td colspan='14'><div class='empty'><div class='empty-icon'>&#128203;</div><div>No hay facturas con esos filtros.</div></div></td></tr>";return;}
-  tb.innerHTML=fs.map(f=>{
-    const cl=(window.WC||[]).find(c=>c.id===f.clienteDespachoId);
-    const fe=f.fecha?new Date(f.fecha+"T12:00:00").toLocaleDateString("es-ES",{day:"2-digit",month:"2-digit",year:"numeric"}):"";
-    const badge=f.tipo==="IVR"?"<span class='badge badge-ivr'>Emitida</span>":"<span class='badge badge-ivs'>Recibida</span>";
-    return "<tr>"+
-      "<td>"+badge+"</td>"+
-      "<td style='font-size:11px;'>"+(cl?cl.nombre:f.clienteDespachoId||"")+"</td>"+
-      "<td>"+fe+"</td>"+
-      "<td>"+(f.numero||"")+"</td>"+
-      "<td style='font-weight:500;'>"+(f.nombre||"")+"</td>"+
-      "<td style='font-size:11px;color:var(--gray-400);'>"+(f.nif||"")+"</td>"+
-      "<td style='font-family:monospace;font-size:11px;'>"+(f.cuenta||"")+"</td>"+
-      "<td class='td-r'>"+eur(f.base1)+"</td>"+
-      "<td class='td-c'>"+(f.pct1||"21")+"%</td>"+
-      "<td class='td-r'>"+eur(f.iva1)+"</td>"+
-      "<td class='td-r' style='font-weight:600;'>"+eur(f.total)+"</td>"+
-      "<td class='td-c'>"+(f.retPct?f.retPct+"%":"")+"</td>"+
-      "<td class='td-c'>"+(f.m347==="1"?"Si":"")+"</td>"+
-      "<td><button class='icon-btn' data-id='"+f.id+"' onclick='delF(this.dataset.id)'>x</button></td>"+
-    "</tr>";
-  }).join("");
-}
-
-function openFM(tipo){
-  document.getElementById("fId").value="";
-  document.getElementById("fTipo").value=tipo;
-  document.getElementById("fMTitle").textContent=tipo==="IVR"?"Nueva factura emitida":"Nueva factura recibida";
-  document.getElementById("fNLbl").innerHTML=(tipo==="IVR"?"Nombre cliente":"Nombre proveedor")+" <span class='ob'>*</span>";
-  document.getElementById("fDedG").style.display=tipo==="IVS"?"block":"none";
-  ["fCD","fNom","fNif","fCta","fNum","fB1","fB2","fI1","fI2","fTot","fRI"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
-  document.getElementById("fFecha").value=new Date().toISOString().slice(0,10);
-  document.getElementById("fP1").value="21";document.getElementById("fP2").value="";
-  document.getElementById("fRP").value="";document.getElementById("f347").value="0";
-  document.getElementById("acList").style.display="none";
-  document.getElementById("fModal").classList.add("open");
-}
-
-function onFCDChange(){
-  document.getElementById("fNom").value="";
-  document.getElementById("fNif").value="";
-  document.getElementById("fCta").value="";
-  document.getElementById("acList").style.display="none";
-}
-
-function acNombre(v){
-  const cid=document.getElementById("fCD").value,tipo=document.getElementById("fTipo").value;
-  const lista=document.getElementById("acList");
-  if(!v||v.length<2||!cid){lista.style.display="none";return;}
-  const ccs=(window.WCC||[]).filter(cc=>{
-    if(cc.clienteDespachoId!==cid)return false;
-    if(tipo==="IVR"&&cc.tipo!=="cliente")return false;
-    if(tipo==="IVS"&&cc.tipo==="cliente")return false;
-    return(cc.nombre||"").toLowerCase().includes(v.toLowerCase());
-  });
-  if(!ccs.length){lista.style.display="none";return;}
-  lista.innerHTML=ccs.map(cc=>
-    "<div class='ac-item' data-n='"+cc.nombre+"' data-nif='"+(cc.nif||"")+"' data-cta='"+cc.cuenta+"' onclick='selCC(this)'>"+
-    cc.nombre+"<div class='ac-sub'>"+(cc.nif?cc.nif+" · ":"")+"Cta: "+cc.cuenta+"</div></div>"
-  ).join("");
-  lista.style.display="block";
-}
-
-function selCC(el){
-  document.getElementById("fNom").value=el.dataset.n;
-  document.getElementById("fNif").value=el.dataset.nif;
-  document.getElementById("fCta").value=el.dataset.cta;
-  document.getElementById("acList").style.display="none";
-}
-
-function calcIVA(l){
-  const b=parseFloat(document.getElementById("fB"+l).value)||0;
-  const p=parseFloat(document.getElementById("fP"+l).value)||0;
-  document.getElementById("fI"+l).value=Math.round(b*p/100*100)/100||"";
-  calcTot();
-}
-function calcTot(){
-  const b1=parseFloat(document.getElementById("fB1").value)||0;
-  const b2=parseFloat(document.getElementById("fB2").value)||0;
-  const i1=parseFloat(document.getElementById("fI1").value)||0;
-  const i2=parseFloat(document.getElementById("fI2").value)||0;
-  const r=parseFloat(document.getElementById("fRI").value)||0;
-  document.getElementById("fTot").value=Math.round((b1+b2+i1+i2-r)*100)/100||"";
-}
-function calcRet(){
-  const b=parseFloat(document.getElementById("fB1").value)||0;
-  const p=parseFloat(document.getElementById("fRP").value)||0;
-  if(p)document.getElementById("fRI").value=Math.round(b*p/100*100)/100;
-  else document.getElementById("fRI").value="";
-  calcTot();
-}
-
-async function saveF(mantenerAbierto){
-  const cid=document.getElementById("fCD").value;
-  const nom=document.getElementById("fNom").value.trim();
-  const fec=document.getElementById("fFecha").value;
-  const num=document.getElementById("fNum").value.trim();
-  const b1=document.getElementById("fB1").value;
-  if(!cid||!nom||!fec||!num||!b1){alert("Rellena los campos obligatorios.");return;}
-  const tipo=document.getElementById("fTipo").value;
-  const cl=(window.WC||[]).find(c=>c.id===cid);
-  const id=document.getElementById("fId").value||String(Date.now());
-  await fbS("iva_facturas",id,{
-    id,tipo,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",
-    fecha:fec,numero:num,nombre:nom,
-    nif:document.getElementById("fNif").value.trim(),
-    cuenta:document.getElementById("fCta").value.trim(),
-    base1:parseFloat(b1)||0,base2:parseFloat(document.getElementById("fB2").value)||0,
-    pct1:document.getElementById("fP1").value,pct2:document.getElementById("fP2").value,
-    iva1:parseFloat(document.getElementById("fI1").value)||0,iva2:parseFloat(document.getElementById("fI2").value)||0,
-    total:parseFloat(document.getElementById("fTot").value)||0,
-    retPct:document.getElementById("fRP").value,retImporte:parseFloat(document.getElementById("fRI").value)||0,
-    m347:document.getElementById("f347").value,
-    deducible:tipo==="IVS"?document.getElementById("fDed").value:"",
-    creado:new Date().toISOString()
-  });
-  closeM("fModal");
-}
-
-async function delF(id){if(!confirm("Eliminar esta factura?"))return;await fbD("iva_facturas",id);}
-
-function renderC(){
-  const tb=document.getElementById("cTbody");if(!tb)return;
-  const fc=document.getElementById("fCC").value,ft=document.getElementById("fCT").value;
-  const fb=(document.getElementById("fCB").value||"").toLowerCase();
-  let ccs=(window.WCC||[]).filter(cc=>{
-    if(fc&&cc.clienteDespachoId!==fc)return false;
-    if(ft&&cc.tipo!==ft)return false;
-    if(fb&&!(cc.nombre||"").toLowerCase().includes(fb)&&!(cc.cuenta||"").includes(fb))return false;
-    return true;
-  }).sort((a,b)=>{
-    const ca=(window.WC||[]).find(c=>c.id===a.clienteDespachoId);
-    const cb=(window.WC||[]).find(c=>c.id===b.clienteDespachoId);
-    const na=ca?ca.nombre:"",nb=cb?cb.nombre:"";
-    if(na!==nb)return na.localeCompare(nb,"es");
-    return(a.nombre||"").localeCompare(b.nombre||"","es");
-  });
-  if(!ccs.length){tb.innerHTML="<tr><td colspan='6'><div class='empty'><div class='empty-icon'>&#128218;</div><div>No hay cuentas.</div></div></td></tr>";return;}
-  tb.innerHTML=ccs.map(cc=>{
-    const cl=(window.WC||[]).find(c=>c.id===cc.clienteDespachoId);
-    const tl=cc.tipo==="cliente"?"Cliente (43x)":cc.tipo==="proveedor"?"Proveedor (40x/41x)":"Otro";
-    return "<tr>"+
-      "<td style='font-size:12px;'>"+(cl?cl.nombre:cc.clienteDespachoId||"")+"</td>"+
-      "<td style='font-weight:500;'>"+(cc.nombre||"")+"</td>"+
-      "<td style='font-size:11px;color:var(--gray-400);'>"+(cc.nif||"")+"</td>"+
-      "<td style='font-family:monospace;font-weight:600;color:var(--navy);'>"+(cc.cuenta||"")+"</td>"+
-      "<td style='font-size:11px;'>"+tl+"</td>"+
-      "<td><button class='icon-btn' data-id='"+cc.id+"' onclick='delC(this.dataset.id)'>x</button></td>"+
-    "</tr>";
-  }).join("");
-}
-
-function openCM(){
-  document.getElementById("cId").value="";
-  document.getElementById("cMTitle").textContent="Nueva cuenta contable";
-  ["cNom","cNif","cCta","cDir","cPob","cCP","cProv","cTel"].forEach(id=>document.getElementById(id).value="");
-  document.getElementById("cCD").value="";
-  document.getElementById("cTip").value="proveedor";
-  document.getElementById("cModal").classList.add("open");
-}
-
-async function saveC(){
-  const cid=document.getElementById("cCD").value;
-  const nom=document.getElementById("cNom").value.trim();
-  const cta=document.getElementById("cCta").value.trim();
-  if(!cid||!nom||!cta){alert("Rellena cliente, nombre y cuenta contable.");return;}
-  const id=document.getElementById("cId").value||String(Date.now());
-  const cl=(window.WC||[]).find(c=>c.id===cid);
-  await fbS("iva_cuentas",id,{
-    id,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",
-    nombre:nom,nif:document.getElementById("cNif").value.trim(),
-    cuenta:cta,tipo:document.getElementById("cTip").value,
-    domicilio:document.getElementById("cDir").value.trim(),
-    poblacion:document.getElementById("cPob").value.trim(),
-    cp:document.getElementById("cCP").value.trim(),
-    provincia:document.getElementById("cProv").value.trim(),
-    telefono:document.getElementById("cTel").value.trim(),
-    creado:new Date().toISOString()
-  });
-  closeM("cModal");
-}
-
-async function delC(id){if(!confirm("Eliminar esta cuenta?"))return;await fbD("iva_cuentas",id);}
-
-function onExpTipoChange(){}
-
-function getTipoFactura(formato){
-  return (formato==="IVR"||formato==="FAC")?"IVR":"IVS";
-}
-
-function getCuentaParaFactura(f){
-  return (window.WCC||[]).find(c=>
-    c.clienteDespachoId===f.clienteDespachoId && c.nombre===f.nombre
-  )||{cuenta:f.cuenta||"",domicilio:"",poblacion:"",cp:"",provincia:"",telefono:"",nif:""};
-}
-
-// Genera fila en formato FRE (98 columnas)
-function rowFRE(f, i){
-  const cc=getCuentaParaFactura(f);
-  const fe=f.fecha?new Date(f.fecha+"T12:00:00"):null;
-  const cod=parseInt(cc.cuenta)||i+1;
-  const row=new Array(98).fill("");
-  row[0]=1;                          // Tipo documento
-  row[1]=i+1; // Numero documento - entero entre 1 y 999999
-  row[2]="";                         // Codigo exterior
-  row[3]=f.numero||""; // Referencia = numero factura              // Referencia
-  row[4]=fe;                         // Fecha
-  row[5]=cod;                        // Proveedor
-  row[6]=1;                          // Estado
-  row[7]=cod;                        // Codigo cliente
-  row[8]=f.nombre||"";             // Nombre proveedor
-  row[9]=cc.domicilio||"";         // Domicilio
-  row[10]=cc.poblacion||"";        // Poblacion
-  row[11]=cc.cp||"";               // CP
-  row[12]=cc.provincia||"";        // Provincia
-  row[13]=f.nif||cc.nif||"";      // NIF
-  row[14]=0;                         // Tipo IVA
-  row[15]=0;                         // Recargo equiv
-  row[16]=cc.telefono||"";         // Telefono
-  row[17]=parseFloat(f.base1)||0;  // Importe neto 1
-  row[18]=parseFloat(f.base2)||0;  // Importe neto 2
-  // cols 19-43 descuentos/pp/portes/financiacion -> vacío
-  row[44]=parseFloat(f.base1)||0;  // Base imponible 1
-  row[45]=parseFloat(f.base2)||0;  // Base imponible 2
-  row[46]=0;                         // Base imponible 3
-  row[47]=parseFloat(f.pct1)||0;   // % IVA 1
-  row[48]=parseFloat(f.pct2)||0;   // % IVA 2
-  row[49]=0;                         // % IVA 3
-  row[50]=parseFloat(f.iva1)||0;   // Importe IVA 1
-  row[51]=parseFloat(f.iva2)||0;   // Importe IVA 2
-  row[52]=0;                         // Importe IVA 3
-  // cols 53-59 recargo equivalencia -> 0
-  row[59]=parseFloat(f.retPct)||0; // % retencion
-  row[60]=parseFloat(f.retImporte)||0; // Importe retencion
-  row[61]=parseFloat(f.total)||0;  // Total
-  row[62]="";                        // Forma pago
-  row[65]=0;                         // Traspasada contabilidad -> 0
-  row[72]=parseFloat(f.deducible)||0; // Factura deducible
-  row[73]=1;                         // Usuario creo
-  row[74]=1;                         // Ultimo usuario
-  row[75]="GEN";                     // Almacen
-  row[86]=0;                         // Enviado mail
-  row[87]=0;                         // Proveedor/Acreedor
-  row[88]=0;                         // Bien inversion
-  row[90]=parseFloat(f.retPct)?parseInt(f.retPct):0; // Tipo retencion
-  row[91]=0;                         // Clave operacion
-  row[95]=0;                         // Regimen esp caja
-  return row;
-}
-
-// Genera fila en formato FAC (119 columnas)
-function rowFAC(f, i){
-  const cc=getCuentaParaFactura(f);
-  const fe=f.fecha?new Date(f.fecha+"T12:00:00"):null;
-  const cod=parseInt(cc.cuenta)||i+1;
-  const row=new Array(119).fill("");
-  row[0]=1;                          // Tipo documento
-  row[1]=i+1; // Numero documento - entero entre 1 y 999999
-  row[2]=String(f.numero||"");             // Referencia
-  row[3]=fe;                         // Fecha
-  row[4]=0;                          // Estado
-  row[5]="GEN";                      // Almacen
-  row[6]=1;                          // Agente
-  row[7]="";                         // Codigo proveedor
-  row[8]=cod;                        // Codigo cliente
-  row[9]=f.nombre||"";             // Nombre cliente
-  row[10]=cc.domicilio||"";        // Domicilio
-  row[11]=cc.poblacion||"";        // Poblacion
-  row[12]=cc.cp||"";               // CP
-  row[13]=cc.provincia||"";        // Provincia
-  row[14]=f.nif||cc.nif||"";      // NIF
-  row[15]=0;                         // Tipo IVA
-  row[16]=0;                         // Recargo equiv
-  row[17]=cc.telefono||"";         // Telefono
-  row[18]=parseFloat(f.base1)||0;  // Importe neto 1
-  row[19]=parseFloat(f.base2)||0;  // Importe neto 2
-  // cols 20-44 descuentos/pp/portes/financiacion -> vacío
-  row[45]=parseFloat(f.base1)||0;  // Base imponible 1
-  row[46]=parseFloat(f.base2)||0;  // Base imponible 2
-  row[47]=0;                         // Base imponible 3
-  row[48]=parseFloat(f.pct1)||0;   // % IVA 1
-  row[49]=parseFloat(f.pct2)||0;   // % IVA 2
-  row[50]=0;                         // % IVA 3
-  row[51]=parseFloat(f.iva1)||0;   // Importe IVA 1
-  row[52]=parseFloat(f.iva2)||0;   // Importe IVA 2
-  row[53]=0;                         // Importe IVA 3
-  row[60]=parseFloat(f.retPct)||0; // % retencion
-  row[61]=parseFloat(f.retImporte)||0; // Importe retencion
-  row[62]=parseFloat(f.total)||0;  // Total
-  row[63]=1;                         // Forma pago
-  row[64]=0;                         // Portes
-  row[75]=0;                         // Cobrado
-  row[76]=1;                         // Tipo creacion
-  row[77]=1;                         // Tipo recibo
-  row[79]=0;                         // Traspasada
-  row[82]=0;                         // Impresa
-  row[86]=1;                         // Usuario creo
-  row[87]=1;                         // Ultimo usuario
-  row[112]=0;                        // Clave operacion
-  row[114]=0;                        // Tipo retencion
-  row[115]=0;                        // Clave op intracom
-  row[116]=0;                        // Regimen esp caja
-  return row;
-}
-
-function prevExp(){
-  const cid=document.getElementById("eC").value,formato=document.getElementById("eT").value;
-  const anio=document.getElementById("eA").value,per=document.getElementById("eP").value;
-  if(!cid){alert("Selecciona un cliente.");return;}
-  const cl=(window.WC||[]).find(c=>c.id===cid);
-  const tipoF=getTipoFactura(formato);
-  let fs=(window.WF||[]).filter(f=>{
-    if(f.tipo!==tipoF||f.clienteDespachoId!==cid)return false;
-    if(f.fecha){
-      const d=new Date(f.fecha+"T12:00:00");
-      if(anio&&d.getFullYear()!==parseInt(anio))return false;
-      if(per&&q(f.fecha)!==per)return false;
-    }
-    return true;
-  }).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
-  const res=document.getElementById("eRes");
-  res.style.display="block";
-  res.innerHTML="<strong>"+(cl?cl.nombre:"")+"</strong> &middot; "+formato+" &middot; "+anio+(per?" &middot; "+per+"T":"")+" &middot; <strong>"+fs.length+" facturas</strong>";
-  document.getElementById("ePrev").style.display=fs.length?"block":"none";
-  document.getElementById("btnExp").style.display=fs.length?"inline-block":"none";
-  if(!fs.length){res.innerHTML+=" &middot; Sin facturas en este periodo.";return;}
-
-  // Obtener cabeceras reales del archivo Delsol
-  const cvIVR=["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","IVA1","IVA2","IVA3","Total"];
-  const cvIVS=["Codigo","Libro IVA","Fecha","Cuenta","Factura","Nombre","CIF","Tipo op.","Deducible","Base 1","Base 2","Base 3","%IVA1","%IVA2","%IVA3","IVA1","IVA2","IVA3","Total"];
-
-  // Para FAC y FRE usamos los headers reales de Delsol
-  const hFAC=["Tipo de documento","Número de documento","Referencia","Fecha","Estado","Almacén","Agente","Código del proveedor","Código de cliente","Nombre del cliente","Domicilio del cliente","Población","Código postal","Provincia","N.I.F.","Tipo de IVA","Recargo de equivalencia","Teléfono del cliente","Importe neto 1","Importe neto 2","Importe neto 3","Porcentaje de descuento 1","Porcentaje de descuento 2","Porcentaje de descuento 3","Importe de descuento 1","Importe de descuento 2","Importe de descuento 3","Porcentaje de pronto pago 1","Porcentaje de pronto pago 2","Porcentaje de pronto pago 3","Importe pronto pago 1","Importe pronto pago 2","Importe pronto pago 3","Porcentaje portes 1","Porcentaje portes 2","Porcentaje portes 3","Importe portes 1","Importe portes 2","Importe portes 3","Porcentaje de financiación 1","Porcentaje de financiación 2","Porcentaje de financiación 3","Importe de financiación 1 ","Importe de financiación 2","Importe de financiación 3","Base imponible 1","Base imponible 2","Base imponible 3","Porcentaje IVA 1","Porcentaje IVA 2","Porcentaje IVA 3","Importe IVA 1","Importe IVA 2","Importe IVA 3","Porcentaje de recargo de equivalencia 1","Porcentaje de recargo de equivalencia 2","Porcentaje de recargo de equivalencia 3","Importe de recargo de equivalencia 1","Importe de recargo de equivalencia 2","Importe de recargo de equivalencia 3","Porcentaje de la retención","Importe de la retención","Total","Forma de pago","Portes","Texto de portes","1ª línea de observaciones","2ª línea de observaciones","Obra de entrega","Remitido por","Embalado por","A la atención de","Referencia","Nº de su pedido","Fecha de su pedido","Cobrado","Tipo de creación","Tipo de recibo","Código del recibo que se crea a partir de esta factura","Traspasada","Anotaciones privadas","Documentos externos asociados","Impresa","Banco del cliente","Hora de creación","Comentario después de las líneas de detalle","Usuario que creó el documento","Último usuario que modificó el documento","Fax","Imagen","Importe neto exento","Porcentaje de descuento exento","Importe de descuento exento","Porcentaje pronto pago exento","Importe de pronto pago exento","Porcentaje de portes exento","Importe de portes exento","Porcentaje de financiación exento","Importe de financiación exento","Base imponible exenta","Enviado por mail","Permisos y contraseña del documento","Ticket, porcentaje de descuento","Ticket, importe de descuento","Caja en que se creó el documento","IBAN del banco","BIC del banco","Nombre del banco","Entidad de la cuenta del cliente","Oficina de la cuenta del cliente","Dígitos de control de la cuenta del cliente","Número de la cuenta del cliente","Clave de operación","Fecha de operación","Tipo de retención","Clave de operación intracomunitaria","Régimen especial de criterio de caja","Departamento","Subdepartamento"];
-  const hFRE=["Tipo de documento","Número de documento","Código exterior","Referencia","Fecha","Proveedor","Estado","Código de cliente","Nombre del proveedor","Domicilio del proveedor","Población","Código postal","Provincia","N.I.F.","Tipo de IVA","Recargo de equivalencia","Teléfono del proveedor","Importe neto 1","Importe neto 2","Importe neto 3","Porcentaje de descuento 1","Porcentaje de descuento 2","Porcentaje de descuento 3","Importe de descuento 1","Importe de descuento 2","Importe de descuento 3","Porcentaje de pronto pago 1","Porcentaje de pronto pago 2","Porcentaje de pronto pago 3","Importe pronto pago 1","Importe pronto pago 2","Importe pronto pago 3","Porcentaje portes 1","Porcentaje portes 2","Porcentaje portes 3","Importe portes 1","Importe portes 2","Importe portes 3","Porcentaje de financiación 1","Porcentaje de financiación 2","Porcentaje de financiación 3","Importe de financiación 1 ","Importe de financiación 2","Importe de financiación 3","Base imponible 1","Base imponible 2","Base imponible 3","Porcentaje IVA 1","Porcentaje IVA 2","Porcentaje IVA 3","Importe IVA 1","Importe IVA 2","Importe IVA 3","Porcentaje de recargo de equivalencia 1","Porcentaje de recargo de equivalencia 2","Porcentaje de recargo de equivalencia 3","Importe de recargo de equivalencia 1","Importe de recargo de equivalencia 2","Importe de recargo de equivalencia 3","Porcentaje de la retención","Importe de la retención","Total","Forma de pago","1ª línea de observaciones","2ª línea de observaciones","Traspasada a contabilidad","Fecha de entrega ","Hora de entrega","Portes","Texto de portes","Agencia de transportes","Comentario después de las líneas de detalle","Factura deducible","Usuario que creó el documento","Último usuario que modificó el documento","Almacén","Importe neto exento","Porcentaje de descuento exento","Importe de descuento exento","Porcentaje pronto pago exento","Importe de pronto pago exento","Porcentaje de portes exento","Importe de portes exento","Porcentaje de financiación exento","Importe de financiación exento","Base imponible exenta","Enviado por mail","Proveedor/Acreedor","Bien de inversión","Imagen","Tipo de retención","Clave de operación","Fecha de operación","Fecha de registro contable","Clave de operación intracomunitaria","Régimen especial de caja","Departamento","Subdepartamento"];
-
-  expData=fs.map((f,i)=>{
-    if(formato==="IVR"){
-      const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
-      const cc=getCuentaParaFactura(f);
-      return[i+1,1,fe,cc.cuenta||f.cuenta||"",f.numero||"",f.nombre||"",f.nif||cc.nif||"",0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe,"",0];
-    } else if(formato==="IVS"){
-      const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
-      const cc=getCuentaParaFactura(f);
-      return[i+1,1,fe,cc.cuenta||f.cuenta||"",f.numero||"",f.nombre||"",f.nif||cc.nif||"",0,f.deducible||0,f.base1||0,f.base2||0,"",f.pct1||21,f.pct2||"","",0,0,0,f.iva1||0,f.iva2||0,"",0,0,0,f.total||0,"","","","","","","","","","","","","","","","","","","",f.m347||0,f.retPct||"",f.retImporte||0,f.retPct?1:"","",fe];
-    } else if(formato==="FAC"){
-      return rowFAC(f,i);
-    } else {
-      return rowFRE(f,i);
-    }
-  });
-
-  const cv=formato==="IVR"?cvIVR:formato==="IVS"?cvIVS:formato==="FAC"?hFAC:hFRE;
-
-  document.getElementById("ePrevTitle").textContent="Vista previa "+formato+" ("+fs.length+" registros)";
-  document.getElementById("ePrevH").innerHTML=cv.map(c=>"<th>"+c+"</th>").join("");
-  document.getElementById("ePrevB").innerHTML=expData.map(r=>"<tr>"+r.slice(0,cv.length).map(v=>"<td>"+(v!==undefined&&v!==""?v:"")+"</td>").join("")+"</tr>").join("");
-}
-
-function doExport(){
-  if(!expData.length){alert("Primero haz la vista previa.");return;}
-  if(typeof XLSX==="undefined"){alert("Error: libreria Excel no disponible. Recarga la pagina.");return;}
-  const formato=document.getElementById("eT").value;
-  const ths=document.getElementById("ePrevH").querySelectorAll("th");
-  const headers=Array.from(ths).map(th=>th.textContent);
-  try {
-    const wb=XLSX.utils.book_new();
-    const wsData=[headers,...expData.map(r=>r.slice(0,headers.length).map(v=>v===undefined||v===null?"":v))];
-    const ws=XLSX.utils.aoa_to_sheet(wsData);
-    ws["!cols"]=headers.map((_,i)=>{
-      const maxLen=Math.max(headers[i].length,...expData.map(r=>String(r[i]||"").length));
-      return {wch:Math.min(Math.max(maxLen,8),30)};
-    });
-    XLSX.utils.book_append_sheet(wb,ws,formato);
-    const u=XLSX.write(wb,{bookType:"xlsx",type:"array"});
-    const b=new Blob([u],{type:"application/octet-stream"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(b);
-    a.download=formato+".xlsx";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  } catch(e) {
-    console.error("Error:",e);
-    alert("Error al generar el archivo: "+e.message);
-  }
-}
-
-// ── Portal clientes ───────────────────────────────────────────────────────────
-
-window.portalDocs = [];
-
-function poblarFiltroPortalClientes() {
-  const sel = document.getElementById("filtroPortalCliente");
-  if(!sel) return;
-  const emails = [...new Set((window.portalDocs||[]).map(d => d.userEmail))].sort();
-  const val = sel.value;
-  sel.innerHTML = "<option value=''>Todos los clientes</option>";
-  emails.forEach(e => {
-    const opt = document.createElement("option");
-    opt.value = e; opt.textContent = e;
-    sel.appendChild(opt);
-  });
-  sel.value = val;
-}
-
-function renderPortal() {
-  const filtroCliente = (document.getElementById("filtroPortalCliente")||{value:""}).value;
-  const filtroEstado = (document.getElementById("filtroPortalEstado")||{value:""}).value;
-  let docs = (window.portalDocs || []).filter(d => {
-    if(filtroCliente && d.userEmail !== filtroCliente) return false;
-    if(filtroEstado && d.estado !== filtroEstado) return false;
-    return true;
-  }).filter(d => !d.archivada).sort((a,b) => (b.creado||"").localeCompare(a.creado||""));
-
-  const elPend = document.getElementById("portalPend");
-  const elProc = document.getElementById("portalProc");
-  const elTotal = document.getElementById("portalTotal");
-  const docsNoArch = (window.portalDocs||[]).filter(d=>!d.archivada);
-  if(elPend) elPend.textContent = docsNoArch.filter(d=>d.estado==="pendiente").length;
-  if(elProc) elProc.textContent = docsNoArch.filter(d=>d.estado==="procesada").length;
-  if(elTotal) elTotal.textContent = docsNoArch.length;
-
-  const el = document.getElementById("portalDocs");
-  if(!el) return;
-  if(!docs.length) {
-    el.innerHTML = "<div class='empty' style='background:white;border-radius:10px;padding:40px;'><div class='empty-icon'>&#128229;</div><div>No hay documentos con esos filtros.</div></div>";
+async function subirDocumento() {
+  if(!window.colaArchivos || !window.colaArchivos.length || !window.currentUser) {
+    alert('No hay archivos en la cola o no has iniciado sesion.');
     return;
   }
-  el.innerHTML = docs.map(function(d) {
-    const fecha = new Date(d.creado).toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
-    const esPdf = d.tipo === "application/pdf";
-    const thumb = d.thumbnail ? "<img src='"+d.thumbnail+"' style='width:52px;height:52px;border-radius:7px;object-fit:cover;'>" : (d.storageUrl && !esPdf ? "<img src='"+d.storageUrl+"' style='width:52px;height:52px;border-radius:7px;object-fit:cover;'>" : (esPdf ? "<span style='font-size:28px;'>&#128196;</span>" : "<span style='font-size:28px;'>&#128247;</span>"));
-    const estadoBg = d.estado === "procesada" ? "#D1FAE5" : "#FEF3C7";
-    const estadoColor = d.estado === "procesada" ? "#065F46" : "#92400E";
-    const estadoLabel = d.estado === "procesada" ? "Procesada" : "Pendiente";
-    const tamano = d.tamano ? (d.tamano < 1024*1024 ? (d.tamano/1024).toFixed(1)+" KB" : (d.tamano/1024/1024).toFixed(1)+" MB") : "";
-    return "<div style='background:white;border-radius:10px;box-shadow:var(--shadow);padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:12px;'>" +
-      "<div style='width:52px;height:52px;border-radius:7px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;flex-shrink:0;'>" + thumb + "</div>" +
-      "<div style='flex:1;min-width:0;'>" +
-        "<div style='font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>" + (d.descripcion||d.nombreArchivo||"Documento") + "</div>" +
-        "<div style='font-size:11px;color:var(--gray-400);margin-top:2px;'>" + d.userEmail + " · " + fecha + (tamano?" · "+tamano:"") + "</div>" +
-      "</div>" +
-      "<div style='display:flex;flex-direction:column;align-items:flex-end;gap:6px;'>" +
-        "<span style='font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;background:"+estadoBg+";color:"+estadoColor+";'>"+estadoLabel+"</span>" +
-        "<div style='display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;'>" +
-          (d.datos ? "<button class='btn btn-sm' style='background:#EFF6FF;color:#1B4F8A;font-size:11px;' data-id='"+d.id+"' onclick='verDocumento(this.dataset.id)'>Ver</button>" : "") +
-          (d.estado !== "procesada" ? "<button class='btn btn-sm' style='background:#FFF7ED;color:#C2410C;font-size:11px;' data-id='"+d.id+"' onclick='registrarFacturaPortal(this.dataset.id)'>&#128203; Registrar</button>" : "") +
-          (d.estado !== "procesada" ? "<button class='btn btn-sm' style='background:#D1FAE5;color:#065F46;font-size:11px;' data-id='"+d.id+"' onclick='marcarProcesada(this.dataset.id)'>Procesada</button>" : "") +
-          "<button class='btn btn-sm' style='background:#FEF2F2;color:#EF4444;font-size:11px;' data-id='"+d.id+"' onclick='eliminarPortalDoc(this.dataset.id)'>&#215;</button>" +
-        "</div>" +
-      "</div>" +
-    "</div>";
-  }).join("");
-}
+  const btnSubir = document.getElementById('btnSubir');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  if(btnSubir) { btnSubir.disabled = true; btnSubir.innerHTML = 'Enviando...'; }
+  if(progressWrap) progressWrap.style.display = 'block';
+  const total = window.colaArchivos.length;
+  let enviados = 0, errores = 0;
+  for(const f of window.colaArchivos) {
+    try {
+      if(progressFill) progressFill.style.width = Math.round((enviados/total)*100) + '%';
+      if(progressText) progressText.textContent = 'Enviando ' + (enviados+1) + ' de ' + total + '...';
+      const id = String(Date.now()) + '_' + enviados;
 
-let _visorZoom = 1;
-let _visorUrl = '';
+      // Subir archivo original a Firebase Storage
+      const storageRef = window.fsRef(window.storage, 'portal/' + window.currentUser.uid + '/' + id + '_' + f.nombre);
+      await window.fsUploadBytes(storageRef, f.fileOriginal);
+      const downloadURL = await window.fsGetDownloadURL(storageRef);
 
-function zoomVisor(dir) {
-  const content = document.getElementById('visorContent');
-  const img = content ? content.querySelector('img') : null;
-  if(dir === 0) {
-    _visorZoom = 1;
-    if(img) { img.style.transform = 'scale(1)'; img.style.maxWidth = '100%'; }
-    return;
-  }
-  if(dir === 99) {
-    // Abrir en ventana nueva a tamaño completo
-    if(_visorUrl) window.open(_visorUrl, '_blank');
-    return;
-  }
-  if(!img) return;
-  _visorZoom = Math.min(Math.max(_visorZoom + dir * 0.5, 0.5), 5);
-  img.style.transformOrigin = 'top left';
-  img.style.transform = 'scale(' + _visorZoom + ')';
-  img.style.maxWidth = 'none';
-  img.style.width = (100 / _visorZoom) + '%';
-  content.style.overflow = 'auto';
-  content.style.cursor = 'grab';
-}
-
-function abrirVisor(d) {
-  const panel = document.getElementById('visorPanel');
-  const content = document.getElementById('visorContent');
-  const title = document.getElementById('visorTitle');
-  if(!panel || !content) return;
-  title.textContent = d.descripcion || d.nombreArchivo || 'Documento';
-  _visorUrl = d.storageUrl || d.datos || '';
-  const url = d.storageUrl || d.datos || '';
-  if(d.tipo === 'application/pdf') {
-    content.innerHTML = '<embed src="'+url+'" width="100%" height="100%" style="min-height:calc(100vh - 44px);">';
-  } else {
-    content.innerHTML = '<img src="'+url+'" style="max-width:100%;display:block;margin:0 auto;">';
-  }
-  panel.style.display = 'flex';
-  document.getElementById('visorOverlay').style.display = 'block';
-  document.body.classList.add('visor-open');
-}
-
-function cerrarVisor() {
-  const panel = document.getElementById('visorPanel');
-  const overlay = document.getElementById('visorOverlay');
-  if(panel) panel.style.display = 'none';
-  if(overlay) overlay.style.display = 'none';
-  document.body.classList.remove('visor-open');
-  const content = document.getElementById('visorContent');
-  if(content) content.innerHTML = '';
-}
-
-function registrarFacturaPortal(id) {
-  const d = (window.portalDocs||[]).find(x => x.id === id);
-  if(!d || (!d.datos && !d.storageUrl)) { alert("No hay datos en este documento."); return; }
-
-  // Abrir el documento en el visor lateral
-  abrirVisor(d);
-
-  // Abrir modal de factura (recibida por defecto)
-  openFM('IVS');
-
-  // Guardar ID para marcarlo procesado al guardar
-  window._portalDocId = id;
-
-  showToast("Rellena los datos de la factura mirando el documento.");
-}
-
-function verDocumento(id) {
-  const d = (window.portalDocs||[]).find(x => x.id === id);
-  const url = d && (d.storageUrl || d.datos);
-  if(!url) return;
-  const win = window.open();
-  if(!win) { alert("Permite las ventanas emergentes para ver el documento."); return; }
-  win.document.write("<html><body style='margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh;'>");
-  if(d.tipo === "application/pdf") {
-    win.document.write("<embed src='"+url+"' width='100%' height='100%' style='min-height:100vh;'>");
-  } else {
-    win.document.write("<img src='"+url+"' style='max-width:100%;max-height:100vh;object-fit:contain;'>");
-  }
-  win.document.write("</body></html>");
-}
-
-async function marcarProcesada(id) {
-  const d = (window.portalDocs||[]).find(x => x.id === id);
-  if(!d) return;
-  // Solo actualizar el estado, sin tocar datos/thumbnail para no perder la imagen
-  const docActualizado = Object.assign({}, d, { estado: "procesada", procesada: new Date().toISOString() });
-  await fbS("portal_documentos", id, docActualizado);
-  renderPortal();
-}
-
-async function eliminarPortalDoc(id) {
-  const d = (window.portalDocs||[]).find(x => x.id === id);
-  if(!d) return;
-  if(d.estado === "procesada") {
-    // Procesada: archivar (desaparece de tu vista, cliente la sigue viendo como Procesada)
-    if(!confirm("Archivar este documento procesado?")) return;
-    await fbS("portal_documentos", id, Object.assign({}, d, { archivada: true }));
-  } else if(d.estado === "eliminada") {
-    // Ya marcada como eliminada: borrar definitivamente de Firebase
-    if(!confirm("Borrar definitivamente este documento?")) return;
-    await fbD("portal_documentos", id);
-  } else {
-    // Pendiente: marcar como eliminada para avisar al cliente que reenvíe
-    if(!confirm("Marcar como eliminada? El cliente verá que debe reenviarla.")) return;
-    await fbS("portal_documentos", id, Object.assign({}, d, { estado: "eliminada", eliminada: new Date().toISOString() }));
-  }
-  renderPortal();
-}
-
-// Liquidacion trimestral (Fase 2: estimacion directa)
-function eur2(n){return (Math.round((n||0)*100)/100).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";}
-function trimOf(fecha){const m=parseInt(String(fecha||"").slice(5,7),10)||0;return m<=3?1:m<=6?2:m<=9?3:4;}
-const MESES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-function loadIngresos(){
-  const grid=document.getElementById("lqMesesGrid");if(!grid)return;
-  const cid=document.getElementById("lqCli").value,anio=String(document.getElementById("lqAnio").value);
-  const rec=(window.WIN||{})[cid+"_"+anio], meses=(rec&&rec.meses)||[];
-  grid.innerHTML=MESES.map((m,i)=>
-    "<div><label style='font-size:10px;color:var(--gray-400);display:block;'>"+m+"</label>"+
-    "<input type='number' step='0.01' id='lqM"+i+"' value='"+(meses[i]!=null&&meses[i]!==""?meses[i]:"")+"' style='width:100%;padding:5px;border:1px solid var(--gray-200);border-radius:5px;text-align:right;font-size:12px;'></div>"
-  ).join("");
-}
-async function guardarIngresos(){
-  const cid=document.getElementById("lqCli").value,anio=String(document.getElementById("lqAnio").value);
-  if(!cid){alert("Selecciona un cliente.");return;}
-  const meses=MESES.map((m,i)=>{const v=document.getElementById("lqM"+i);return v&&v.value!==""?(parseFloat(v.value)||0):"";});
-  await fbS("iva_ingresos",cid+"_"+anio,{id:cid+"_"+anio,cid,anio,meses});
-  const st=document.getElementById("lqRes");if(st)st.innerHTML="<div style='color:var(--success);font-size:12px;'>Ingresos guardados. Pulsa Calcular.</div>";
-}
-// Minoracion por incentivos al empleo: coeficiente por tramos sobre las unidades del modulo "personal asalariado" (marginal, como tramos de IRPF)
-function tramoIncentivoEmpleo(units){
-  const tr=[[1.00,0.10],[3.00,0.15],[5.00,0.20],[8.00,0.25],[Infinity,0.30]];
-  let prev=0,acc=0;
-  for(const [top,coef] of tr){ if(units<=prev)break; acc+=(Math.min(units,top)-prev)*coef; prev=top; }
-  return acc;
-}
-// Periodo de actividad en el ano (para alta/baja a mitad de ano en objetiva): dias de alta por trimestre y factores de prorrateo.
-function periodoActividad(anio,fInicio,fCese){
-  const y=parseInt(anio,10);
-  const D=s=>Date.parse(s+"T00:00:00");
-  const jan1=y+"-01-01",dec31=y+"-12-31";
-  const ok=s=>s&&/^\d{4}-\d{2}-\d{2}$/.test(s);
-  let ini=jan1,ces=dec31;
-  if(ok(fInicio)&&D(fInicio)>D(jan1)&&D(fInicio)<=D(dec31))ini=fInicio;   // alta durante el ano
-  if(ok(fCese)&&D(fCese)>=D(jan1)&&D(fCese)<D(dec31))ces=fCese;           // cese durante el ano
-  const qb=[[y+"-01-01",y+"-03-31"],[y+"-04-01",y+"-06-30"],[y+"-07-01",y+"-09-30"],[y+"-10-01",y+"-12-31"]];
-  const factors=qb.map(([qs,qe])=>{const s=Math.max(D(qs),D(ini)),e=Math.min(D(qe),D(ces));
-    const act=e>=s?Math.round((e-s)/86400000)+1:0,tot=Math.round((D(qe)-D(qs))/86400000)+1;return {act,tot,f:tot?act/tot:0};});
-  const activo=D(ces)>=D(ini);
-  const diasAnio=Math.round((D(dec31)-D(jan1))/86400000)+1;
-  const diasAct=activo?Math.round((D(ces)-D(ini))/86400000)+1:0;
-  let firstQ=0,lastQ=0;factors.forEach((x,i)=>{if(x.f>0){if(!firstQ)firstQ=i+1;lastQ=i+1;}});
-  return {ini,ces,factors,factorAnual:diasAnio?diasAct/diasAnio:0,firstQ,lastQ,diasAnio,diasAct,parcial:(ini!==jan1||ces!==dec31)};
-}
-function calcLiq(){
-  const cid=document.getElementById("lqCli").value,anio=String(document.getElementById("lqAnio").value);
-  const compAnt=parseFloat(document.getElementById("lqComp").value)||0;
-  const cont=document.getElementById("lqRes");
-  if(!cid){cont.innerHTML="<div style='color:var(--warning);font-size:12px;'>Selecciona un cliente.</div>";return;}
-  const ficha=(window.WFI||{})[cid]||{regimen:"directa"};
-  const sinIva=!!ficha.sinIva;                                          // actividad exenta: no presenta 303
-  const modList=(Array.isArray(ficha.modelos)&&ficha.modelos.length)?ficha.modelos:modelosPropuestos(ficha.regimen||"directa",sinIva);
-  const modBanner="<div style='background:rgba(212,160,23,0.12);border-radius:7px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--navy);'><strong>Modelos que presenta:</strong> "+(modList.length?modList.join(" &middot; "):"&mdash;")+"</div>";
-  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&String(f.fecha||"").slice(0,4)===anio);
-  const emit=fs.filter(f=>f.tipo==="IVR"),reci=fs.filter(f=>f.tipo==="IVS");
-  const base=f=>(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
-  const iva=f=>(parseFloat(f.iva1)||0)+(parseFloat(f.iva2)||0);
-  const rp=f=>parseFloat(f.retPct)||0, ri=f=>parseFloat(f.retImporte)||0;
-  const retSop=f=>ri(f);                                                // retencion soportada (emitidas): sus clientes le retienen
-  const ivaDed=f=>(sinIva||String(f.deducible)==="0")?0:iva(f);         // IVA deducible (303); si exenta o "no deducible" no resta
-  const regGasto=ficha.regGasto||"exenta";                             // regla de gasto para actividades sin IVA
-  // gasto IRPF. Recargo equiv.: base+IVA siempre (todo es coste, incl. alquiler). Exenta (art.20): base+IVA salvo facturas CON retencion -> solo base. General: base + IVA no deducible
-  const gasto=f=> sinIva
-        ? (regGasto==="recargo" ? base(f)+iva(f) : (ri(f)>0 ? base(f) : base(f)+iva(f)))
-        : base(f)+(String(f.deducible)==="0"?iva(f):0);
-
-  // obligaciones del cliente (marcadas en la app Despacho) — sirven tambien para decidir que retenciones mostrar
-  const _cl=(window.WC||[]).find(c=>c.id===cid); const obl=Array.isArray(_cl&&_cl.obligaciones)?_cl.obligaciones:[];
-  // ---------- 115 / 180: retenciones de alquiler urbano (19%) ----------
-  const arr=ficha.arrendadores||{};
-  const alq=reci.filter(f=>rp(f)===19);                                 // facturas de alquiler con retencion 19%
-  const pkey=f=>String(f.nif||f.nombre||"?").trim().toUpperCase();
-  let b115="";
-  if(modList.includes("115")||obl.includes("115")||alq.length>0){
-    const tr=[1,2,3,4].map(t=>{const fq=alq.filter(f=>trimOf(f.fecha)===t);
-      return {t,nP:new Set(fq.map(pkey)).size,b:fq.reduce((s,f)=>s+base(f),0),r:fq.reduce((s,f)=>s+ri(f),0)};});
-    const byP={};
-    alq.forEach(f=>{const k=pkey(f);(byP[k]=byP[k]||{nif:f.nif||"",nombre:f.nombre||"",b:0,r:0,n:0,key:k});byP[k].b+=base(f);byP[k].r+=ri(f);byP[k].n++;});
-    const percs=Object.values(byP);
-    const totB=alq.reduce((s,f)=>s+base(f),0),totR=alq.reduce((s,f)=>s+ri(f),0);
-    const nPerAnual=new Set(alq.map(pkey)).size;
-    b115="<div style='margin-top:24px;border-top:2px solid var(--gold);padding-top:14px;'>"+
-      "<div style='font-weight:700;color:var(--navy);font-size:14px;'>Retenciones de alquiler &mdash; modelo 115 (trimestral) y 180 (anual)</div>"+
-      "<div style='font-size:11px;color:var(--gray-400);margin:2px 0 10px;'>Como arrendatario/a, practica el 19% de retencion sobre el alquiler y lo ingresa con el 115 cada trimestre. El 180 es el resumen anual por arrendador. Base de retencion = importe del alquiler sin IVA.</div>"+
-      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre (115)</th><th class='td-r'>N&ordm; perceptores</th><th class='td-r'>Base retenciones</th><th class='td-r'>Retencion a ingresar</th></tr></thead><tbody>"+
-      tr.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+(x.nP||"&mdash;")+"</td><td class='td-r'>"+eur2(x.b)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.r)+"</td></tr>").join("")+
-      "<tr style='background:var(--gray-50);font-weight:700;'><td>Total a&ntilde;o</td><td class='td-r'>"+nPerAnual+"</td><td class='td-r'>"+eur2(totB)+"</td><td class='td-r'>"+eur2(totR)+"</td></tr>"+
-      "</tbody></table></div>"+
-      "<div style='font-weight:700;color:var(--navy);font-size:12px;margin:14px 0 4px;'>Modelo 180 &mdash; detalle por arrendador</div>"+
-      "<div class='tabla-wrapper'><table><thead><tr><th>NIF</th><th>Arrendador</th><th class='td-r'>Base</th><th class='td-r'>Retenci&oacute;n</th><th>Municipio inmueble</th><th>Ref. catastral</th></tr></thead><tbody>"+
-      percs.map((p,i)=>{const ex=arr[p.key]||{};return "<tr><td>"+(p.nif||"<span style='color:var(--warning);'>(falta NIF)</span>")+"</td><td>"+(p.nombre||"")+"</td><td class='td-r'>"+eur2(p.b)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(p.r)+"</td>"+
-        "<td><input type='text' id='a180m_"+i+"' data-key=\""+p.key+"\" value=\""+(ex.municipio||"")+"\" style='width:120px;font-size:11px;padding:3px 5px;border:1px solid var(--gray-200);border-radius:5px;'></td>"+
-        "<td><input type='text' id='a180r_"+i+"' value=\""+(ex.refCatastral||"")+"\" style='width:150px;font-size:11px;padding:3px 5px;border:1px solid var(--gray-200);border-radius:5px;'></td></tr>";}).join("")+
-      "</tbody></table></div>"+
-      "<div style='margin-top:8px;'><button class='btn btn-secondary' onclick=\"save180('"+cid+"',"+percs.length+")\">Guardar datos del 180</button> <span style='font-size:11px;color:var(--gray-400);'>El municipio y la referencia catastral del inmueble son obligatorios en el 180; se guardan por arrendador.</span></div>"+
-      "</div>";
-  }
-
-  // ---------- 111 / 190: retenciones de trabajo y actividades profesionales ----------
-  let b111="";
-  if(modList.includes("111")||obl.includes("111")){
-    const prof=reci.filter(f=>ri(f)>0 && rp(f)!==19);                    // retenciones a profesionales/actividades (no alquiler)
-    const nom=ficha.ret111Nom||{};
-    const tr1=[1,2,3,4].map(t=>{const fq=prof.filter(f=>trimOf(f.fecha)===t);
-      const rProf=fq.reduce((s,f)=>s+ri(f),0), rNom=parseFloat(nom[t])||0;
-      return {t,rProf,rNom,total:rProf+rNom};});
-    const tProf=tr1.reduce((s,x)=>s+x.rProf,0),tNom=tr1.reduce((s,x)=>s+x.rNom,0),tTot=tProf+tNom;
-    const inp=x=>"<input type='number' step='0.01' id='ret111_"+x.t+"' value=\""+((nom[x.t]!=null&&nom[x.t]!=="")?nom[x.t]:"")+"\" placeholder='0.00' style='width:92px;font-size:12px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:5px;text-align:right;'>";
-    b111="<div style='margin-top:24px;border-top:2px solid var(--gold);padding-top:14px;'>"+
-      "<div style='font-weight:700;color:var(--navy);font-size:14px;'>Retenciones de trabajo y profesionales &mdash; modelo 111 (trimestral) y 190 (anual)</div>"+
-      "<div style='font-size:11px;color:var(--gray-400);margin:2px 0 10px;'>Retenciones practicadas a profesionales/actividades (salen de las facturas recibidas con retencion) y a trabajadores (n&oacute;minas). Las de n&oacute;minas se llevan en la app Laboral; introd&uacute;celas aqu&iacute; por trimestre para completar el 111.</div>"+
-      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre (111)</th><th class='td-r'>Ret. profesionales</th><th class='td-r'>Ret. n&oacute;minas</th><th class='td-r'>Total a ingresar</th></tr></thead><tbody>"+
-      tr1.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.rProf)+"</td><td class='td-r'>"+inp(x)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.total)+"</td></tr>").join("")+
-      "<tr style='background:var(--gray-50);font-weight:700;'><td>Total a&ntilde;o</td><td class='td-r'>"+eur2(tProf)+"</td><td class='td-r'>"+eur2(tNom)+"</td><td class='td-r'>"+eur2(tTot)+"</td></tr>"+
-      "</tbody></table></div>"+
-      "<div style='margin-top:8px;'><button class='btn btn-secondary' onclick=\"save111('"+cid+"')\">Guardar retenciones de n&oacute;minas</button> <span style='font-size:11px;color:var(--gray-400);'>El 190 es el resumen anual del 111.</span></div>"+
-      "</div>";
-  }
-  b115=b111+b115;   // ambos bloques de retenciones se muestran juntos alli donde se pinta b115
-
-  if(ficha.regimen==="objetiva"){
-    const e=(window.WM||{})[ficha.epigrafe];
-    if(!e){cont.innerHTML="<div style='font-size:12px;color:var(--warning);'>El cliente es objetiva pero su ficha no tiene epigrafe/modulos definidos.</div>";return;}
-    const uIr=ficha.unidadesIrpf||{},uIv=ficha.unidadesIva||{},indice=parseFloat(ficha.indice)||1;
-    const incInver=parseFloat(ficha.incentivoInversion)||0;
-    const incrAsal=parseFloat(ficha.incrementoAsalariados)||0;           // incremento de unidades de asalariados vs ano anterior (parte 0,40)
-    const rendPrevio=(e.modulosIrpf||[]).reduce((s,m)=>s+(m.valor||0)*(parseFloat(uIr[m.nombre])||0),0);
-    // incentivo al empleo: automatico desde el modulo "personal asalariado" (tramos) + incremento (0,40)
-    const mAsal=(e.modulosIrpf||[]).find(m=>/asalariad/i.test(m.nombre||"")&&!/no\s*asalariad/i.test(m.nombre||""));
-    let incEmpleo=0;
-    if(mAsal){
-      const uAsal=parseFloat(uIr[mAsal.nombre])||0, valUnit=parseFloat(mAsal.valor)||0;
-      const rest=Math.max(0,uAsal-incrAsal);
-      incEmpleo=(0.40*incrAsal+tramoIncentivoEmpleo(rest))*valUnit;
-    }
-    if(ficha.incentivoEmpleoManual!=null&&ficha.incentivoEmpleoManual!=="")incEmpleo=parseFloat(ficha.incentivoEmpleoManual)||0; // override manual opcional
-    const rendMinorado=Math.max(0,rendPrevio-incEmpleo-incInver);        // - incentivos al empleo y a la inversion
-    const redFactor=1-(parseFloat(e.reduccionGralPct)||0)/100;
-    const rendPF=rendMinorado*indice*redFactor;                          // rend. minorado x indice corrector x (1 - reduccion 5%) = rend. a efectos pagos fraccionados
-    const pfPct=(ficha.pagoFraccIrpfPct!=null&&ficha.pagoFraccIrpfPct!=="")?(parseFloat(ficha.pagoFraccIrpfPct)||0):(parseFloat(e.pagoFraccIrpfPct)||0); // % por cliente (2 sin asalariados/3 con uno/4 general); si vacio, el del epigrafe
-    const irpfTrim=rendPF*pfPct/100;
-    const cuotaDev=(e.modulosIva||[]).reduce((s,m)=>s+(m.valor||0)*(parseFloat(uIv[m.nombre])||0),0);
-    const ivaAc=cuotaDev*(parseFloat(e.ingresoCuentaIvaPct)||0)/100;
-    const sopAnual=reci.reduce((s,f)=>s+ivaDed(f),0);
-    const cuotaMin=cuotaDev*(parseFloat(e.cuotaMinIvaPct)||0)/100;
-    const per=periodoActividad(anio,ficha.fechaInicio,ficha.fechaCese);   // alta/baja durante el ano
-    const fac=per.factors, regQ=per.lastQ||4;                             // regQ = ultimo trimestre de alta (regularizacion IVA); 4T si todo el ano
-    const cuotaDevPr=cuotaDev*per.factorAnual, cuotaMinPr=cuotaMin*per.factorAnual; // cuota anual IVA prorrateada por dias de actividad
-    const cuotaAnual=Math.max(cuotaDevPr-sopAnual,cuotaMinPr);
-    const icCalc=[1,2,3,4].reduce((s,t)=>s+((t<regQ&&fac[t-1].f>0)?ivaAc*fac[t-1].f:0),0); // ingresos a cuenta de los trimestres de alta previos al de regularizacion
-    const icRaw=document.getElementById("lqIc").value;
-    const icReal=(icRaw!==""&&icRaw!=null)?(parseFloat(icRaw)||0):icCalc;
-    const res4=cuotaAnual-icReal;
-    let pend=compAnt,q4Pagar;
-    if(res4>=0){const usa=Math.min(res4,pend);q4Pagar=res4-usa;pend-=usa;}else{pend+=(-res4);q4Pagar=0;}
-    const rows=[1,2,3,4].map(t=>{const ft=fac[t-1].f;
-      if(ft<=0)return "<tr style='color:var(--gray-300);'><td>"+t+"T</td><td class='td-r'>&mdash;</td><td class='td-r'>&mdash;</td></tr>";
-      const ivaT=(t<regQ)?ivaAc*ft:q4Pagar;                              // el trimestre de regularizacion lleva cuota anual - ingresos a cuenta
-      const nota=ft<1?" <span style='font-size:10px;color:var(--gray-400);'>("+fac[t-1].act+"/"+fac[t-1].tot+" dias)</span>":"";
-      return "<tr><td>"+t+"T"+nota+"</td><td class='td-r'>"+eur2(ivaT)+"</td><td class='td-r'>"+eur2(irpfTrim*ft)+"</td></tr>";}).join("");
-    cont.innerHTML=modBanner+"<div style='background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;'>"+
-      "<strong>Datos base (objetiva &middot; epigrafe "+e.id+")</strong>"+(per.parcial?" <span style='color:var(--gold);font-weight:600;'>&middot; alta parcial "+per.ini.split('-').reverse().join('/')+" &rarr; "+per.ces.split('-').reverse().join('/')+" ("+per.diasAct+"/"+per.diasAnio+" dias, "+(per.factorAnual*100).toFixed(1)+"%)</span>":"")+"<br>"+
-      "Rend. modulos IRPF: "+eur2(rendPrevio)+(incEmpleo?(" &minus; inc. empleo "+eur2(incEmpleo)):"")+(incInver?(" &minus; inc. inversion "+eur2(incInver)):"")+((incEmpleo||incInver)?(" = minorado "+eur2(rendMinorado)):"")+" &nbsp;&rarr;&nbsp; x indice "+indice+" x reduc. "+redFactor.toFixed(2)+" = base pagos fraccionados <strong>"+eur2(rendPF)+"</strong><br>"+
-      "Pago fraccionado 131 ("+pfPct+"%): <strong>"+eur2(irpfTrim)+"</strong>/trim<br>"+
-      "Cuota devengada IVA: "+eur2(cuotaDev)+(per.parcial?" &times; "+(per.factorAnual*100).toFixed(1)+"% = "+eur2(cuotaDevPr):"")+" &nbsp;&middot;&nbsp; IVA soportado del ano: "+eur2(sopAnual)+"<br>"+
-      "Cuota minima ("+(e.cuotaMinIvaPct||0)+"%): "+eur2(per.parcial?cuotaMinPr:cuotaMin)+" &nbsp;&middot;&nbsp; cuota anual IVA: <strong>"+eur2(cuotaAnual)+"</strong><br>"+
-      "Ingresos a cuenta previos "+(icRaw!==""&&icRaw!=null?"(introducidos)":"(calculados)")+": "+eur2(icReal)+" &nbsp;&middot;&nbsp; resultado "+regQ+"T (regularizacion): <strong>"+eur2(res4)+"</strong>"+
-      (res4<0?" &rarr; <span style='color:var(--success);'>a compensar</span>":"")+
-      ((compAnt>0||res4<0)?"<br>Pendiente de compensar tras el "+regQ+"T: <strong>"+eur2(pend)+"</strong>":"")+"</div>"+
-      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA (reg. simplificado)</th><th class='td-r'>IRPF (131)</th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
-      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingreso a cuenta = "+(e.ingresoCuentaIvaPct||0)+"% de la cuota devengada, en cada trimestre de alta salvo el ultimo. El ultimo trimestre de alta ("+regQ+"T) regulariza: cuota anual [max(cuota devengada &minus; soportado, cuota minima)] &minus; ingresos a cuenta previos."+(per.parcial?" <strong>Alta/baja durante el ano:</strong> los trimestres sin actividad no se pagan, el de inicio/cese se prorratea por dias, y la cuota anual de IVA se prorratea al "+(per.factorAnual*100).toFixed(1)+"% de los dias.":"")+" Si dejas el campo de ingresos a cuenta vacio uso el calculado; metelo a mano si lo real fue distinto.</div>"+b115;
-    return;
-  }
-
-  // Directa. 130 acumulado desde enero; retenciones soportadas (emitidas) descuentan del 130.
-  const ingMes=(window.WIN||{})[cid+"_"+anio], meses=ingMes&&(ingMes.meses||[]);
-  const usarMeses=meses&&meses.some(x=>(parseFloat(x)||0)>0);
-  const ivaVen=sinIva?0:(parseFloat(ficha.ivaVentasPct)||21);            // IVA de las ventas: los ingresos por mes se meten con IVA incluido
-  const mesBase=m=>{const g=parseFloat(m)||0;return ivaVen>0?g/(1+ivaVen/100):g;};   // base (ingreso neto) -> 130
-  const mesIvaRep=m=>{const g=parseFloat(m)||0;return ivaVen>0?g-g/(1+ivaVen/100):0;}; // IVA repercutido -> 303
-  let pagosPrev=0;
-  const q=[1,2,3,4].map(t=>{
-    const ingAcum=usarMeses?meses.slice(0,t*3).reduce((s,x)=>s+mesBase(x),0)
-                           :emit.filter(f=>trimOf(f.fecha)<=t).reduce((s,f)=>s+base(f),0);
-    const gasAcum=reci.filter(f=>trimOf(f.fecha)<=t).reduce((s,f)=>s+gasto(f),0);
-    const retSopAcum=emit.filter(f=>trimOf(f.fecha)<=t).reduce((s,f)=>s+retSop(f),0);
-    const rend=ingAcum-gasAcum;
-    const pago130acum=Math.max(0,rend*0.20-retSopAcum), pago130=Math.max(0,pago130acum-pagosPrev);
-    pagosPrev+=pago130;
-    // 111 (retenciones de profesionales practicadas) y 115 (alquileres), por trimestre
-    const rt=reci.filter(f=>trimOf(f.fecha)===t);
-    const ret115=rt.filter(f=>rp(f)===19).reduce((s,f)=>s+ri(f),0);
-    const ret111=rt.filter(f=>rp(f)!==19&&ri(f)>0).reduce((s,f)=>s+ri(f),0);
-    return {t,ingAcum,gasAcum,rend,retSopAcum,pago130,ret111,ret115};
-  });
-
-  if(sinIva){
-    cont.innerHTML=modBanner+"<div style='background:var(--gray-50);border-radius:7px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--gray-600);'>"+(regGasto==="recargo"?"Actividad en <strong>recargo de equivalencia</strong> (no presenta 303; el IVA y el recargo soportados son coste).":"Actividad <strong>exenta de IVA</strong> (no presenta 303).")+" El 130 es el pago fraccionado de IRPF; 111 y 115 son las retenciones que practica.</div>"+
-      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>Ingresos</th><th class='td-r'>Gastos</th><th class='td-r'>Rendimiento</th><th class='td-r'>Ret. soport.</th><th class='td-r'>IRPF 130</th><th class='td-r'>111 profes.</th><th class='td-r'>115 alquiler</th></tr></thead><tbody>"+
-      q.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.ingAcum)+"</td><td class='td-r'>"+eur2(x.gasAcum)+"</td><td class='td-r'>"+eur2(x.rend)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.retSopAcum)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td><td class='td-r'>"+eur2(x.ret111)+"</td><td class='td-r'>"+eur2(x.ret115)+"</td></tr>").join("")+"</tbody></table></div>"+
-      "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingresos por mes (arriba) o, si los dejas vacios, de las facturas emitidas. "+(regGasto==="recargo"?"Gasto = base + IVA (todo es coste, tambien el alquiler; la retencion no reduce el gasto)":"Gasto = total factura, salvo facturas con retencion (solo base)")+". <strong>130 = 20% del rendimiento &minus; retenciones soportadas &minus; pagos anteriores.</strong> Si prefieres no restar las retenciones soportadas en el 130 (como en tu hoja), dimelo. 111 = retenciones a profesionales (7/15%); 115 = retenciones de alquiler (19%), del trimestre.</div>"+b115;
-    return;
-  }
-
-  // Directa con IVA: 303 con arrastre trimestral de compensaciones + 130
-  let pend=compAnt;
-  const q2=q.map(x=>{
-    const repIVA=emit.filter(f=>trimOf(f.fecha)===x.t).reduce((s,f)=>s+iva(f),0)
-               +(usarMeses?meses.slice((x.t-1)*3,x.t*3).reduce((s,m)=>s+mesIvaRep(m),0):0);   // + IVA repercutido de las ventas mensuales
-    const sopIVA=reci.filter(f=>trimOf(f.fecha)===x.t).reduce((s,f)=>s+ivaDed(f),0);
-    const res=repIVA-sopIVA;let aPagar=0;
-    if(res>=0){const usa=Math.min(res,pend);aPagar=res-usa;pend-=usa;}else{pend+=(-res);aPagar=0;}
-    return {...x,repIVA,sopIVA,res,aPagar,pendFin:pend};
-  });
-  cont.innerHTML=modBanner+"<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA reperc.</th><th class='td-r'>IVA soport.</th><th class='td-r'>Resultado</th><th class='td-r'>IVA a pagar</th><th class='td-r'>Pdte. comp.</th><th class='td-r'>IRPF 130</th></tr></thead><tbody>"+
-    q2.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='color:"+(x.res>=0?"var(--gray-600)":"var(--success)")+";'>"+eur2(x.res)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.aPagar)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.pendFin)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+"</td></tr>").join("")+"</tbody></table></div>"+
-    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado (solo IVA deducible). Si es negativo queda pendiente de compensar y se arrastra (hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados &minus; retenciones soportadas, menos lo pagado antes."+(usarMeses?" Los ingresos por mes se toman CON IVA incluido ("+ivaVen+"%): la base va al 130 y el IVA repercutido al 303.":"")+"</div>"+b115;
-}
-
-// Exportar el registro (libro) de facturas del cliente/ano filtrado, desde los datos de la app (incluye las metidas a mano).
-function exportRegistro(){
-  const cid=document.getElementById("fFC").value, fa=document.getElementById("fFA").value;
-  if(!cid){alert("Selecciona un cliente en el filtro para exportar su registro.");return;}
-  const anio=fa||String(new Date().getFullYear());
-  const cn=(document.getElementById("fFC").options[document.getElementById("fFC").selectedIndex]||{}).text||"cliente";
-  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&String(f.fecha||"").slice(0,4)===anio)
-                          .sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")||String(a.numero||"").localeCompare(String(b.numero||"")));
-  if(!fs.length){alert("No hay facturas de "+cn+" en "+anio+".");return;}
-  const lineasDe=f=>{
-    const b1=parseFloat(f.base1)||0,i1=parseFloat(f.iva1)||0,b2=parseFloat(f.base2)||0,i2=parseFloat(f.iva2)||0;
-    const L=[]; if(b1||i1||!(b2||i2))L.push([f.pct1||"",b1,i1]); if(b2||i2)L.push([f.pct2||"",b2,i2]); return L;
-  };
-  const mkRows=(arr,recibida)=>{
-    const rows=[]; let tB=0,tC=0,tT=0;
-    arr.forEach(f=>{
-      const mes=parseInt(String(f.fecha||"").slice(5,7),10)||"", tri=f.fecha?trimOf(f.fecha):"";
-      let tg="";
-      if(recibida){const cc=getCuentaParaFactura(f);const t=(window.WTG||[]).find(x=>x.cuenta===cc.contrapartida);tg=t?t.nombre:(cc.contrapartida||"");}
-      lineasDe(f).forEach(([p,b,c])=>{
-        tB+=b;tC+=c;tT+=b+c;
-        const base=[f.fecha||"",mes,tri];
-        if(recibida)base.push(tg);
-        base.push(f.nombre||"",f.nif||"",f.numero||"",(p!==""?Number(p):""),round2(b),round2(c),round2(b+c));
-        if(recibida)base.push(String(f.deducible)==="0"?"No":"Si");
-        else base.push(f.retPct||"",round2(parseFloat(f.retImporte)||0));
-        rows.push(base);
+      // Guardar solo metadatos en Firestore (sin el base64)
+      await window.fsSetDoc(window.fsDoc(window.db, 'portal_documentos', id), {
+        id,
+        userEmail: window.currentUser.email,
+        userId: window.currentUser.uid,
+        nombreArchivo: f.nombre,
+        descripcion: f.descripcion || f.nombre,
+        tipo: f.tipo,
+        tamano: f.tamano,
+        storageUrl: downloadURL,
+        storagePath: 'portal/' + window.currentUser.uid + '/' + id + '_' + f.nombre,
+        thumbnail: f.thumbnail || null,
+        estado: 'pendiente',
+        creado: new Date().toISOString(),
+        reenviado: false
       });
-    });
-    return {rows,tot:[round2(tB),round2(tC),round2(tT)]};
-  };
-  try{
-    const wb=XLSX.utils.book_new();
-    const rec=fs.filter(f=>f.tipo==="IVS"), emi=fs.filter(f=>f.tipo==="IVR");
-    if(rec.length){
-      const H=["FECHA","MES","TRIM","TIPO GASTO","PROVEEDOR","NIF","Nº FACTURA","% IVA","BASE","CUOTA IVA","TOTAL LINEA","DEDUCIBLE"];
-      const {rows,tot}=mkRows(rec,true);
-      const ws=XLSX.utils.aoa_to_sheet([H,...rows,[],["","","","","","","TOTALES","",tot[0],tot[1],tot[2]]]);
-      ws["!cols"]=[{wch:11},{wch:5},{wch:5},{wch:22},{wch:30},{wch:13},{wch:16},{wch:7},{wch:11},{wch:11},{wch:12},{wch:9}];
-      XLSX.utils.book_append_sheet(wb,ws,"Recibidas");
-    }
-    if(emi.length){
-      const H=["FECHA","MES","TRIM","CLIENTE","NIF","Nº FACTURA","% IVA","BASE","CUOTA IVA","TOTAL LINEA","% RET","RETENCION"];
-      const {rows,tot}=mkRows(emi,false);
-      const ws=XLSX.utils.aoa_to_sheet([H,...rows,[],["","","","","","TOTALES","",tot[0],tot[1],tot[2]]]);
-      ws["!cols"]=[{wch:11},{wch:5},{wch:5},{wch:30},{wch:13},{wch:16},{wch:7},{wch:11},{wch:11},{wch:12},{wch:7},{wch:11}];
-      XLSX.utils.book_append_sheet(wb,ws,"Emitidas");
-    }
-    const u=XLSX.write(wb,{bookType:"xlsx",type:"array"});
-    const bl=new Blob([u],{type:"application/octet-stream"});
-    const a=document.createElement("a");a.href=URL.createObjectURL(bl);
-    a.download=("registro_"+cn+"_"+anio).replace(/[^A-Za-z0-9_-]+/g,"_")+".xlsx";
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-  }catch(e){console.error(e);alert("Error al exportar: "+(e.message||e));}
-}
-
-// Modelo 347: operaciones con terceros > 3.005,06 EUR (IVA incl.), por clave y trimestre.
-window.W347=null;
-function gen347(){
-  const cid=document.getElementById("m3Cli").value,anio=String(document.getElementById("m3Anio").value);
-  const cont=document.getElementById("m3Res");
-  if(!cid){cont.innerHTML="<div style='color:var(--warning);font-size:12px;'>Selecciona un cliente.</div>";document.getElementById("m3Btn").style.display="none";return;}
-  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&String(f.fecha||"").slice(0,4)===anio&&String(f.m347)==="1");
-  const UMBRAL=3005.06;
-  const grp={};
-  let excl=0;
-  fs.forEach(f=>{
-    const clave=f.tipo==="IVR"?"B":"A"; // B=ventas/ingresos, A=compras/gastos
-    const nif=String(f.nif||"").trim();
-    const nom=String(f.nombre||"").trim();
-    if(!nif&&!nom){excl++;return;} // sin tercero identificado (consumidor final) no va al 347
-    const key=clave+"|"+(nif||nom.toLowerCase());
-    if(!grp[key])grp[key]={clave,nif,nombre:nom,t:[0,0,0,0],total:0};
-    const tot=parseFloat(f.total)||0;
-    grp[key].t[trimOf(f.fecha)-1]+=tot;
-    grp[key].total+=tot;
-    if(nif&&!grp[key].nif)grp[key].nif=nif;
-    if(nom&&!grp[key].nombre)grp[key].nombre=nom;
-  });
-  const rows=Object.values(grp).filter(g=>Math.abs(g.total)>UMBRAL)
-    .sort((a,b)=>a.clave.localeCompare(b.clave)||(b.total-a.total));
-  window.W347=rows;
-  if(!rows.length){
-    cont.innerHTML="<div style='font-size:12px;color:var(--gray-400);'>No hay terceros que superen 3.005,06 &euro; en "+anio+". "+
-      (excl?("("+excl+" factura(s) sin NIF/nombre excluidas.)"):"")+"</div>";
-    document.getElementById("m3Btn").style.display="none";return;
-  }
-  const clv=c=>c==="A"?"A - Adquisiciones (gastos)":"B - Entregas (ingresos)";
-  cont.innerHTML="<div class='tabla-wrapper'><table><thead><tr><th>Clave</th><th>NIF</th><th>Nombre</th><th class='td-r'>1T</th><th class='td-r'>2T</th><th class='td-r'>3T</th><th class='td-r'>4T</th><th class='td-r'>Total anual</th></tr></thead><tbody>"+
-    rows.map(g=>"<tr><td>"+g.clave+"</td><td>"+(g.nif||"<span style='color:var(--warning);'>sin NIF</span>")+"</td><td>"+(g.nombre||"")+"</td>"+
-      g.t.map(x=>"<td class='td-r'>"+eur2(x)+"</td>").join("")+"<td class='td-r' style='font-weight:600;'>"+eur2(g.total)+"</td></tr>").join("")+
-    "</tbody></table></div>"+
-    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Clave A = adquisiciones (facturas recibidas/gastos), B = entregas (facturas emitidas/ingresos). Importes con IVA incluido. Solo se incluyen facturas marcadas &laquo;Incluir en 347&raquo; y terceros que superan 3.005,06 &euro; anuales. "+
-    (excl?(excl+" factura(s) sin NIF/nombre excluidas. "):"")+"Revisa que cada tercero tenga NIF antes de presentar.</div>";
-  document.getElementById("m3Btn").style.display="";
-}
-function exp347(){
-  if(!window.W347||!window.W347.length){alert("Genera primero el 347.");return;}
-  const anio=String(document.getElementById("m3Anio").value);
-  const cn=(document.getElementById("m3Cli").options[document.getElementById("m3Cli").selectedIndex]||{}).text||"";
-  const headers=["Clave","NIF","Nombre","1T","2T","3T","4T","Total anual"];
-  const data=window.W347.map(g=>[g.clave,g.nif,g.nombre,round2(g.t[0]),round2(g.t[1]),round2(g.t[2]),round2(g.t[3]),round2(g.total)]);
-  try{
-    const wb=XLSX.utils.book_new();
-    const ws=XLSX.utils.aoa_to_sheet([headers,...data]);
-    ws["!cols"]=[{wch:6},{wch:12},{wch:34},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14}];
-    XLSX.utils.book_append_sheet(wb,ws,"347");
-    const u=XLSX.write(wb,{bookType:"xlsx",type:"array"});
-    const b=new Blob([u],{type:"application/octet-stream"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(b);
-    a.download=("347_"+cn+"_"+anio).replace(/[^A-Za-z0-9_-]+/g,"_")+".xlsx";
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-  }catch(e){console.error("Error 347:",e);alert("Error al generar el Excel: "+e.message);}
-}
-
-// Desglose de gastos por cuenta contable (para la renta)
-window.WDG=null;
-function genDG(){
-  const cid=document.getElementById("dgCli").value,anio=String(document.getElementById("dgAnio").value);
-  const cont=document.getElementById("dgRes");
-  if(!cid){cont.innerHTML="<div style='color:var(--warning);font-size:12px;'>Selecciona un cliente.</div>";document.getElementById("dgBtn").style.display="none";return;}
-  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&f.tipo==="IVS"&&String(f.fecha||"").slice(0,4)===anio);
-  const grp={};
-  fs.forEach(f=>{
-    const cc=getCuentaParaFactura(f);
-    const cuenta=cc.contrapartida||"(sin cuenta de gasto)";
-    const tg=(window.WTG||[]).find(t=>t.cuenta===cc.contrapartida);
-    const base=(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
-    const iva=(parseFloat(f.iva1)||0)+(parseFloat(f.iva2)||0);
-    const ded=String(f.deducible)!=="0"; // en la app "1"/vacio = IVA deducible, "0" = no deducible
-    if(!grp[cuenta])grp[cuenta]={cuenta,nombre:tg?tg.nombre:"",base:0,ivaDed:0,ivaNoDed:0,n:0};
-    grp[cuenta].base+=base;
-    if(ded)grp[cuenta].ivaDed+=iva; else grp[cuenta].ivaNoDed+=iva;
-    grp[cuenta].n++;
-  });
-  const rows=Object.values(grp).sort((a,b)=>(a.cuenta||"").localeCompare(b.cuenta||""));
-  window.WDG=rows;
-  if(!rows.length){cont.innerHTML="<div style='font-size:12px;color:var(--gray-400);'>No hay facturas recibidas en "+anio+".</div>";document.getElementById("dgBtn").style.display="none";return;}
-  const tB=rows.reduce((s,g)=>s+g.base,0),tD=rows.reduce((s,g)=>s+g.ivaDed,0),tN=rows.reduce((s,g)=>s+g.ivaNoDed,0),tn=rows.reduce((s,g)=>s+g.n,0);
-  cont.innerHTML="<div class='tabla-wrapper'><table><thead><tr><th>Cuenta</th><th>Tipo de gasto</th><th class='td-r'>Facturas</th><th class='td-r'>Base</th><th class='td-r'>IVA deducible</th><th class='td-r'>IVA no deducible</th><th class='td-r'>Gasto total</th></tr></thead><tbody>"+
-    rows.map(g=>"<tr><td style='font-family:monospace;'>"+g.cuenta+"</td><td>"+(g.nombre||"")+"</td><td class='td-r'>"+g.n+"</td><td class='td-r'>"+eur2(g.base)+"</td><td class='td-r'>"+eur2(g.ivaDed)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(g.ivaNoDed)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(g.base+g.ivaNoDed)+"</td></tr>").join("")+
-    "<tr style='border-top:2px solid var(--gray-200);font-weight:600;'><td colspan='2'>TOTAL</td><td class='td-r'>"+tn+"</td><td class='td-r'>"+eur2(tB)+"</td><td class='td-r'>"+eur2(tD)+"</td><td class='td-r'>"+eur2(tN)+"</td><td class='td-r'>"+eur2(tB+tN)+"</td></tr>"+
-    "</tbody></table></div>"+
-    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>La columna &laquo;Gasto total&raquo; = base + IVA no deducible (el IVA deducible no es gasto, se recupera). En un ticket sin factura el IVA no se deduce, asi que suma como gasto. La cuenta de gasto sale de cada factura o, si esta vacia, de la ficha del proveedor.</div>";
-  document.getElementById("dgBtn").style.display="";
-}
-function expDG(){
-  if(!window.WDG||!window.WDG.length){alert("Genera primero el desglose.");return;}
-  const anio=String(document.getElementById("dgAnio").value);
-  const cn=(document.getElementById("dgCli").options[document.getElementById("dgCli").selectedIndex]||{}).text||"";
-  const headers=["Cuenta","Tipo de gasto","Facturas","Base","IVA deducible","IVA no deducible","Gasto total"];
-  const data=window.WDG.map(g=>[g.cuenta,g.nombre,g.n,round2(g.base),round2(g.ivaDed),round2(g.ivaNoDed),round2(g.base+g.ivaNoDed)]);
-  try{
-    const wb=XLSX.utils.book_new();
-    const ws=XLSX.utils.aoa_to_sheet([headers,...data]);
-    ws["!cols"]=[{wch:16},{wch:26},{wch:9},{wch:12},{wch:14},{wch:16},{wch:13}];
-    XLSX.utils.book_append_sheet(wb,ws,"Gastos");
-    const u=XLSX.write(wb,{bookType:"xlsx",type:"array"});
-    const b=new Blob([u],{type:"application/octet-stream"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(b);
-    a.download=("gastos_"+cn+"_"+anio).replace(/[^A-Za-z0-9_-]+/g,"_")+".xlsx";
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-  }catch(e){console.error("Error desglose:",e);alert("Error al generar el Excel: "+e.message);}
-}
-
-function openEpi(id){
-  const e=(window.WM||{})[id]||{};
-  document.getElementById("epiId").value=id||"";
-  document.getElementById("epiMTitle").textContent=id?"Editar epigrafe":"Nuevo epigrafe";
-  document.getElementById("epiCod").value=e.id||"";
-  document.getElementById("epiNom").value=e.nombre||"";
-  document.getElementById("epiAnio").value=e.anio||2026;
-  document.getElementById("epiIrpfPct").value=e.pagoFraccIrpfPct!=null?e.pagoFraccIrpfPct:2;
-  document.getElementById("epiRedPct").value=e.reduccionGralPct!=null?e.reduccionGralPct:5;
-  document.getElementById("epiIcIva").value=e.ingresoCuentaIvaPct!=null?e.ingresoCuentaIvaPct:2;
-  document.getElementById("epiCmIva").value=e.cuotaMinIvaPct!=null?e.cuotaMinIvaPct:6;
-  document.getElementById("epiModIrpf").value=modsToText(e.modulosIrpf);
-  document.getElementById("epiModIva").value=modsToText(e.modulosIva);
-  document.getElementById("epiModal").classList.add("open");
-}
-async function saveEpi(){
-  const cod=document.getElementById("epiCod").value.trim();
-  if(!cod){alert("Indica el codigo del epigrafe.");return;}
-  await fbS("iva_modulos",cod,{id:cod,nombre:document.getElementById("epiNom").value.trim(),
-    anio:parseInt(document.getElementById("epiAnio").value,10)||2026,
-    pagoFraccIrpfPct:parseFloat(document.getElementById("epiIrpfPct").value)||0,
-    reduccionGralPct:parseFloat(document.getElementById("epiRedPct").value)||0,
-    ingresoCuentaIvaPct:parseFloat(document.getElementById("epiIcIva").value)||0,
-    cuotaMinIvaPct:parseFloat(document.getElementById("epiCmIva").value)||0,
-    modulosIrpf:parseMods(document.getElementById("epiModIrpf").value),
-    modulosIva:parseMods(document.getElementById("epiModIva").value)});
-  closeM("epiModal");
-}
-async function delEpi(id){if(!confirm("Eliminar el epigrafe "+id+"?"))return;await fbD("iva_modulos",id);}
-async function seedEpi673(){
-  await fbS("iva_modulos","673.2",{id:"673.2",nombre:"Otros cafes y bares",anio:2025,
-    pagoFraccIrpfPct:2,reduccionGralPct:5,ingresoCuentaIvaPct:2,cuotaMinIvaPct:6,
-    modulosIrpf:[{nombre:"Personal asalariado",valor:1643.93},{nombre:"Personal no asalariado",valor:11413.08},{nombre:"Potencia electrica",valor:94.48},{nombre:"Mesas",valor:119.67},{nombre:"Longitud de barra",valor:163.76},{nombre:"Maquina tipo A",valor:806.23},{nombre:"Maquinas tipo B",valor:2947.75}],
-    modulosIva:[{nombre:"Personal asalariado",valor:2577.52},{nombre:"Potencia electrica",valor:47.83},{nombre:"Mesas",valor:56.69},{nombre:"Longitud de barra",valor:62.89},{nombre:"Maquina tipo A",valor:177.15},{nombre:"Maquinas tipo B",valor:655.45}]});
-}
-
-function renderFichaForm(){
-  const cont=document.getElementById("fichaForm");if(!cont)return;
-  const cid=document.getElementById("fiCli").value;
-  if(!cid){cont.innerHTML="";return;}
-  const f=(window.WFI||{})[cid]||{regimen:"directa",epigrafe:"",indice:1};
-  const eps=Object.values(window.WM||{}).sort((a,b)=>(a.id||"").localeCompare(b.id||""));
-  cont.innerHTML="<div class='mg2' style='max-width:640px;'>"+
-    "<div class='fg'><label class='fl'>Regimen</label><select class='fi2' id='fiReg' onchange='renderFichaForm2()'>"+
-      "<option value='directa'"+(f.regimen==="directa"?" selected":"")+">Estimacion directa</option>"+
-      "<option value='objetiva'"+(f.regimen==="objetiva"?" selected":"")+">Estimacion objetiva (modulos)</option></select></div>"+
-    "<div class='fg'><label class='fl'>IVA</label><label style='display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--gray-600);height:38px;'><input type='checkbox' id='fiSinIva' onchange='renderFichaForm2()' style='width:16px;height:16px;'"+(f.sinIva?" checked":"")+"> Actividad exenta / sin IVA (no presenta 303; solo 130/111/115)</label></div>"+
-    "<div class='fg' id='fiRegGastoWrap'><label class='fl'>Regla de gasto (sin IVA)</label><select class='fi2' id='fiRegGasto'>"+
-      "<option value='exenta'"+((f.regGasto||'exenta')==='exenta'?" selected":"")+">Exenta art.20 &mdash; base+IVA, salvo con retencion (solo base)</option>"+
-      "<option value='recargo'"+(f.regGasto==='recargo'?" selected":"")+">Recargo de equivalencia &mdash; base+IVA siempre (incl. alquiler)</option>"+
-      "</select></div>"+
-    "<div class='fg' id='fiEpiWrap'><label class='fl'>Epigrafe</label><select class='fi2' id='fiEpi' onchange='renderFichaForm2()'><option value=''>Seleccionar...</option>"+
-      eps.map(e=>"<option value='"+e.id+"'"+(f.epigrafe===e.id?" selected":"")+">"+e.id+" "+(e.nombre||"")+"</option>").join("")+"</select></div></div>"+
-    "<div style='margin-top:14px;'><div class='fl' style='margin-bottom:6px;'>Modelos que presenta <span style='color:var(--gray-400);font-weight:400;text-transform:none;letter-spacing:0;'>(se proponen segun regimen y exencion; ajusta lo que quieras)</span></div><div id='fiModelos' style='display:flex;flex-wrap:wrap;gap:6px 16px;'></div></div>"+
-    "<div id='fiUnidades' style='margin-top:12px;'></div>"+
-    "<div class='ma' style='justify-content:flex-start;'><button class='btn btn-primary' onclick='saveFicha()'>Guardar ficha fiscal</button></div>";
-  renderModelos(f);
-  renderFichaForm2();
-}
-const MODELOS=[["130","130 IRPF"],["131","131 IRPF modulos"],["303","303 IVA"],["111","111 Retenc. trabajo/prof."],["115","115 Retenc. alquiler"],["349","349 Intracomunitario"],["347","347 Operac. terceros"],["390","390 Resumen IVA"],["180","180 Resumen alquiler"],["190","190 Resumen trab./prof."]];
-function modelosPropuestos(reg,sinIva){
-  const s=[]; s.push(reg==="objetiva"?"131":"130"); if(!sinIva){s.push("303");s.push("390");} return s;
-}
-function renderModelos(f){
-  const cont=document.getElementById("fiModelos");if(!cont)return;
-  const reg=(document.getElementById("fiReg")||{}).value||f.regimen||"directa";
-  const sinIva=(document.getElementById("fiSinIva")||{}).checked!=null?document.getElementById("fiSinIva").checked:!!f.sinIva;
-  const sel=new Set(Array.isArray(f.modelos)&&f.modelos.length?f.modelos:modelosPropuestos(reg,sinIva));
-  cont.innerHTML=MODELOS.map(([c,l])=>"<label style='display:flex;align-items:center;gap:5px;font-size:12px;font-weight:400;color:var(--gray-600);white-space:nowrap;'><input type='checkbox' id='fiMod_"+c+"' value='"+c+"'"+(sel.has(c)?" checked":"")+"> "+l+"</label>").join("");
-}
-function renderFichaForm2(){
-  const cid=document.getElementById("fiCli").value;
-  const f=(window.WFI||{})[cid]||{indice:1};
-  const reg=document.getElementById("fiReg").value;
-  const sinIvaChk=(document.getElementById("fiSinIva")||{}).checked;
-  const rgw=document.getElementById("fiRegGastoWrap"); if(rgw)rgw.style.display=sinIvaChk?"":"none";
-  document.getElementById("fiEpiWrap").style.display=(reg==="objetiva")?"":"none";
-  const u=document.getElementById("fiUnidades");
-  if(reg!=="objetiva"){u.innerHTML="<div style='font-size:12px;color:var(--gray-400);'>En estimacion directa no hay modulos: la liquidacion saldra de los ingresos y gastos registrados.</div>"+
-    (sinIvaChk?"":("<div class='fg' style='max-width:380px;margin-top:10px;'><label class='fl'>% IVA de las ventas</label><input type='number' step='0.01' class='fi2' id='fiIvaVentas' value='"+(f.ivaVentasPct!=null&&f.ivaVentasPct!==""?f.ivaVentasPct:21)+"'></div>"+
-     "<div style='font-size:11px;color:var(--gray-400);margin-top:2px;max-width:440px;'>Los importes de &laquo;Ingresos por mes&raquo; se toman CON IVA incluido: la app separa la base (al 130) y el IVA repercutido (al 303) con este porcentaje.</div>"));return;}
-  const e=(window.WM||{})[document.getElementById("fiEpi").value];
-  if(!e){u.innerHTML="<div style='font-size:12px;color:var(--warning);'>Selecciona un epigrafe (o crealo antes en la tabla de arriba).</div>";return;}
-  const ui=f.unidadesIrpf||{},uv=f.unidadesIva||{};
-  const tbl=(arr,mapObj,pref)=>"<table style='width:100%;font-size:12px;margin-bottom:6px;'><thead><tr><th style='text-align:left;'>Modulo</th><th style='text-align:right;'>Valor/ud</th><th style='text-align:right;'>Unidades</th></tr></thead><tbody>"+
-    arr.map((m,i)=>"<tr><td>"+m.nombre+"</td><td style='text-align:right;color:var(--gray-400);'>"+m.valor+"</td><td style='text-align:right;'><input type='number' step='0.01' style='width:88px;padding:4px;border:1px solid var(--gray-200);border-radius:5px;text-align:right;' id='"+pref+i+"' value='"+(mapObj[m.nombre]!=null?mapObj[m.nombre]:"")+"'></td></tr>").join("")+"</tbody></table>";
-  u.innerHTML="<div class='mg2'><div><div class='fl' style='margin-bottom:6px;'>Unidades IRPF</div>"+tbl(e.modulosIrpf||[],ui,"uir")+"</div><div><div class='fl' style='margin-bottom:6px;'>Unidades IVA</div>"+tbl(e.modulosIva||[],uv,"uiv")+"</div></div>"+
-    "<div class='mg2' style='max-width:600px;margin-top:8px;'>"+
-      "<div class='fg'><label class='fl'>% pago fraccionado 131 (2 sin asalariados / 3 con uno / 4 general)</label><input type='number' step='0.01' class='fi2' id='fiPagoFracc' value='"+(f.pagoFraccIrpfPct!=null&&f.pagoFraccIrpfPct!==""?f.pagoFraccIrpfPct:(e.pagoFraccIrpfPct!=null?e.pagoFraccIrpfPct:2))+"'></div>"+
-      "<div class='fg'><label class='fl'>Indice corrector (0,90 pequena dimension; 1 si ninguno)</label><input type='number' step='0.01' class='fi2' id='fiIndice' value='"+(f.indice!=null?f.indice:1)+"'></div>"+
-      "<div class='fg'><label class='fl'>Incremento unidades asalariados vs ano anterior (parte 0,40)</label><input type='number' step='0.01' class='fi2' id='fiIncrAsal' value='"+(f.incrementoAsalariados!=null&&f.incrementoAsalariados!==""?f.incrementoAsalariados:"")+"' placeholder='0 si no aumento'></div>"+
-      "<div class='fg'><label class='fl'>Incentivo a la inversion (amortizaciones, EUR)</label><input type='number' step='0.01' class='fi2' id='fiIncInver' value='"+(f.incentivoInversion!=null?f.incentivoInversion:"")+"' placeholder='0'></div>"+
-      "<div class='fg'><label class='fl'>Fecha inicio de actividad (solo si es alta a mitad de ano)</label><input type='date' class='fi2' id='fiFechaInicio' value='"+(f.fechaInicio||"")+"'></div>"+
-      "<div class='fg'><label class='fl'>Fecha de cese (solo si causa baja durante el ano)</label><input type='date' class='fi2' id='fiFechaCese' value='"+(f.fechaCese||"")+"'></div>"+
-    "</div>"+
-    "<div style='font-size:11px;color:var(--gray-400);margin-top:2px;max-width:620px;'>Deja las fechas <strong>en blanco</strong> si el cliente esta de alta todo el ano. Si hay alta o baja a mitad de ano, la liquidacion solo calcula los trimestres de actividad, prorratea por dias el trimestre de inicio/cese, y prorratea la cuota anual de IVA por los dias de alta.</div>"+
-    "<div style='font-size:11px;color:var(--gray-400);margin-top:4px;max-width:620px;'>El <strong>incentivo al empleo</strong> lo calcula la app sola: coge las unidades del modulo &laquo;personal asalariado&raquo;, aplica el coeficiente por tramos (0,10 hasta 1; 0,15 hasta 3; 0,20 hasta 5; 0,25 hasta 8; 0,30 mas) y lo multiplica por el valor/ud. Solo metes arriba el <strong>incremento</strong> de plantilla respecto al ano anterior (si lo hubo), que lleva el 0,40. Cadena 131: modulos &minus; incentivos = minorado &times; indice &times; (1&minus;reduccion) &times; % pago fraccionado.</div>";
-}
-async function saveFicha(){
-  const cid=document.getElementById("fiCli").value;if(!cid){alert("Selecciona un cliente.");return;}
-  const reg=document.getElementById("fiReg").value;
-  const modelos=MODELOS.map(m=>m[0]).filter(c=>{const el=document.getElementById("fiMod_"+c);return el&&el.checked;});
-  const rec={id:cid,regimen:reg,epigrafe:"",unidadesIrpf:{},unidadesIva:{},indice:1,sinIva:!!(document.getElementById("fiSinIva")||{}).checked,regGasto:(document.getElementById("fiRegGasto")||{}).value||"exenta",modelos};
-  const ivv=document.getElementById("fiIvaVentas");if(ivv&&ivv.value!=="")rec.ivaVentasPct=parseFloat(ivv.value)||0;
-  if(reg==="objetiva"){
-    const epi=document.getElementById("fiEpi").value;rec.epigrafe=epi;
-    const e=(window.WM||{})[epi]||{};
-    (e.modulosIrpf||[]).forEach((m,i)=>{const inp=document.getElementById("uir"+i);if(inp&&inp.value!==""){const v=parseFloat(inp.value);if(!isNaN(v))rec.unidadesIrpf[m.nombre]=v;}});
-    (e.modulosIva||[]).forEach((m,i)=>{const inp=document.getElementById("uiv"+i);if(inp&&inp.value!==""){const v=parseFloat(inp.value);if(!isNaN(v))rec.unidadesIva[m.nombre]=v;}});
-    const ind=document.getElementById("fiIndice");rec.indice=ind?(parseFloat(ind.value)||1):1;
-    const pf=document.getElementById("fiPagoFracc");rec.pagoFraccIrpfPct=pf&&pf.value!==""?(parseFloat(pf.value)||0):"";
-    const ia=document.getElementById("fiIncrAsal");rec.incrementoAsalariados=ia&&ia.value!==""?(parseFloat(ia.value)||0):0;
-    const ii=document.getElementById("fiIncInver");rec.incentivoInversion=ii&&ii.value!==""?(parseFloat(ii.value)||0):0;
-    const fi=document.getElementById("fiFechaInicio");rec.fechaInicio=fi&&fi.value?fi.value:"";
-    const fc=document.getElementById("fiFechaCese");rec.fechaCese=fc&&fc.value?fc.value:"";
-  }
-  const prevF=(window.WFI||{})[cid];if(prevF&&prevF.arrendadores)rec.arrendadores=prevF.arrendadores; // preserva datos del 180
-  if(prevF&&prevF.ret111Nom)rec.ret111Nom=prevF.ret111Nom; // preserva retenciones de nominas del 111
-  await fbS("iva_fiscal",cid,rec);alert("Ficha fiscal guardada.");
-}
-async function save111(cid){
-  const prev=(window.WFI||{})[cid]||{id:cid};
-  const nom={};
-  [1,2,3,4].forEach(t=>{const el=document.getElementById("ret111_"+t);if(el&&el.value!=="")nom[t]=parseFloat(el.value)||0;});
-  await fbS("iva_fiscal",cid,{...prev,id:cid,ret111Nom:nom});
-  if(typeof calcLiq==="function")calcLiq();
-  alert("Retenciones de nominas guardadas.");
-}
-window.save111=save111;
-async function save180(cid,n){
-  const prev=(window.WFI||{})[cid]||{id:cid};
-  const arrd={...(prev.arrendadores||{})};
-  for(let i=0;i<n;i++){const mi=document.getElementById("a180m_"+i);if(!mi)continue;const key=mi.getAttribute("data-key");const re=document.getElementById("a180r_"+i);arrd[key]={municipio:(mi.value||"").trim(),refCatastral:re?(re.value||"").trim():""};}
-  await fbS("iva_fiscal",cid,{...prev,id:cid,arrendadores:arrd});
-  alert("Datos del 180 guardados.");
-}
-window.save180=save180;
-
-function onExpTipoChange(){
-  document.getElementById("apuCfg").style.display=(document.getElementById("eT").value==="APU")?"block":"none";
-}
-
-function getTipoFactura(formato){
-  return (formato==="IVR"||formato==="FAC"||formato==="LFA")?"IVR":"IVS";
-}
-
-function getCuentaParaFactura(f){
-  const cc=(window.WCC||[]).find(c=>
-    c.clienteDespachoId===f.clienteDespachoId && c.nombre===f.nombre
-  )||{cuenta:f.cuenta||"",contrapartida:"",domicilio:"",poblacion:"",cp:"",provincia:"",telefono:"",nif:""};
-  // La cuenta de gasto/venta de la propia factura manda sobre la de la ficha
-  return f.contrapartida?{...cc,contrapartida:f.contrapartida}:cc;
-}
-
-// Tipo de IVA de FactuSOL segun el porcentaje (config por defecto: 1=21%, 2=10%, 3=4%, 4=0%/exento)
-function ivaTipoFS(pct){
-  const p=parseFloat(pct)||0;
-  if(p===21)return 1; if(p===10)return 2; if(p===4)return 3; return 4;
-}
-
-// Genera las lineas de detalle (LFA emitidas / LFR recibidas) de una factura:
-// una linea por cada base de IVA, sin articulo, con el importe. Se enlaza con la
-// cabecera por "Numero de documento" (col B).
-function lineasFactura(f, docNum){
-  const lineas=[];
-  const desc=f.numero?("Factura "+f.numero):"Factura";
-  const base2=parseFloat(f.base2)||0;
-  const add=(pos,base,pct)=>{
-    const row=new Array(12).fill("");
-    row[0]=1;                 // A  Tipo de documento
-    row[1]=docNum;            // B  Numero de documento (enlace con la cabecera)
-    row[2]=pos;               // C  Posicion de la linea
-    row[3]="";                // D  Articulo (en blanco: sin catalogo)
-    row[4]=desc;              // E  Descripcion
-    row[5]=1;                 // F  Cantidad
-    row[9]=base;              // J  Precio del articulo (= base, cantidad 1)
-    row[10]=base;             // K  Total (cantidad x precio = base imponible)
-    row[11]=ivaTipoFS(pct);   // L  Tipo de IVA
-    lineas.push(row);
-  };
-  add(1, parseFloat(f.base1)||0, f.pct1);
-  if(base2>0) add(2, base2, f.pct2);
-  return lineas;
-}
-
-// Genera fila en formato FRE (98 columnas)
-function rowFRE(f, i, docNum){
-  const cc=getCuentaParaFactura(f);
-  const fe=f.fecha?new Date(f.fecha+"T12:00:00"):null;
-  const cod=parseInt(cc.cuenta)||i+1;
-  const row=new Array(98).fill("");
-  row[0]=1;                          // Tipo documento
-  row[1]=docNum||i+1;                // Numero documento = correlativo continuo por cliente
-  row[2]=String(f.numero||"").substring(0,20); // Codigo exterior = numero de factura del proveedor ("Codigo de factura" en Delsol)
-  row[3]="";                         // Referencia ("Su ref." en Delsol, se deja en blanco)
-  row[4]=fe;                         // Fecha
-  row[5]=cod;                        // Proveedor
-  row[6]=1;                          // Estado
-  row[7]=cod;                        // Codigo cliente
-  row[8]=f.nombre||"";             // Nombre proveedor
-  row[9]=cc.domicilio||"";         // Domicilio
-  row[10]=cc.poblacion||"";        // Poblacion
-  row[11]=cc.cp||"";               // CP
-  row[12]=cc.provincia||"";        // Provincia
-  row[13]=f.nif||cc.nif||"";      // NIF
-  row[14]=0;                         // Tipo IVA
-  row[15]=0;                         // Recargo equiv
-  row[16]=cc.telefono||"";         // Telefono
-  row[17]=parseFloat(f.base1)||0;  // Importe neto 1
-  row[18]=parseFloat(f.base2)||0;  // Importe neto 2
-  // cols 19-43 descuentos/pp/portes/financiacion -> vacío
-  row[44]=parseFloat(f.base1)||0;  // Base imponible 1
-  row[45]=parseFloat(f.base2)||0;  // Base imponible 2
-  row[46]=0;                         // Base imponible 3
-  row[47]=parseFloat(f.pct1)||0;   // % IVA 1
-  row[48]=parseFloat(f.pct2)||0;   // % IVA 2
-  row[49]=0;                         // % IVA 3
-  row[50]=parseFloat(f.iva1)||0;   // Importe IVA 1
-  row[51]=parseFloat(f.iva2)||0;   // Importe IVA 2
-  row[52]=0;                         // Importe IVA 3
-  // cols 53-59 recargo equivalencia -> 0
-  row[59]=parseFloat(f.retPct)||0; // % retencion
-  row[60]=parseFloat(f.retImporte)||0; // Importe retencion
-  row[61]=parseFloat(f.total)||0;  // Total
-  row[62]="";                        // Forma pago
-  row[65]=0;                         // Traspasada contabilidad -> 0
-  row[72]=parseFloat(f.deducible)||0; // Factura deducible
-  row[73]=1;                         // Usuario creo
-  row[74]=1;                         // Ultimo usuario
-  row[75]="GEN";                     // Almacen
-  row[86]=0;                         // Enviado mail
-  row[87]=0;                         // Proveedor/Acreedor
-  row[88]=0;                         // Bien inversion
-  row[90]=parseFloat(f.retPct)?parseInt(f.retPct):0; // Tipo retencion
-  row[91]=0;                         // Clave operacion
-  row[95]=0;                         // Regimen esp caja
-  return row;
-}
-
-// Genera fila en formato FAC (119 columnas)
-function rowFAC(f, i, docNum){
-  const cc=getCuentaParaFactura(f);
-  const fe=f.fecha?new Date(f.fecha+"T12:00:00"):null;
-  const cod=parseInt(cc.cuenta)||i+1;
-  const row=new Array(119).fill("");
-  row[0]=1;                          // Tipo documento
-  row[1]=docNum||i+1;                // Numero documento = correlativo continuo por cliente
-  row[2]=String(f.numero||"");       // Referencia (Su ref.) = numero real de la factura
-  row[3]=fe;                         // Fecha
-  row[4]=0;                          // Estado
-  row[5]="GEN";                      // Almacen
-  row[6]=1;                          // Agente
-  row[7]="";                         // Codigo proveedor
-  row[8]=cod;                        // Codigo cliente
-  row[9]=f.nombre||"";             // Nombre cliente
-  row[10]=cc.domicilio||"";        // Domicilio
-  row[11]=cc.poblacion||"";        // Poblacion
-  row[12]=cc.cp||"";               // CP
-  row[13]=cc.provincia||"";        // Provincia
-  row[14]=f.nif||cc.nif||"";      // NIF
-  row[15]=0;                         // Tipo IVA
-  row[16]=0;                         // Recargo equiv
-  row[17]=cc.telefono||"";         // Telefono
-  row[18]=parseFloat(f.base1)||0;  // Importe neto 1
-  row[19]=parseFloat(f.base2)||0;  // Importe neto 2
-  // cols 20-44 descuentos/pp/portes/financiacion -> vacío
-  row[45]=parseFloat(f.base1)||0;  // Base imponible 1
-  row[46]=parseFloat(f.base2)||0;  // Base imponible 2
-  row[47]=0;                         // Base imponible 3
-  row[48]=parseFloat(f.pct1)||0;   // % IVA 1
-  row[49]=parseFloat(f.pct2)||0;   // % IVA 2
-  row[50]=0;                         // % IVA 3
-  row[51]=parseFloat(f.iva1)||0;   // Importe IVA 1
-  row[52]=parseFloat(f.iva2)||0;   // Importe IVA 2
-  row[53]=0;                         // Importe IVA 3
-  row[60]=parseFloat(f.retPct)||0; // % retencion
-  row[61]=parseFloat(f.retImporte)||0; // Importe retencion
-  row[62]=parseFloat(f.total)||0;  // Total
-  row[63]=1;                         // Forma pago
-  row[64]=0;                         // Portes
-  row[75]=0;                         // Cobrado
-  row[76]=1;                         // Tipo creacion
-  row[77]=1;                         // Tipo recibo
-  row[79]=0;                         // Traspasada
-  row[82]=0;                         // Impresa
-  row[86]=1;                         // Usuario creo
-  row[87]=1;                         // Ultimo usuario
-  row[112]=0;                        // Clave operacion
-  row[114]=0;                        // Tipo retencion
-  row[115]=0;                        // Clave op intracom
-  row[116]=0;                        // Regimen esp caja
-  return row;
-}
-
-// ===== ASIENTOS (fichero APU) para ContaSOL =====
-function round2(x){return Math.round((parseFloat(x)||0)*100)/100;}
-// Una linea del asiento (17 columnas A..Q)
-function apuLine(cfg,asNum,fe,orden,cuenta,concepto,doc,debe,haber,tiva){
-  const row=new Array(17).fill("");
-  row[0]=cfg.diario;                 // A Diario
-  row[1]=fe;                         // B Fecha
-  row[2]=asNum;                      // C Asiento
-  row[3]=orden;                      // D Orden
-  row[4]=cuenta;                     // E Cuenta
-  row[6]=concepto;                   // G Concepto
-  row[7]=doc;                        // H Documento
-  if(debe)row[8]=round2(debe);       // I Importe debe euros
-  if(haber)row[9]=round2(haber);     // J Importe haber euros
-  row[10]="E";                       // K Moneda
-  row[11]=0;                         // L Punteo
-  if(tiva)row[12]=tiva;              // M Tipo de IVA (R/S)
-  return row;
-}
-// Asiento de una factura EMITIDA (venta): Debe cliente / Haber ventas + IVA rep
-function asientoEmitida(f,cfg,asNum){
-  const cc=getCuentaParaFactura(f);
-  const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
-  const num=String(f.numero||""),doc=num.substring(0,5),con="S/Fra "+num;
-  const cliente=cc.cuenta||f.cuenta||"",contra=cc.contrapartida||"70000000";
-  const base=(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
-  const iva1=parseFloat(f.iva1)||0,iva2=parseFloat(f.iva2)||0;
-  const total=parseFloat(f.total)||0,ret=parseFloat(f.retImporte)||0;
-  const L=[];let o=1;
-  L.push(apuLine(cfg,asNum,fe,o++,cliente,con,doc,total,0,""));          // Debe cliente (total)
-  if(ret>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.retE,con,doc,ret,0,""));  // Debe retencion (473)
-  L.push(apuLine(cfg,asNum,fe,o++,contra,con,doc,0,base,""));            // Haber ventas (base)
-  if(iva1>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaR,con,doc,0,iva1,"R"));// Haber IVA repercutido
-  if(iva2>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaR,con,doc,0,iva2,"R"));
-  return L;
-}
-// Asiento de una factura RECIBIDA (compra/gasto): Debe gasto + IVA sop / Haber proveedor
-function asientoRecibida(f,cfg,asNum){
-  const cc=getCuentaParaFactura(f);
-  const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
-  const num=String(f.numero||""),doc=num.substring(0,5),con="S/Fra "+num;
-  const prov=cc.cuenta||f.cuenta||"",contra=cc.contrapartida||"60000000";
-  const base=(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
-  const iva1=parseFloat(f.iva1)||0,iva2=parseFloat(f.iva2)||0;
-  const total=parseFloat(f.total)||0,ret=parseFloat(f.retImporte)||0;
-  const L=[];let o=1;
-  L.push(apuLine(cfg,asNum,fe,o++,contra,con,doc,base,0,""));            // Debe gasto (base)
-  if(iva1>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaS,con,doc,iva1,0,"S"));// Debe IVA soportado
-  if(iva2>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaS,con,doc,iva2,0,"S"));
-  L.push(apuLine(cfg,asNum,fe,o++,prov,con,doc,0,total,""));            // Haber proveedor (total)
-  if(ret>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.retR,con,doc,0,ret,""));  // Haber retencion (4751)
-  return L;
-}
-
-// Genera fila del Libro de IVA REPERCUTIDO (IVR) para ContaSOL - 64 columnas (A..BL)
-function rowIVR(f, i){
-  const cc=getCuentaParaFactura(f);
-  const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
-  const b2=parseFloat(f.base2)||0, i2=parseFloat(f.iva2)||0;
-  const row=new Array(64).fill("");
-  row[0]=i+1;                        // A  Codigo (campo indice)
-  row[1]=1;                          // B  Libro de IVA
-  row[2]=fe;                         // C  Fecha
-  row[3]=cc.cuenta||f.cuenta||"";    // D  Cuenta
-  row[4]=f.numero||"";               // E  Factura
-  row[5]=f.nombre||"";               // F  Nombre
-  row[6]=f.nif||cc.nif||"";          // G  C.I.F.
-  row[7]=0;                          // H  Tipo de operacion
-  row[8]=parseFloat(f.base1)||0;     // I  Base 1
-  row[9]=b2||"";                     // J  Base 2
-  row[11]=parseFloat(f.pct1)||21;    // L  % de IVA 1
-  row[12]=f.pct2||"";                // M  % de IVA 2
-  row[17]=parseFloat(f.iva1)||0;     // R  Importe de IVA 1
-  row[18]=i2||"";                    // S  Importe de IVA 2
-  row[23]=parseFloat(f.total)||0;    // X  Total
-  row[42]=Number(f.m347)||0;         // AQ Incluir en el modelo 347
-  if(f.retPct){row[43]=parseFloat(f.retPct)||0;row[44]=parseFloat(f.retImporte)||0;} // AR/AS retencion
-  row[47]=fe;                        // AV Fecha de expedicion de la factura
-  return row;
-}
-
-// Genera fila del Libro de IVA SOPORTADO (IVS) para ContaSOL - 73 columnas (A..BU)
-function rowIVS(f, i){
-  const cc=getCuentaParaFactura(f);
-  const fe=f.fecha?f.fecha.split("-").reverse().join("/"):"";
-  const b2=parseFloat(f.base2)||0, i2=parseFloat(f.iva2)||0;
-  const row=new Array(73).fill("");
-  row[0]=i+1;                        // A  Codigo (campo indice)
-  row[1]=1;                          // B  Libro de IVA
-  row[2]=fe;                         // C  Fecha
-  row[3]=cc.cuenta||f.cuenta||"";    // D  Cuenta
-  row[4]=f.numero||"";               // E  Factura
-  row[5]=f.nombre||"";               // F  Nombre
-  row[6]=f.nif||cc.nif||"";          // G  C.I.F.
-  row[7]=0;                          // H  Tipo de operacion
-  row[8]=(f.deducible==="0")?1:0;    // I  Deducible en ContaSOL: 0=deducible, 1=no deducible, 2=prorrata (f.deducible "1"=Si -> 0)
-  row[51]=(f.deducible==="0")?0:100; // AZ Porcentaje deducible (100% si es deducible)
-  row[9]=parseFloat(f.base1)||0;     // J  Base 1
-  row[10]=b2||"";                    // K  Base 2
-  row[12]=parseFloat(f.pct1)||21;    // M  % de IVA 1
-  row[13]=f.pct2||"";                // N  % de IVA 2
-  row[18]=parseFloat(f.iva1)||0;     // S  Importe de IVA 1
-  row[19]=i2||"";                    // T  Importe de IVA 2
-  row[24]=parseFloat(f.total)||0;    // Y  Total
-  row[44]=Number(f.m347)||0;         // AS Incluir en el modelo 347
-  if(f.retPct){row[45]=parseFloat(f.retPct)||0;row[46]=parseFloat(f.retImporte)||0;} // AT/AU retencion
-  row[49]=fe;                        // AX Fecha expedicion de la factura
-  return row;
-}
-
-function prevExp(){
-  const cid=document.getElementById("eC").value,formato=document.getElementById("eT").value;
-  const anio=document.getElementById("eA").value,per=document.getElementById("eP").value;
-  if(!cid){alert("Selecciona un cliente.");return;}
-  const cl=(window.WC||[]).find(c=>c.id===cid);
-  const tipoF=getTipoFactura(formato);
-  let fs=(window.WF||[]).filter(f=>{
-    if(f.clienteDespachoId!==cid)return false;
-    if(formato!=="APU"&&f.tipo!==tipoF)return false;   // APU incluye emitidas y recibidas
-    if(f.fecha){
-      const d=new Date(f.fecha+"T12:00:00");
-      if(anio&&d.getFullYear()!==parseInt(anio))return false;
-      if(per&&q(f.fecha)!==per)return false;
-    }
-    return true;
-  }).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")||(a.creado||"").localeCompare(b.creado||""));
-  const res=document.getElementById("eRes");
-  res.style.display="block";
-  res.innerHTML="<strong>"+(cl?cl.nombre:"")+"</strong> &middot; "+formato+" &middot; "+anio+(per?" &middot; "+per+"T":"")+" &middot; <strong>"+fs.length+" facturas</strong>";
-  document.getElementById("ePrev").style.display=fs.length?"block":"none";
-  document.getElementById("btnExp").style.display=fs.length?"inline-block":"none";
-  if(!fs.length){res.innerHTML+=" &middot; Sin facturas en este periodo.";return;}
-
-  // Obtener cabeceras reales del archivo Delsol
-  const cvIVR=["Codigo","Libro de IVA","Fecha","Cuenta","Factura","Nombre","C.I.F.","Tipo de operacion","Base 1","Base 2","Base 3","% de IVA 1","% de IVA 2","% de IVA 3","% de recargo 1","% de recargo 2","% de recargo 3","Importe de IVA 1","Importe de IVA 2","Importe de IVA 3","Importe de recargo 1","Importe de recargo 2","Importe de recargo 3","Total","Factura rectificada","Fecha factura rectificativa","Total factura rectificativa","% IVA 1 rectificativa","% IVA 2 rectificativa","% IVA 3 rectificativa","% recargo 1 rectificativa","% recargo 2 rectificativa","% recargo 3 rectificativa","Base 1 rectificativa","Base 2 rectificativa","Base 3 rectificativa","Importe IVA 1 rectificativa","Importe IVA 2 rectificativa","Importe IVA 3 rectificativa","Importe recargo 1 rectificativa","Importe recargo 2 rectificativa","Importe recargo 3 rectificativa","Incluir en el modelo 347","Porcentaje de retencion","Importe de retencion","Tipo de retencion","Importe retencion factura rectificativa","Fecha de expedicion de la factura","Base exenta factura","Clave de operacion","Identificacion fiscal","Tipo de impuesto","Base exenta factura rectificativa","Base imponible a coste","Numero de facturas","Primer numero","Ultimo numero","Tipo de operacion (2)","Dias de plazo","Descripcion de los bienes","Otras facturas o documentacion","Estado miembro origen o destino del bien","Importe de suplidos","Incluir exportaciones en la liquidacion"];
-  const cvIVS=["Codigo","Libro de IVA","Fecha","Cuenta","Factura","Nombre","C.I.F.","Tipo de operacion","Deducible","Base 1","Base 2","Base 3","% de IVA 1","% de IVA 2","% de IVA 3","% de recargo 1","% de recargo 2","% de recargo 3","Importe de IVA 1","Importe de IVA 2","Importe de IVA 3","Importe de recargo 1","Importe de recargo 2","Importe de recargo 3","Total","Bienes soportados","Factura rectificada","Fecha factura rectificativa","Total factura rectificativa","% IVA 1 rectificativa","% IVA 2 rectificativa","% IVA 3 rectificativa","% recargo 1 rectificativa","% recargo 2 rectificativa","% recargo 3 rectificativa","Base 1 rectificativa","Base 2 rectificativa","Base 3 rectificativa","Importe IVA 1 rectificativa","Importe IVA 2 rectificativa","Importe IVA 3 rectificativa","Importe recargo 1 rectificativa","Importe recargo 2 rectificativa","Importe recargo 3 rectificativa","Incluir en el modelo 347","Porcentaje de retencion","Importe de retencion","Tipo de retencion","Importe retencion factura rectificativa","Fecha expedicion de la factura","Base imponible exenta","Porcentaje deducible","Base exenta factura rectificativa","Clave de operacion","Identificacion fiscal","Tipo de impuesto","Identificacion del bien","Prorrata definitiva","Fecha de inicio de la utilizacion","Regularizacion anual de la inversion","Identificacion de entrega","Regularizacion de la deduccion efectuada","Base imponible a coste","Numero de Facturas","Primer numero","Ultimo numero","Tipo de operacion (2)","Dias de plazo","Descripcion de los bienes","Otras facturas o documentacion","Estado miembro origen o destino del bien","Importe suplidos","Porcentaje de deduccion"];
-
-  // Para FAC y FRE usamos los headers reales de Delsol
-  const hFAC=["Tipo de documento","Número de documento","Referencia","Fecha","Estado","Almacén","Agente","Código del proveedor","Código de cliente","Nombre del cliente","Domicilio del cliente","Población","Código postal","Provincia","N.I.F.","Tipo de IVA","Recargo de equivalencia","Teléfono del cliente","Importe neto 1","Importe neto 2","Importe neto 3","Porcentaje de descuento 1","Porcentaje de descuento 2","Porcentaje de descuento 3","Importe de descuento 1","Importe de descuento 2","Importe de descuento 3","Porcentaje de pronto pago 1","Porcentaje de pronto pago 2","Porcentaje de pronto pago 3","Importe pronto pago 1","Importe pronto pago 2","Importe pronto pago 3","Porcentaje portes 1","Porcentaje portes 2","Porcentaje portes 3","Importe portes 1","Importe portes 2","Importe portes 3","Porcentaje de financiación 1","Porcentaje de financiación 2","Porcentaje de financiación 3","Importe de financiación 1 ","Importe de financiación 2","Importe de financiación 3","Base imponible 1","Base imponible 2","Base imponible 3","Porcentaje IVA 1","Porcentaje IVA 2","Porcentaje IVA 3","Importe IVA 1","Importe IVA 2","Importe IVA 3","Porcentaje de recargo de equivalencia 1","Porcentaje de recargo de equivalencia 2","Porcentaje de recargo de equivalencia 3","Importe de recargo de equivalencia 1","Importe de recargo de equivalencia 2","Importe de recargo de equivalencia 3","Porcentaje de la retención","Importe de la retención","Total","Forma de pago","Portes","Texto de portes","1ª línea de observaciones","2ª línea de observaciones","Obra de entrega","Remitido por","Embalado por","A la atención de","Referencia","Nº de su pedido","Fecha de su pedido","Cobrado","Tipo de creación","Tipo de recibo","Código del recibo que se crea a partir de esta factura","Traspasada","Anotaciones privadas","Documentos externos asociados","Impresa","Banco del cliente","Hora de creación","Comentario después de las líneas de detalle","Usuario que creó el documento","Último usuario que modificó el documento","Fax","Imagen","Importe neto exento","Porcentaje de descuento exento","Importe de descuento exento","Porcentaje pronto pago exento","Importe de pronto pago exento","Porcentaje de portes exento","Importe de portes exento","Porcentaje de financiación exento","Importe de financiación exento","Base imponible exenta","Enviado por mail","Permisos y contraseña del documento","Ticket, porcentaje de descuento","Ticket, importe de descuento","Caja en que se creó el documento","IBAN del banco","BIC del banco","Nombre del banco","Entidad de la cuenta del cliente","Oficina de la cuenta del cliente","Dígitos de control de la cuenta del cliente","Número de la cuenta del cliente","Clave de operación","Fecha de operación","Tipo de retención","Clave de operación intracomunitaria","Régimen especial de criterio de caja","Departamento","Subdepartamento"];
-  const hFRE=["Tipo de documento","Número de documento","Código exterior","Referencia","Fecha","Proveedor","Estado","Código de cliente","Nombre del proveedor","Domicilio del proveedor","Población","Código postal","Provincia","N.I.F.","Tipo de IVA","Recargo de equivalencia","Teléfono del proveedor","Importe neto 1","Importe neto 2","Importe neto 3","Porcentaje de descuento 1","Porcentaje de descuento 2","Porcentaje de descuento 3","Importe de descuento 1","Importe de descuento 2","Importe de descuento 3","Porcentaje de pronto pago 1","Porcentaje de pronto pago 2","Porcentaje de pronto pago 3","Importe pronto pago 1","Importe pronto pago 2","Importe pronto pago 3","Porcentaje portes 1","Porcentaje portes 2","Porcentaje portes 3","Importe portes 1","Importe portes 2","Importe portes 3","Porcentaje de financiación 1","Porcentaje de financiación 2","Porcentaje de financiación 3","Importe de financiación 1 ","Importe de financiación 2","Importe de financiación 3","Base imponible 1","Base imponible 2","Base imponible 3","Porcentaje IVA 1","Porcentaje IVA 2","Porcentaje IVA 3","Importe IVA 1","Importe IVA 2","Importe IVA 3","Porcentaje de recargo de equivalencia 1","Porcentaje de recargo de equivalencia 2","Porcentaje de recargo de equivalencia 3","Importe de recargo de equivalencia 1","Importe de recargo de equivalencia 2","Importe de recargo de equivalencia 3","Porcentaje de la retención","Importe de la retención","Total","Forma de pago","1ª línea de observaciones","2ª línea de observaciones","Traspasada a contabilidad","Fecha de entrega ","Hora de entrega","Portes","Texto de portes","Agencia de transportes","Comentario después de las líneas de detalle","Factura deducible","Usuario que creó el documento","Último usuario que modificó el documento","Almacén","Importe neto exento","Porcentaje de descuento exento","Importe de descuento exento","Porcentaje pronto pago exento","Importe de pronto pago exento","Porcentaje de portes exento","Importe de portes exento","Porcentaje de financiación exento","Importe de financiación exento","Base imponible exenta","Enviado por mail","Proveedor/Acreedor","Bien de inversión","Imagen","Tipo de retención","Clave de operación","Fecha de operación","Fecha de registro contable","Clave de operación intracomunitaria","Régimen especial de caja","Departamento","Subdepartamento"];
-
-  // Gestion (FAC/FRE/LFA/LFR): numero de documento = correlativo continuo por cliente,
-  // compartido entre cabecera y lineas para que enlacen (ordenado por fecha)
-  const esGestion=["FAC","FRE","LFA","LFR"].includes(formato);
-  let facSeq=null;
-  if(esGestion){
-    facSeq={};
-    (window.WF||[]).filter(x=>x.tipo===tipoF&&x.clienteDespachoId===cid)
-      .sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")||(a.creado||"").localeCompare(b.creado||""))
-      .forEach((x,idx)=>{facSeq[x.id]=idx+1;});
-  }
-  const hLINEAS=["Tipo de documento","Número de documento","Posición de la línea","Artículo","Descripción","Cantidad","Porcentaje descuento 1","Porcentaje descuento 2","Porcentaje descuento 3","Precio del artículo","Total","Tipo de IVA"];
-  const hAPU=["Diario","Fecha","Asiento","Orden","Cuenta","Importe en pesetas","Concepto","Documento","Importe debe","Importe haber","Moneda","Punteo","Tipo de IVA","Codigo de IVA","Departamento","Subdepartamento","Archivo de imagen"];
-
-  if(formato==="APU"){
-    const cfg={
-      diario:parseInt(document.getElementById("aDiario").value,10)||1,
-      ivaR:document.getElementById("aIvaR").value.trim()||"47700000",
-      ivaS:document.getElementById("aIvaS").value.trim()||"47200000",
-      retE:document.getElementById("aRetE").value.trim()||"47300000",
-      retR:document.getElementById("aRetR").value.trim()||"47510000"
-    };
-    let asNum=parseInt(document.getElementById("aAsIni").value,10)||1;
-    expData=[];
-    fs.forEach(f=>{
-      const lineas=(f.tipo===getTipoFactura("FAC"))?asientoEmitida(f,cfg,asNum):asientoRecibida(f,cfg,asNum);
-      lineas.forEach(l=>expData.push(l));
-      asNum++;
-    });
-  } else if(formato==="LFA"||formato==="LFR"){
-    expData=[];
-    fs.forEach((f,i)=>{ lineasFactura(f,facSeq?facSeq[f.id]:i+1).forEach(l=>expData.push(l)); });
-  } else {
-    expData=fs.map((f,i)=>{
-      if(formato==="IVR"){
-        return rowIVR(f,i);
-      } else if(formato==="IVS"){
-        return rowIVS(f,i);
-      } else if(formato==="FAC"){
-        return rowFAC(f,i,facSeq?facSeq[f.id]:i+1);
-      } else {
-        return rowFRE(f,i,facSeq?facSeq[f.id]:i+1);
+      // Marcar docs eliminados anteriores como reenviados (solo actualizar campos clave, sin el blob)
+      const docsEliminados = (window.misDocumentos||[]).filter(d => d.estado === 'eliminada' && !d.reenviado);
+      for(const de of docsEliminados) {
+        try {
+          // Usar updateDoc-style: guardar solo los campos que cambian sin el blob pesado
+          await window.fsSetDoc(window.fsDoc(window.db, 'portal_documentos', de.id), {
+            id: de.id,
+            userEmail: de.userEmail,
+            userId: de.userId,
+            nombreArchivo: de.nombreArchivo,
+            descripcion: de.descripcion,
+            tipo: de.tipo,
+            tamano: de.tamano,
+            thumbnail: de.thumbnail || null,
+            estado: 'eliminada',
+            eliminada: de.eliminada || new Date().toISOString(),
+            reenviado: true,
+            creado: de.creado
+          });
+        } catch(e) { console.error('Error marcando reenviado:', e); }
       }
-    });
+      enviados++;
+    } catch(err) {
+      console.error('Error enviando:', err);
+      errores++;
+    }
   }
-
-  const cv=formato==="IVR"?cvIVR:formato==="IVS"?cvIVS:formato==="FAC"?hFAC:formato==="FRE"?hFRE:formato==="APU"?hAPU:hLINEAS;
-
-  document.getElementById("ePrevTitle").textContent="Vista previa "+formato+" ("+expData.length+" registros)";
-  document.getElementById("ePrevH").innerHTML=cv.map(c=>"<th>"+c+"</th>").join("");
-  document.getElementById("ePrevB").innerHTML=expData.map(r=>"<tr>"+r.slice(0,cv.length).map(v=>"<td>"+(v!==undefined&&v!==""?v:"")+"</td>").join("")+"</tr>").join("");
+  if(progressFill) progressFill.style.width = '100%';
+  showToast(errores === 0
+    ? (total === 1 ? 'Documento enviado correctamente' : total + ' documentos enviados')
+    : enviados + ' enviados, ' + errores + ' con error'
+  );
+  setTimeout(() => {
+    window.colaArchivos = [];
+    renderCola();
+    if(progressWrap) progressWrap.style.display = 'none';
+    if(progressFill) progressFill.style.width = '0%';
+    if(btnSubir) { btnSubir.disabled = false; btnSubir.innerHTML = '&#128229; Enviar al asesor'; }
+  }, 1500);
 }
 
-function doExport(){
-  if(!expData.length){alert("Primero haz la vista previa.");return;}
-  if(typeof XLSX==="undefined"){alert("Error: libreria Excel no disponible. Recarga la pagina.");return;}
-  const formato=document.getElementById("eT").value;
-  const ths=document.getElementById("ePrevH").querySelectorAll("th");
-  const headers=Array.from(ths).map(th=>th.textContent);
-  try {
-    const wb=XLSX.utils.book_new();
-    const wsData=[headers,...expData.map(r=>r.slice(0,headers.length).map(v=>v===undefined||v===null?"":v))];
-    const ws=XLSX.utils.aoa_to_sheet(wsData);
-    ws["!cols"]=headers.map((_,i)=>{
-      const maxLen=Math.max(headers[i].length,...expData.map(r=>String(r[i]||"").length));
-      return {wch:Math.min(Math.max(maxLen,8),30)};
-    });
-    XLSX.utils.book_append_sheet(wb,ws,formato);
-    const u=XLSX.write(wb,{bookType:"xlsx",type:"array"});
-    const b=new Blob([u],{type:"application/octet-stream"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(b);
-    a.download=formato+".xlsx";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  } catch(e) {
-    console.error("Error:",e);
-    alert("Error al generar el archivo: "+e.message);
-  }
+function doLogin() {
+  const e = document.getElementById('loginEmail').value.trim();
+  const p = document.getElementById('loginPassword').value;
+  document.getElementById('loginError').style.display = 'none';
+  if(!e || !p) return;
+  window.fsSignIn(window.auth, e, p).catch(() => {
+    document.getElementById('loginError').style.display = 'block';
+  });
 }
+function doLogout() { window.fsSignOut(window.auth); }
+document.getElementById('loginEmail').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('loginPassword').focus(); });
+document.getElementById('loginPassword').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 
-function showToast(msg, duration) {
-  duration = duration || 3000;
-  // Crear o reusar el toast
-  let t = document.getElementById('ivaToast');
-  if(!t) {
-    t = document.createElement('div');
-    t.id = 'ivaToast';
-    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:white;padding:10px 20px;border-radius:20px;font-size:13px;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;';
-    document.body.appendChild(t);
-  }
+function showToast(msg, duration=3000) {
+  const t = document.getElementById('toast');
   t.textContent = msg;
-  t.style.opacity = '1';
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => { t.style.opacity = '0'; }, duration);
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
 }
 
-function doLogin(){
-  const e=document.getElementById("loginEmail").value.trim(),p=document.getElementById("loginPassword").value;
-  document.getElementById("loginError").style.display="none";
-  if(!e||!p)return;
-  window.fsSignIn(window.auth,e,p).catch(()=>{document.getElementById("loginError").style.display="block";});
+function renderStats() {
+  const docs = window.misDocumentos || [];
+  document.getElementById('stTotal').textContent = docs.length;
+  document.getElementById('stPend').textContent = docs.filter(d => d.estado === 'pendiente').length;
+  const elimCount = docs.filter(d => d.estado === 'eliminada').length;
+  const stElim = document.getElementById('stElim');
+  if(stElim) stElim.textContent = elimCount;
+  document.getElementById('stProc').textContent = docs.filter(d => d.estado === 'procesada').length;
 }
-function doLogout(){window.fsSignOut(window.auth);}
 
-document.getElementById("loginEmail").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("loginPassword").focus();});
-document.getElementById("loginPassword").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
-document.addEventListener("click",e=>{if(!e.target.closest(".ac-wrap"))document.getElementById("acList").style.display="none";});
+let _filtroDoc = '';
+function filtrarDocs(filtro) {
+  _filtroDoc = filtro;
+  ['filtTodos','filtPend','filtProc'].forEach(id => {
+    const btn = document.getElementById(id);
+    if(!btn) return;
+    btn.style.background = 'white';
+    btn.style.color = btn.id === 'filtTodos' ? 'var(--navy)' : btn.id === 'filtPend' ? 'var(--warning)' : 'var(--success)';
+  });
+  const activo = filtro === '' ? 'filtTodos' : filtro === 'pendiente' ? 'filtPend' : filtro === 'procesada' ? 'filtProc' : 'filtElim';
+  const btnActivo = document.getElementById(activo);
+  if(btnActivo) {
+    btnActivo.style.background = filtro === '' ? 'var(--navy)' : filtro === 'pendiente' ? 'var(--warning)' : filtro === 'procesada' ? 'var(--success)' : '#EF4444';
+    btnActivo.style.color = 'white';
+  }
+  renderDocumentos();
+}
+
+function renderDocumentos() {
+  const lista = document.getElementById('docsList');
+  const todos = (window.misDocumentos || []).filter(d => !d.reenviado);
+  const docs = _filtroDoc ? todos.filter(d => d.estado === _filtroDoc) : todos;
+  if(!todos.length) {
+    lista.innerHTML = '<div class="empty"><div class="empty-icon">📂</div><div>Aún no has enviado ningún documento.</div></div>';
+    return;
+  }
+  if(!docs.length) {
+    lista.innerHTML = '<div class="empty"><div class="empty-icon">📂</div><div>No hay documentos ' + (_filtroDoc === 'pendiente' ? 'pendientes' : 'procesados') + '.</div></div>';
+    return;
+  }
+  lista.innerHTML = docs.map(d => {
+    const fecha = new Date(d.creado).toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const fechaProc = d.procesada ? new Date(d.procesada).toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'}) : '';
+    const esPdf = d.tipo === 'application/pdf';
+    const thumb = esPdf ? '📄' : (d.thumbnail ? '<img src="'+d.thumbnail+'" style="width:52px;height:52px;border-radius:7px;object-fit:cover;">' : (d.storageUrl ? '<img src="'+d.storageUrl+'" style="width:52px;height:52px;border-radius:7px;object-fit:cover;">' : '🖼️'));
+    const estadoClass = d.estado === 'procesada' ? 'estado-procesada' : d.estado === 'eliminada' ? 'estado-eliminada' : 'estado-pendiente';
+    const estadoLabel = d.estado === 'procesada' ? '✓ Procesada' : d.estado === 'eliminada' ? '❌ Reenviar' : '⏳ Pendiente';
+    return '<div class="doc-item">' +
+      '<div class="doc-thumb">' + thumb + '</div>' +
+      '<div class="doc-info">' +
+        '<div class="doc-nombre">' + (d.descripcion || d.nombreArchivo || 'Documento') + '</div>' +
+        '<div class="doc-meta">Enviado: ' + fecha + ' · ' + formatBytes(d.tamano||0) + (fechaProc ? '<br>Procesado: ' + fechaProc : '') + '</div>' +
+      '</div>' +
+      '<span class="doc-estado ' + estadoClass + '">' + estadoLabel + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+function formatBytes(bytes) {
+  if(bytes < 1024) return bytes + ' B';
+  if(bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(1) + ' MB';
+}
+
+window.colaArchivos = [];
+
+async function procesarArchivos(input) {
+  const files = Array.from(input.files);
+  if(!files.length) return;
+  input.value = '';
+  showToast('Procesando ' + files.length + ' archivo' + (files.length > 1 ? 's' : '') + '...');
+  for(const file of files) {
+    if(file.type === 'application/pdf') {
+      // PDF: guardar archivo original para subir a Storage
+      window.colaArchivos.push({ nombre: file.name, tipo: file.type, tamano: file.size, fileOriginal: file, thumbnail: null, descripcion: '' });
+    } else {
+      // Imagen: guardar archivo original + generar thumbnail pequeño para preview
+      const thumb = await comprimirImagen(file, 120, 0.6);
+      window.colaArchivos.push({ nombre: file.name, tipo: file.type, tamano: file.size, fileOriginal: file, thumbnail: thumb.dataUrl, descripcion: '' });
+    }
+  }
+  renderCola();
+}
+
+function procesarArchivo(input) {
+  const files = Array.from(input.files);
+  if(!files.length) return;
+  input.value = '';
+  procesarArchivos({ files: files });
+}
+
+function renderCola() {
+  const lista = document.getElementById('colaLista');
+  const area = document.getElementById('previewArea');
+  if(!lista) return;
+  if(!window.colaArchivos.length) { if(area) area.style.display='none'; return; }
+  if(area) area.style.display = 'block';
+  lista.innerHTML = window.colaArchivos.map(function(f, i) {
+    const thumb = f.thumbnail ? '<img src="'+f.thumbnail+'" style="width:40px;height:40px;border-radius:6px;object-fit:cover;">' : '<span style="font-size:22px;">&#128196;</span>';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--gray-50);border-radius:8px;margin-bottom:6px;">' +
+      '<div style="width:40px;height:40px;border-radius:6px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + thumb + '</div>' +
+      '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:12px;font-weight:500;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + f.nombre + '</div>' +
+        '<input type="text" placeholder="Descripcion (opcional)" value="'+f.descripcion+'" style="width:100%;font-size:11px;border:1px solid var(--gray-200);border-radius:5px;padding:3px 6px;margin-top:3px;" data-idx="'+i+'" onchange="window.colaArchivos[parseInt(this.dataset.idx)].descripcion=this.value">' +
+      '</div>' +
+      '<button onclick="eliminarDeCola('+i+')" style="background:none;border:none;color:var(--gray-400);font-size:18px;cursor:pointer;flex-shrink:0;">&#215;</button>' +
+    '</div>';
+  }).join('');
+}
+
+function eliminarDeCola(idx) {
+  window.colaArchivos.splice(idx, 1);
+  renderCola();
+}
+
+function comprimirImagen(file, maxDim, calidad) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if(w > maxDim || h > maxDim) {
+          const ratio = Math.min(maxDim/w, maxDim/h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', calidad);
+        canvas.toBlob(blob => resolve({ blob, dataUrl }), 'image/jpeg', calidad);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// mostrarPreview eliminada - ahora se usa renderCola
+
+function cancelarPreview() {
+  window.colaArchivos = [];
+  renderCola();
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function generarThumbnail(base64, tipo) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX = 120;
+      const ratio = Math.min(MAX/img.width, MAX/img.height);
+      canvas.width = img.width * ratio;
+      canvas.height = img.height * ratio;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = () => resolve(null);
+    img.src = base64;
+  });
+}
 </script>
 </body>
 </html>
