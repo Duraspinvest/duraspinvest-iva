@@ -661,7 +661,28 @@ async function saveF(mantenerAbierto){
     deducible:tipo==="IVS"?document.getElementById("fDed").value:"",
     creado:new Date().toISOString()
   });
-  closeM("fModal");
+  // Si viene del portal, marcar documento como procesado
+  if(window._portalDocId) {
+    marcarProcesada(window._portalDocId);
+    window._portalDocId = null;
+  }
+  if(mantenerAbierto) {
+    // Limpiar formulario para nueva factura del mismo tipo
+    ['fNom','fNif','fCta','fNum','fB1','fB2','fI1','fI2','fTot','fRI'].forEach(function(id){
+      const el=document.getElementById(id); if(el) el.value='';
+    });
+    document.getElementById('fId').value='';
+    document.getElementById('fFecha').value=new Date().toISOString().slice(0,10);
+    if(document.getElementById('fP1')) document.getElementById('fP1').value='21';
+    if(document.getElementById('fP2')) document.getElementById('fP2').value='';
+    if(document.getElementById('fRP')) document.getElementById('fRP').value='';
+    const acList = document.getElementById('acList');
+    if(acList) acList.style.display='none';
+    const nom = document.getElementById('fNom');
+    if(nom) nom.focus();
+  } else {
+    closeM('fModal');
+  }
 }
 
 async function delF(id){if(!confirm("Eliminar esta factura?"))return;await fbD("iva_facturas",id);}
