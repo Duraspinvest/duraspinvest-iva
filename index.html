@@ -94,7 +94,7 @@ tr:last-child td{border-bottom:none;}
 #visorHeader span{color:white;font-size:13px;font-weight:600;flex:1;}
 #visorContent{flex:1;overflow:auto;background:#525659;position:relative;cursor:zoom-in;}
 #visorContent.zoomed{cursor:zoom-out;}
-#visorContent img{max-width:100%;display:block;margin:0 auto;transition:transform 0.2s;transform-origin:top left;}
+#visorContent img{max-width:100%;display:block;transition:transform 0.15s;transform-origin:top left;}
 #visorContent embed{width:100%;height:100%;min-height:calc(100vh - 44px);}
 .zoom-btn{background:rgba(255,255,255,0.15);border:none;color:white;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;font-weight:600;}
 .zoom-btn:hover{background:rgba(255,255,255,0.25);}
@@ -342,6 +342,7 @@ body.visor-open .modal-overlay.open{display:flex;}
     <button class="zoom-btn" onclick="zoomVisor(-1)" title="Reducir">−</button>
     <button class="zoom-btn" onclick="zoomVisor(0)" title="Ajustar">⊡</button>
     <button class="zoom-btn" onclick="zoomVisor(1)" title="Ampliar">+</button>
+    <button class="zoom-btn" onclick="zoomVisor(99)" title="Abrir a tamaño completo">&#x26F6;</button>
     <button onclick="cerrarVisor()" style="background:rgba(255,255,255,0.15);border:none;color:white;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;">✕</button>
   </div>
   <div id="visorContent" ondblclick="zoomVisor(1)"></div>
@@ -1000,20 +1001,29 @@ function renderPortal() {
 }
 
 let _visorZoom = 1;
+let _visorUrl = '';
 
 function zoomVisor(dir) {
   const content = document.getElementById('visorContent');
   const img = content ? content.querySelector('img') : null;
-  if(!img) return;
   if(dir === 0) {
     _visorZoom = 1;
-  } else {
-    _visorZoom = Math.min(Math.max(_visorZoom + dir * 0.3, 0.5), 4);
+    if(img) { img.style.transform = 'scale(1)'; img.style.maxWidth = '100%'; }
+    return;
   }
-  img.style.transformOrigin = 'top center';
+  if(dir === 99) {
+    // Abrir en ventana nueva a tamaño completo
+    if(_visorUrl) window.open(_visorUrl, '_blank');
+    return;
+  }
+  if(!img) return;
+  _visorZoom = Math.min(Math.max(_visorZoom + dir * 0.5, 0.5), 5);
+  img.style.transformOrigin = 'top left';
   img.style.transform = 'scale(' + _visorZoom + ')';
-  img.style.maxWidth = _visorZoom <= 1 ? '100%' : 'none';
-  content.style.cursor = _visorZoom >= 4 ? 'zoom-out' : 'zoom-in';
+  img.style.maxWidth = 'none';
+  img.style.width = (100 / _visorZoom) + '%';
+  content.style.overflow = 'auto';
+  content.style.cursor = 'grab';
 }
 
 function abrirVisor(d) {
@@ -1022,6 +1032,7 @@ function abrirVisor(d) {
   const title = document.getElementById('visorTitle');
   if(!panel || !content) return;
   title.textContent = d.descripcion || d.nombreArchivo || 'Documento';
+  _visorUrl = d.storageUrl || d.datos || '';
   const url = d.storageUrl || d.datos || '';
   if(d.tipo === 'application/pdf') {
     content.innerHTML = '<embed src="'+url+'" width="100%" height="100%" style="min-height:calc(100vh - 44px);">';
