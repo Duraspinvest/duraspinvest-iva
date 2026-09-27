@@ -694,13 +694,44 @@ async function saveF(mantenerAbierto){
     deducible:tipo==="IVS"?document.getElementById("fDed").value:"",
     creado:new Date().toISOString()
   });
-  // Si viene del portal, marcar documento como procesado
+  // Si viene del portal, marcar documento como procesado y cargar el siguiente
   if(window._portalDocId) {
     marcarProcesada(window._portalDocId);
+    const idActual = window._portalDocId;
     window._portalDocId = null;
+    // Buscar siguiente documento pendiente
+    const pendientes = (window.portalDocs||[]).filter(d => d.estado === 'pendiente' && d.id !== idActual && !d.archivada);
+    if(pendientes.length > 0) {
+      // Hay más pendientes - cargar el siguiente en el visor y limpiar el formulario
+      const siguiente = pendientes[0];
+      abrirVisor(siguiente);
+      window._portalDocId = siguiente.id;
+      ['fNom','fNif','fCta','fNum','fB1','fB2','fI1','fI2','fTot','fRI'].forEach(function(id){
+        const el=document.getElementById(id); if(el) el.value='';
+      });
+      document.getElementById('fId').value='';
+      document.getElementById('fFecha').value=new Date().toISOString().slice(0,10);
+      if(document.getElementById('fP1')) document.getElementById('fP1').value='21';
+      if(document.getElementById('fP2')) document.getElementById('fP2').value='';
+      if(document.getElementById('fRP')) document.getElementById('fRP').value='';
+      const acList = document.getElementById('acList');
+      if(acList) acList.style.display='none';
+      // Autorellenar cliente si hay filtro activo
+      const filtroCliente = (document.getElementById('filtroPortalCliente')||{value:''}).value;
+      if(filtroCliente) onFCDChange();
+      showToast('Siguiente factura cargada. ' + (pendientes.length-1) + ' pendientes más.');
+      const nom = document.getElementById('fNom');
+      if(nom) nom.focus();
+      return;
+    } else {
+      // No hay más pendientes - cerrar todo
+      cerrarVisor();
+      closeM('fModal');
+      showToast('Todas las facturas procesadas.');
+      return;
+    }
   }
   if(mantenerAbierto) {
-    // Limpiar formulario para nueva factura del mismo tipo
     ['fNom','fNif','fCta','fNum','fB1','fB2','fI1','fI2','fTot','fRI'].forEach(function(id){
       const el=document.getElementById(id); if(el) el.value='';
     });
