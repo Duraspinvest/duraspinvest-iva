@@ -197,7 +197,7 @@ body.visor-open .modal-overlay.open{display:flex;}
   </div>
   <div class="tabla-wrapper">
     <table><thead><tr>
-      <th>Cliente despacho</th><th>Nombre</th><th>NIF/CIF</th><th>Cuenta</th><th>Tipo</th><th></th>
+      <th>Cliente despacho</th><th>Nombre</th><th>NIF/CIF</th><th>Cuenta</th><th>Tipo</th><th>Ret.</th><th>347</th><th></th>
     </tr></thead>
     <tbody id="cTbody"><tr><td colspan="6"><div class="empty"><div class="empty-icon">&#128218;</div><div>No hay cuentas.</div></div></td></tr></tbody></table>
   </div>
@@ -426,6 +426,23 @@ body.visor-open .modal-overlay.open{display:flex;}
       <div class="fg"><label class="fl">Provincia</label><input type="text" class="fi2" id="cProv" placeholder="Madrid"></div>
       <div class="fg"><label class="fl">Telefono</label><input type="text" class="fi2" id="cTel" placeholder="600000000"></div>
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="fg"><label class="fl">% Retención habitual</label>
+        <select class="fi2" id="cRetPct">
+          <option value="">Sin retención</option>
+          <option value="7">7%</option>
+          <option value="15">15%</option>
+          <option value="19">19%</option>
+          <option value="21">21%</option>
+        </select>
+      </div>
+      <div class="fg"><label class="fl">Incluir en 347</label>
+        <select class="fi2" id="c347">
+          <option value="0">No incluir</option>
+          <option value="1">Sí incluir</option>
+        </select>
+      </div>
+    </div>
     <div class="ma">
       <button class="btn btn-secondary" onclick="closeM('cModal')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveC()">Guardar</button>
@@ -588,6 +605,19 @@ function onFCDChange(){
   document.getElementById("fNif").value="";
   document.getElementById("fCta").value="";
   document.getElementById("acList").style.display="none";
+  // Autorellenar 347 y retención del cliente seleccionado
+  const cid = document.getElementById("fCD").value;
+  const tipo = document.getElementById("fTipo").value;
+  const cl = (window.WC||[]).find(c => c.id === cid);
+  if(cl) {
+    const el347 = document.getElementById("f347");
+    if(el347 && cl.m347defecto) el347.value = cl.m347defecto;
+    // Retención solo para emitidas (IVR)
+    if(tipo === "IVR") {
+      const elRP = document.getElementById("fRP");
+      if(elRP && cl.retPct) elRP.value = cl.retPct;
+    }
+  }
 }
 
 function acNombre(v){
@@ -602,8 +632,8 @@ function acNombre(v){
   });
   if(!ccs.length){lista.style.display="none";return;}
   lista.innerHTML=ccs.map(cc=>
-    "<div class='ac-item' data-n='"+cc.nombre+"' data-nif='"+(cc.nif||"")+"' data-cta='"+cc.cuenta+"' onclick='selCC(this)'>"+
-    cc.nombre+"<div class='ac-sub'>"+(cc.nif?cc.nif+" · ":"")+"Cta: "+cc.cuenta+"</div></div>"
+    "<div class='ac-item' data-n='"+cc.nombre+"' data-nif='"+(cc.nif||"")+"' data-cta='"+cc.cuenta+"' data-ret='"+(cc.retPct||"")+"' data-m347='"+(cc.m347||"0")+"' onclick='selCC(this)'>"+
+    cc.nombre+"<div class='ac-sub'>"+(cc.nif?cc.nif+" · ":"")+"Cta: "+cc.cuenta+(cc.retPct?" · Ret:"+cc.retPct+"%":"")+(cc.m347==="1"?" · 347":"")+"</div></div>"
   ).join("");
   lista.style.display="block";
 }
@@ -612,6 +642,9 @@ function selCC(el){
   document.getElementById("fNom").value=el.dataset.n;
   document.getElementById("fNif").value=el.dataset.nif;
   document.getElementById("fCta").value=el.dataset.cta;
+  // Autorellenar retención y 347 desde la ficha de cuenta
+  const elRP=document.getElementById("fRP"); if(elRP&&el.dataset.ret) elRP.value=el.dataset.ret;
+  const el347=document.getElementById("f347"); if(el347&&el.dataset.m347) el347.value=el.dataset.m347;
   document.getElementById("acList").style.display="none";
 }
 
@@ -713,17 +746,21 @@ function renderC(){
       "<td style='font-size:11px;color:var(--gray-400);'>"+(cc.nif||"")+"</td>"+
       "<td style='font-family:monospace;font-weight:600;color:var(--navy);'>"+(cc.cuenta||"")+"</td>"+
       "<td style='font-size:11px;'>"+tl+"</td>"+
-      "<td><button class='icon-btn' data-id='"+cc.id+"' onclick='delC(this.dataset.id)'>x</button></td>"+
+      "<td style='font-size:11px;color:var(--gray-600);'>"+(cc.retPct?cc.retPct+"%":"—")+"</td>"+
+      "<td style='font-size:11px;color:var(--gray-600);'>"+(cc.m347==="1"?"Sí":"No")+"</td>"+
+      "<td style='display:flex;gap:4px;'><button class='icon-btn' style='color:var(--navy);' data-id='"+cc.id+"' onclick='editC(this.dataset.id)'>✏</button><button class='icon-btn' data-id='"+cc.id+"' onclick='delC(this.dataset.id)'>x</button></td>"+
     "</tr>";
   }).join("");
 }
 
-function openCM(){
-  document.getElementById("cId").value="";
-  document.getElementById("cMTitle").textContent="Nueva cuenta contable";
-  ["cNom","cNif","cCta","cDir","cPob","cCP","cProv","cTel"].forEach(id=>document.getElementById(id).value="");
-  document.getElementById("cCD").value="";
-  document.getElementById("cTip").value="proveedor";
+function openCM(cc){
+  document.getElementById("cId").value=cc?cc.id:"";
+  document.getElementById("cMTitle").textContent=cc?"Editar cuenta contable":"Nueva cuenta contable";
+  ["cNom","cNif","cCta","cDir","cPob","cCP","cProv","cTel"].forEach(id=>document.getElementById(id).value=cc?(cc[id.replace("c","").toLowerCase()]||cc[{cNom:"nombre",cNif:"nif",cCta:"cuenta",cDir:"domicilio",cPob:"poblacion",cCP:"cp",cProv:"provincia",cTel:"telefono"}[id]]||""):"");
+  document.getElementById("cCD").value=cc?cc.clienteDespachoId:"";
+  document.getElementById("cTip").value=cc?cc.tipo:"proveedor";
+  const elRP=document.getElementById("cRetPct"); if(elRP) elRP.value=cc?cc.retPct||"":"";
+  const el347=document.getElementById("c347"); if(el347) el347.value=cc?cc.m347||"0":"0";
   document.getElementById("cModal").classList.add("open");
 }
 
@@ -743,9 +780,16 @@ async function saveC(){
     cp:document.getElementById("cCP").value.trim(),
     provincia:document.getElementById("cProv").value.trim(),
     telefono:document.getElementById("cTel").value.trim(),
+    retPct:(document.getElementById("cRetPct")||{value:""}).value,
+    m347:(document.getElementById("c347")||{value:"0"}).value,
     creado:new Date().toISOString()
   });
   closeM("cModal");
+}
+
+function editC(id){
+  const cc=(window.WCC||[]).find(x=>x.id===id);
+  if(cc) openCM(cc);
 }
 
 async function delC(id){if(!confirm("Eliminar esta cuenta?"))return;await fbD("iva_cuentas",id);}
