@@ -1150,7 +1150,7 @@ function cerrarVisor() {
   if(content) content.innerHTML = '';
 }
 
-function registrarFacturaPortal(id) {
+async function registrarFacturaPortal(id) {
   const d = (window.portalDocs||[]).find(x => x.id === id);
   if(!d || (!d.datos && !d.storageUrl)) { alert("No hay datos en este documento."); return; }
 
@@ -1163,7 +1163,52 @@ function registrarFacturaPortal(id) {
   // Guardar ID para marcarlo procesado al guardar
   window._portalDocId = id;
 
-  showToast("Rellena los datos de la factura mirando el documento.");
+  // Intentar extracción automática con IA via Cloud Function
+  if(d.datos) {
+    showToast("Extrayendo datos con IA...", 6000);
+    try {
+      const resp = await fetch("https://leerdocumento-gyc3opqqlq-ew.a.run.app", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datos: d.datos, tipo: d.tipo || "application/pdf", modo: "factura" })
+      });
+      const result = await resp.json();
+      if(result.ok && result.datos) {
+        const f = result.datos;
+        if(f.numero) document.getElementById("fNum").value = f.numero;
+        if(f.fecha) {
+          const parts = f.fecha.split("/");
+          if(parts.length === 3) document.getElementById("fFecha").value = parts[2]+"-"+parts[1].padStart(2,"0")+"-"+parts[0].padStart(2,"0");
+        }
+        if(f.nombre) document.getElementById("fNom").value = f.nombre;
+        if(f.nif) document.getElementById("fNif").value = f.nif;
+        if(f.base1) document.getElementById("fB1").value = f.base1;
+        if(f.pct1) document.getElementById("fP1").value = f.pct1;
+        if(f.iva1) document.getElementById("fI1").value = f.iva1;
+        if(f.base2) document.getElementById("fB2").value = f.base2;
+        if(f.pct2) document.getElementById("fP2").value = f.pct2;
+        if(f.iva2) document.getElementById("fI2").value = f.iva2;
+        if(f.total) document.getElementById("fTot").value = f.total;
+        if(f.retPct) document.getElementById("fRP").value = f.retPct;
+        // Buscar cuenta contable por nombre
+        if(f.nombre) {
+          const match = (window.WCC||[]).find(cc => (cc.nombre||"").toLowerCase().includes((f.nombre||"").toLowerCase().slice(0,8)));
+          if(match) {
+            document.getElementById("fNif").value = match.nif || f.nif || "";
+            document.getElementById("fCta").value = match.cuenta || "";
+          }
+        }
+        showToast("Datos extraidos automaticamente. Revisa y confirma.");
+      } else {
+        showToast("No se pudieron extraer datos. Rellena manualmente.");
+      }
+    } catch(err) {
+      console.error("Error extraccion IA:", err);
+      showToast("Rellena los datos manualmente.");
+    }
+  } else {
+    showToast("Documento en Storage — rellena los datos mirando la imagen.");
+  }
 }
 
 function verDocumento(id) {
