@@ -40,6 +40,15 @@ main{padding:20px;max-width:1400px;margin:0 auto;}
 .filtro-label{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;}
 .fi{padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:7px;font-size:13px;color:var(--gray-800);outline:none;font-family:inherit;background:white;}
 .fi:focus{border-color:var(--accent);}
+.res-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-bottom:12px;}
+.res-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 14px;border-top:3px solid #1B4F8A;font-size:12px;}
+.res-card h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--gray-400);font-weight:600;}
+.res-row{display:flex;justify-content:space-between;padding:2px 0;}
+.res-row b{font-variant-numeric:tabular-nums;}
+.res-big{font-size:18px;font-weight:700;margin-top:4px;}
+.res-tipos{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px;}
+.res-tipos td{padding:2px 0;border-top:1px solid var(--gray-200);}
+#fTfoot td{font-weight:700;background:#F3F4F6;border-top:2px solid #1B4F8A;}
 .tabla-wrapper{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--gray-200);}
 table{border-collapse:collapse;width:100%;font-size:12px;}
 thead{position:sticky;top:0;z-index:5;}
@@ -167,16 +176,18 @@ body.visor-open .modal-overlay.open{display:flex;}
         <select class="fi" id="fFQ" onchange="renderF()"><option value="">Todos</option><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
     </div>
     <div style="display:flex;gap:8px;">
+      <button class="btn" onclick="exportVistaF()" style="background:#065F46;color:white;" title="Exporta a Excel las facturas de la vista actual con su resumen">&#8681; Excel vista</button>
       <button class="btn btn-primary" onclick="openFM('IVR')">+ Emitida</button>
       <button class="btn btn-ivs" onclick="openFM('IVS')">+ Recibida</button>
     </div>
   </div>
+  <div id="fResumen"></div>
   <div class="tabla-wrapper">
     <table><thead><tr>
       <th>Tipo</th><th>Cliente despacho</th><th>Fecha</th><th>N Factura</th><th>Nombre</th><th>NIF/CIF</th><th>Cuenta</th>
       <th class="td-r">Base 1</th><th class="td-c">%IVA</th><th class="td-r">Cuota</th><th class="td-r">Total</th><th class="td-c">Ret.</th><th class="td-c">347</th><th></th>
     </tr></thead>
-    <tbody id="fTbody"><tr><td colspan="14"><div class="empty"><div class="empty-icon">&#128203;</div><div>No hay facturas.</div></div></td></tr></tbody></table>
+    <tbody id="fTbody"><tr><td colspan="14"><div class="empty"><div class="empty-icon">&#128203;</div><div>No hay facturas.</div></div></td></tr></tbody><tfoot id="fTfoot"></tfoot></table>
   </div>
 </div>
 
@@ -562,6 +573,8 @@ function renderF(){
     if(fq&&f.fecha&&q(f.fecha)!==fq)return false;
     return true;
   }).sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||""));
+  window.fVista=fs;
+  renderResumenF(fs);
   if(!fs.length){tb.innerHTML="<tr><td colspan='14'><div class='empty'><div class='empty-icon'>&#128203;</div><div>No hay facturas con esos filtros.</div></div></td></tr>";return;}
   tb.innerHTML=fs.map(f=>{
     const cl=(window.WC||[]).find(c=>c.id===f.clienteDespachoId);
@@ -584,6 +597,129 @@ function renderF(){
       "<td><button class='icon-btn' data-id='"+f.id+"' onclick='delF(this.dataset.id)'>x</button></td>"+
     "</tr>";
   }).join("");
+}
+
+// ===== Sumatorio de la vista de facturas + exportación =====
+function _n(v){return parseFloat(v)||0;}
+function _r2(n){return Math.round((n||0)*100)/100;}
+function resumenF(fs){
+  const R={IVR:{n:0,base:0,cuota:0,ret:0,total:0,tipos:{}},IVS:{n:0,base:0,cuota:0,ded:0,noDed:0,total:0,tipos:{}}};
+  fs.forEach(f=>{
+    const t=f.tipo==="IVR"?"IVR":"IVS",r=R[t];
+    r.n++; r.total+=_n(f.total);
+    const lineas=[[f.base1,f.pct1||"21",f.iva1],[f.base2,f.pct2,f.iva2]];
+    let cuotaF=0;
+    lineas.forEach(([b,p,c])=>{
+      b=_n(b);c=_n(c); if(!b&&!c)return;
+      const k=String(p===""||p==null?"0":p);
+      r.tipos[k]=r.tipos[k]||{base:0,cuota:0};
+      r.tipos[k].base+=b; r.tipos[k].cuota+=c;
+      r.base+=b; r.cuota+=c; cuotaF+=c;
+    });
+    if(t==="IVR") r.ret+=_n(f.retImporte);
+    else { if(f.deducible==="0") r.noDed+=cuotaF; else r.ded+=cuotaF; }
+  });
+  R.resultado=R.IVR.cuota-R.IVS.ded;
+  return R;
+}
+function _descVista(){
+  const fc=document.getElementById("fFC").value,ft=document.getElementById("fFT").value;
+  const fa=document.getElementById("fFA").value,fq=document.getElementById("fFQ").value;
+  const cl=(window.WC||[]).find(c=>c.id===fc);
+  return {
+    cliente: cl?cl.nombre:(fc?fc:"Todos los clientes"),
+    nif: cl&&cl.nif?cl.nif:"",
+    tipo: ft==="IVR"?"Emitidas":ft==="IVS"?"Recibidas":"Emitidas y recibidas",
+    periodo: (fq?fq+"T ":"")+(fa||"Todos los años"),
+    fa, fq, fc
+  };
+}
+function renderResumenF(fs){
+  const box=document.getElementById("fResumen"),tf=document.getElementById("fTfoot");
+  if(!box)return;
+  if(!fs.length){box.innerHTML="";if(tf)tf.innerHTML="";return;}
+  const R=resumenF(fs),d=_descVista();
+  const tiposHtml=t=>{
+    const ks=Object.keys(R[t].tipos).sort((a,b)=>parseFloat(b)-parseFloat(a));
+    if(ks.length<1)return"";
+    return "<table class='res-tipos'>"+ks.map(k=>"<tr><td>"+k+"%</td><td class='td-r'>"+eur(R[t].tipos[k].base)+"</td><td class='td-r'>"+eur(R[t].tipos[k].cuota)+"</td></tr>").join("")+"</table>";
+  };
+  let h="<div class='res-grid'>";
+  if(R.IVR.n){
+    h+="<div class='res-card'><h4>Emitidas ("+R.IVR.n+")</h4>"+
+      "<div class='res-row'><span>Base imponible</span><b>"+eur(R.IVR.base)+"</b></div>"+
+      "<div class='res-row'><span>IVA repercutido</span><b>"+eur(R.IVR.cuota)+"</b></div>"+
+      (R.IVR.ret?"<div class='res-row'><span>Retenciones</span><b>"+eur(R.IVR.ret)+"</b></div>":"")+
+      "<div class='res-row'><span>Total facturado</span><b>"+eur(R.IVR.total)+"</b></div>"+tiposHtml("IVR")+"</div>";
+  }
+  if(R.IVS.n){
+    h+="<div class='res-card' style='border-top-color:#C2410C;'><h4>Recibidas ("+R.IVS.n+")</h4>"+
+      "<div class='res-row'><span>Base imponible</span><b>"+eur(R.IVS.base)+"</b></div>"+
+      "<div class='res-row'><span>IVA soportado deducible</span><b>"+eur(R.IVS.ded)+"</b></div>"+
+      (R.IVS.noDed?"<div class='res-row'><span>IVA no deducible</span><b>"+eur(R.IVS.noDed)+"</b></div>":"")+
+      "<div class='res-row'><span>Total</span><b>"+eur(R.IVS.total)+"</b></div>"+tiposHtml("IVS")+"</div>";
+  }
+  if(R.IVR.n&&R.IVS.n){
+    const res=R.resultado,col=res>=0?"#B91C1C":"#065F46";
+    h+="<div class='res-card' style='border-top-color:"+col+";'><h4>Resultado IVA &middot; "+d.periodo+"</h4>"+
+      "<div class='res-row'><span>Repercutido</span><b>"+eur(R.IVR.cuota)+"</b></div>"+
+      "<div class='res-row'><span>&minus; Soportado deducible</span><b>"+eur(R.IVS.ded)+"</b></div>"+
+      "<div class='res-big' style='color:"+col+";'>"+eur(res)+"</div>"+
+      "<div style='color:var(--gray-400);font-size:11px;'>"+(res>=0?"A ingresar":"A compensar / devolver")+"</div></div>";
+  }
+  box.innerHTML=h+"</div>";
+  if(tf){
+    const b=fs.reduce((s,f)=>s+_n(f.base1),0),c=fs.reduce((s,f)=>s+_n(f.iva1),0),t=fs.reduce((s,f)=>s+_n(f.total),0);
+    const mixto=R.IVR.n&&R.IVS.n;
+    tf.innerHTML="<tr><td colspan='7'>"+(mixto?"Suma bruta (emitidas + recibidas) &middot; "+fs.length+" facturas":"TOTAL &middot; "+fs.length+" facturas")+"</td>"+
+      "<td class='td-r'>"+eur(b)+"</td><td></td><td class='td-r'>"+eur(c)+"</td><td class='td-r'>"+eur(t)+"</td><td colspan='3'></td></tr>";
+  }
+}
+function exportVistaF(){
+  const fs=window.fVista||[];
+  if(!fs.length){alert("No hay facturas en la vista actual.");return;}
+  if(typeof XLSX==="undefined"){alert("Error: libreria Excel no disponible. Recarga la pagina.");return;}
+  const R=resumenF(fs),d=_descVista();
+  const wb=XLSX.utils.book_new();
+  // Hoja Resumen
+  const res=[
+    ["Resumen IVA - Duraspinvest"],[],
+    ["Cliente",d.cliente],["NIF",d.nif],["Periodo",d.periodo],["Facturas",d.tipo],
+    ["Generado",new Date().toLocaleString("es-ES")],[],
+    ["EMITIDAS","Nº",R.IVR.n],["Base imponible","",_r2(R.IVR.base)],["IVA repercutido","",_r2(R.IVR.cuota)],
+    ["Retenciones","",_r2(R.IVR.ret)],["Total facturado","",_r2(R.IVR.total)],[],
+    ["RECIBIDAS","Nº",R.IVS.n],["Base imponible","",_r2(R.IVS.base)],["IVA soportado deducible","",_r2(R.IVS.ded)],
+    ["IVA no deducible","",_r2(R.IVS.noDed)],["Total","",_r2(R.IVS.total)],[],
+    ["RESULTADO IVA (repercutido - deducible)","",_r2(R.resultado)],[],
+    ["DESGLOSE POR TIPO","% IVA","Base","Cuota"]
+  ];
+  ["IVR","IVS"].forEach(t=>Object.keys(R[t].tipos).sort((a,b)=>parseFloat(b)-parseFloat(a)).forEach(k=>
+    res.push([t==="IVR"?"Emitidas":"Recibidas",parseFloat(k),_r2(R[t].tipos[k].base),_r2(R[t].tipos[k].cuota)])));
+  const ws1=XLSX.utils.aoa_to_sheet(res);
+  ws1["!cols"]=[{wch:40},{wch:22},{wch:16},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws1,"Resumen");
+  // Hoja Facturas
+  const head=["Tipo","Cliente despacho","Fecha","Nº factura","Nombre","NIF/CIF","Cuenta","Base 1","% IVA 1","Cuota 1","Base 2","% IVA 2","Cuota 2","% Ret.","Retención","Total","347","Deducible"];
+  const filas=fs.map(f=>{
+    const cl=(window.WC||[]).find(c=>c.id===f.clienteDespachoId);
+    return [f.tipo==="IVR"?"Emitida":"Recibida",cl?cl.nombre:(f.clienteDespachoId||""),
+      f.fecha?f.fecha.split("-").reverse().join("/"):"",f.numero||"",f.nombre||"",f.nif||"",f.cuenta||"",
+      _n(f.base1),_n(f.pct1||21),_n(f.iva1),_n(f.base2)||"",f.pct2?_n(f.pct2):"",_n(f.iva2)||"",
+      f.retPct?_n(f.retPct):"",_n(f.retImporte)||"",_n(f.total),f.m347==="1"?"Si":"",
+      f.tipo==="IVS"?(f.deducible==="0"?"No":"Si"):""];
+  });
+  const ws2=XLSX.utils.aoa_to_sheet([head,...filas]);
+  const ult=filas.length+1;
+  ["H","J","K","M","O","P"].forEach(c=>{ws2[c+(ult+1)]={t:"n",f:"SUBTOTAL(9,"+c+"2:"+c+ult+")"};});
+  ws2["A"+(ult+1)]={t:"s",v:"TOTAL"};
+  ws2["!ref"]="A1:R"+(ult+1);
+  ["H","J","K","M","O","P"].forEach(c=>{for(let i=2;i<=ult+1;i++){const x=ws2[c+i];if(x)x.z="#,##0.00";}});
+  ws2["!cols"]=[{wch:9},{wch:24},{wch:11},{wch:12},{wch:30},{wch:12},{wch:11},{wch:11},{wch:7},{wch:11},{wch:11},{wch:7},{wch:11},{wch:7},{wch:11},{wch:12},{wch:5},{wch:9}];
+  ws2["!autofilter"]={ref:"A1:R"+ult};
+  XLSX.utils.book_append_sheet(wb,ws2,"Facturas");
+  const limpio=x=>String(x).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,"");
+  const nombre="IVA_"+limpio(d.fc?d.cliente:"Todos")+"_"+(d.fa||"todos")+(d.fq?"_"+d.fq+"T":"")+(document.getElementById("fFT").value?"_"+limpio(d.tipo):"")+".xlsx";
+  XLSX.writeFile(wb,nombre);
 }
 
 function openFM(tipo){
