@@ -753,7 +753,9 @@ const _IMP_COLS={
   numero:["n factura","no factura","num factura","numero factura","numero","n","factura","n documento"],
   nombre:["nombre","proveedor","cliente","nombre proveedor","nombre cliente","razon social","tercero","contraparte"],
   nif:["nif","nif cif","cif","nif proveedor","nif cliente"],
-  cuenta:["cuenta"],
+  cuenta:["cuenta","cuenta proveedor","cuenta cliente","subcuenta"],
+  contrapartida:["cuenta gasto","cuenta de gasto","cuenta ingreso","cuenta de ingreso","contrapartida","cuenta contable"],
+  concepto:["concepto","tipo gasto","tipo de gasto","descripcion","tipo ingreso"],
   base1:["base 1","base imponible 1","base","base imponible","importe neto 1","importe neto"],
   pct1:["% iva 1","%iva 1","% iva","%iva","tipo iva","tipo iva 1","% 1"],
   iva1:["cuota 1","cuota iva 1","cuota","cuota iva","iva","importe iva","importe iva 1"],
@@ -808,8 +810,17 @@ function _impLeer(wb){
       const b2=_impNum(g(r,"base2")),c2=_impNum(g(r,"iva2"));let p2=g(r,"pct2");
       p2=p2===""?"":String(_impNum(p2)<1&&_impNum(p2)>0?Math.round(_impNum(p2)*100):_impNum(p2));
       let rp=g(r,"retPct");rp=rp===""?"":String(_impNum(rp)<1&&_impNum(rp)>0?Math.round(_impNum(rp)*100):_impNum(rp));
-      filas.push({tipo,fecha,numero:String(g(r,"numero")||"").trim(),nombre:String(g(r,"nombre")||"").trim(),
-        nif:String(g(r,"nif")||"").trim().toUpperCase(),cuenta:String(g(r,"cuenta")||"").trim(),
+      // "Cuenta" que empieza por 6 o 7 es de gasto/ingreso (contrapartida); por 4, de proveedor/cliente
+      let cta=String(g(r,"cuenta")||"").trim(),contra=String(g(r,"contrapartida")||"").trim();
+      if(/^[67]/.test(cta)&&!contra){contra=cta;cta="";}
+      const concepto=String(g(r,"concepto")||"").trim();
+      let numero=String(g(r,"numero")||"").trim(),nombre=String(g(r,"nombre")||"").trim();
+      if(!nombre)nombre=concepto||contra;
+      if(!numero){ // fila resumida por concepto: numero automatico estable (evita duplicar al reimportar)
+        numero="RES-"+fecha.slice(0,4)+"-"+q(fecha)+"T-"+(contra||concepto||nombre).replace(/\s+/g,"").slice(0,20)+"-"+(p1===""?"21":p1);
+      }
+      filas.push({tipo,fecha,numero,nombre,concepto,contrapartida:contra,
+        nif:String(g(r,"nif")||"").trim().toUpperCase(),cuenta:cta,
         base1:b1,pct1:p1===""?"21":p1,iva1:c1,base2:b2,pct2:b2||c2?p2:"",iva2:c2,
         retPct:rp==="0"?"":rp,retImporte:Math.abs(_impNum(g(r,"retImporte"))),
         total:tot,m347:_impSiNo(g(r,"m347"),"0"),deducible:tipo==="IVS"?_impSiNo(g(r,"deducible"),"1"):"",
@@ -1788,7 +1799,7 @@ function exportRegistro(){
     arr.forEach(f=>{
       const mes=parseInt(String(f.fecha||"").slice(5,7),10)||"", tri=f.fecha?trimOf(f.fecha):"";
       let tg="";
-      if(recibida){const cc=getCuentaParaFactura(f);const t=(window.WTG||[]).find(x=>x.cuenta===cc.contrapartida);tg=t?t.nombre:(cc.contrapartida||"");}
+      if(recibida){const cc=getCuentaParaFactura(f);const t=(window.WTG||[]).find(x=>x.cuenta===cc.contrapartida);tg=t?t.nombre:(f.concepto||cc.contrapartida||"");}
       lineasDe(f).forEach(([p,b,c])=>{
         tB+=b;tC+=c;tT+=b+c;
         const base=[f.fecha||"",mes,tri];
@@ -1901,7 +1912,7 @@ function genDG(){
     const base=(parseFloat(f.base1)||0)+(parseFloat(f.base2)||0);
     const iva=(parseFloat(f.iva1)||0)+(parseFloat(f.iva2)||0);
     const ded=String(f.deducible)!=="0"; // en la app "1"/vacio = IVA deducible, "0" = no deducible
-    if(!grp[cuenta])grp[cuenta]={cuenta,nombre:tg?tg.nombre:"",base:0,ivaDed:0,ivaNoDed:0,n:0};
+    if(!grp[cuenta])grp[cuenta]={cuenta,nombre:tg?tg.nombre:(f.concepto||""),base:0,ivaDed:0,ivaNoDed:0,n:0};
     grp[cuenta].base+=base;
     if(ded)grp[cuenta].ivaDed+=iva; else grp[cuenta].ivaNoDed+=iva;
     grp[cuenta].n++;
