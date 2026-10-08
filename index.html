@@ -176,6 +176,9 @@ body.visor-open .modal-overlay.open{display:flex;}
         <select class="fi" id="fFQ" onchange="renderF()"><option value="">Todos</option><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
     </div>
     <div style="display:flex;gap:8px;">
+      <input type="file" id="impFInput" accept=".xlsx,.xls" style="display:none;" onchange="importarFacturasExcel(this)">
+      <button class="btn" onclick="if(!document.getElementById('fFC').value){alert('Primero selecciona el cliente en el filtro Cliente.');return;}document.getElementById('impFInput').click()" style="background:#1B4F8A;color:white;" title="Importa facturas desde Excel al cliente seleccionado en el filtro">&#8679; Importar Excel</button>
+      <button class="btn" onclick="exportRegistro()" style="background:#7C5E10;color:white;" title="Libro registro de facturas emitidas y recibidas del cliente y año filtrados">&#128210; Registro</button>
       <button class="btn" onclick="exportVistaF()" style="background:#065F46;color:white;" title="Exporta a Excel las facturas de la vista actual con su resumen">&#8681; Excel vista</button>
       <button class="btn btn-primary" onclick="openFM('IVR')">+ Emitida</button>
       <button class="btn btn-ivs" onclick="openFM('IVS')">+ Recibida</button>
@@ -720,6 +723,163 @@ function exportVistaF(){
   const limpio=x=>String(x).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9]+/g,"_").replace(/^_|_$/g,"");
   const nombre="IVA_"+limpio(d.fc?d.cliente:"Todos")+"_"+(d.fa||"todos")+(d.fq?"_"+d.fq+"T":"")+(document.getElementById("fFT").value?"_"+limpio(d.tipo):"")+".xlsx";
   XLSX.writeFile(wb,nombre);
+}
+
+// ===== Importar facturas desde Excel (al cliente seleccionado en el filtro) =====
+// Lee las columnas por su cabecera. Admite una hoja con columna TIPO, u hojas
+// llamadas "Emitidas"/"Recibidas". Si una factura viene en varias lineas (una por
+// tipo de IVA, formato registro), las junta en Base 1 / Base 2.
+function _impNorm(h){return String(h||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9%]+/g," ").trim();}
+function _impNum(v){
+  if(v===undefined||v===null||v==="")return 0;
+  if(typeof v==="number")return v;
+  let t=String(v).replace(/[€\s]|EUR/gi,"");
+  if(t.indexOf(",")>-1)t=t.replace(/\./g,"").replace(",",".");
+  const n=parseFloat(t);return isNaN(n)?0:n;
+}
+function _impFecha(v){
+  if(v===undefined||v===null||v==="")return"";
+  const p2=n=>String(n).padStart(2,"0");
+  if(v instanceof Date)return v.getFullYear()+"-"+p2(v.getMonth()+1)+"-"+p2(v.getDate());
+  if(typeof v==="number"){const d=new Date(Math.round((v-25569)*86400000));return d.getUTCFullYear()+"-"+p2(d.getUTCMonth()+1)+"-"+p2(d.getUTCDate());}
+  const t=String(v).trim();let m;
+  if((m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)))return m[1]+"-"+p2(m[2])+"-"+p2(m[3]);
+  if((m=t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/))){const y=m[3].length===2?"20"+m[3]:m[3];return y+"-"+p2(m[2])+"-"+p2(m[1]);}
+  return"";
+}
+const _IMP_COLS={
+  tipo:["tipo","tipo factura","tipo documento"],
+  fecha:["fecha","fecha factura","fecha expedicion","fecha emision"],
+  numero:["n factura","no factura","num factura","numero factura","numero","n","factura","n documento"],
+  nombre:["nombre","proveedor","cliente","nombre proveedor","nombre cliente","razon social","tercero","contraparte"],
+  nif:["nif","nif cif","cif","nif proveedor","nif cliente"],
+  cuenta:["cuenta"],
+  base1:["base 1","base imponible 1","base","base imponible","importe neto 1","importe neto"],
+  pct1:["% iva 1","%iva 1","% iva","%iva","tipo iva","tipo iva 1","% 1"],
+  iva1:["cuota 1","cuota iva 1","cuota","cuota iva","iva","importe iva","importe iva 1"],
+  base2:["base 2","base imponible 2","importe neto 2"],
+  pct2:["% iva 2","%iva 2","tipo iva 2","% 2"],
+  iva2:["cuota 2","cuota iva 2","importe iva 2"],
+  retPct:["% ret","%ret","% retencion","tipo retencion","ret %"],
+  retImporte:["retencion","importe retencion","ret"],
+  total:["total","total factura","importe total","total linea"],
+  m347:["347"],
+  deducible:["deducible","iva deducible"]
+};
+function _impMapa(cab){
+  const n=cab.map(_impNorm),M={};
+  Object.keys(_IMP_COLS).forEach(k=>{
+    for(const alias of _IMP_COLS[k]){const i=n.indexOf(alias);if(i>-1&&!Object.values(M).includes(i)){M[k]=i;break;}}
+  });
+  return M;
+}
+function _impTipo(v,hoja){
+  const t=_impNorm(v);
+  if(/^(ivr|emit|venta|ingreso)/.test(t))return"IVR";
+  if(/^(ivs|recib|compra|gasto)/.test(t))return"IVS";
+  const h=_impNorm(hoja);
+  if(/emit|venta|ingreso|ivr/.test(h))return"IVR";
+  if(/recib|compra|gasto|ivs/.test(h))return"IVS";
+  return"";
+}
+function _impSiNo(v,def){const t=_impNorm(v);if(t==="")return def;return /^(s|si|1|x|true|yes)/.test(t)?"1":"0";}
+function _impLeer(wb){
+  const filas=[],avisos=[];
+  wb.SheetNames.forEach(hoja=>{
+    if(/resumen/i.test(hoja))return;
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[hoja],{header:1,raw:true,defval:""});
+    // Buscar la fila de cabeceras (la primera con "fecha" y algo de base/total)
+    let hi=-1;
+    for(let i=0;i<Math.min(rows.length,15);i++){const n=rows[i].map(_impNorm);if(n.includes("fecha")&&n.some(x=>/^(base|total|importe)/.test(x))){hi=i;break;}}
+    if(hi<0)return;
+    const M=_impMapa(rows[hi]);
+    if(M.fecha===undefined||(M.base1===undefined&&M.total===undefined)){avisos.push("Hoja «"+hoja+"»: no encuentro las columnas de fecha y base/total.");return;}
+    const g=(r,k)=>M[k]===undefined?"":r[M[k]];
+    for(let i=hi+1;i<rows.length;i++){
+      const r=rows[i];const fecha=_impFecha(g(r,"fecha"));
+      if(!fecha)continue; // filas vacias, totales, notas
+      const tipo=_impTipo(g(r,"tipo"),hoja);
+      if(!tipo){avisos.push("Hoja «"+hoja+"», fila "+(i+1)+": no sé si es emitida o recibida (falta columna TIPO).");continue;}
+      let b1=_impNum(g(r,"base1")),c1=_impNum(g(r,"iva1")),p1=g(r,"pct1");
+      let tot=_impNum(g(r,"total"));
+      p1=p1===""?"":String(_impNum(p1)<1&&_impNum(p1)>0?Math.round(_impNum(p1)*100):_impNum(p1));
+      if(!b1&&tot&&p1!==""){b1=Math.round(tot/(1+_impNum(p1)/100)*100)/100;}
+      if(!c1&&b1&&p1!=="")c1=Math.round(b1*_impNum(p1))/100;
+      const b2=_impNum(g(r,"base2")),c2=_impNum(g(r,"iva2"));let p2=g(r,"pct2");
+      p2=p2===""?"":String(_impNum(p2)<1&&_impNum(p2)>0?Math.round(_impNum(p2)*100):_impNum(p2));
+      let rp=g(r,"retPct");rp=rp===""?"":String(_impNum(rp)<1&&_impNum(rp)>0?Math.round(_impNum(rp)*100):_impNum(rp));
+      filas.push({tipo,fecha,numero:String(g(r,"numero")||"").trim(),nombre:String(g(r,"nombre")||"").trim(),
+        nif:String(g(r,"nif")||"").trim().toUpperCase(),cuenta:String(g(r,"cuenta")||"").trim(),
+        base1:b1,pct1:p1===""?"21":p1,iva1:c1,base2:b2,pct2:b2||c2?p2:"",iva2:c2,
+        retPct:rp==="0"?"":rp,retImporte:Math.abs(_impNum(g(r,"retImporte"))),
+        total:tot,m347:_impSiNo(g(r,"m347"),"0"),deducible:tipo==="IVS"?_impSiNo(g(r,"deducible"),"1"):"",
+        _fila:hoja+" fila "+(i+1)});
+    }
+  });
+  // Juntar lineas de una misma factura (formato registro: una linea por tipo de IVA)
+  const out=[],idx={};
+  filas.forEach(f=>{
+    const k=f.numero?[f.tipo,f.numero,f.nif||f.nombre,f.fecha].join("|"):null;
+    if(k&&idx[k]!==undefined){
+      const a=out[idx[k]];
+      if(!a.base2&&!a.iva2&&String(a.pct1)!==String(f.pct1)){a.base2=f.base1;a.pct2=f.pct1;a.iva2=f.iva1;a._tot2=f.total;}
+      else{a.base1+=f.base1;a.iva1+=f.iva1;a._tot2=(a._tot2||0)+f.total;}
+      return;
+    }
+    if(k)idx[k]=out.length;out.push(f);
+  });
+  out.forEach(f=>{
+    const r2=n=>Math.round(n*100)/100;
+    f.base1=r2(f.base1);f.iva1=r2(f.iva1);f.base2=r2(f.base2);f.iva2=r2(f.iva2);
+    if(f.retPct&&!f.retImporte)f.retImporte=r2((f.base1+f.base2)*_impNum(f.retPct)/100);
+    // Total igual que en la app: bases + cuotas - retencion
+    f.total=r2(f.base1+f.iva1+f.base2+f.iva2-f.retImporte);
+    delete f._tot2;
+  });
+  return {facturas:out,avisos};
+}
+function importarFacturasExcel(input){
+  const file=input.files&&input.files[0];input.value="";
+  if(!file)return;
+  if(typeof XLSX==="undefined"){alert("Error: libreria Excel no disponible. Recarga la pagina.");return;}
+  const cid=document.getElementById("fFC").value;
+  const cl=(window.WC||[]).find(c=>c.id===cid);
+  if(!cid||!cl){alert("Primero selecciona el cliente en el filtro Cliente.");return;}
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array",cellDates:true});
+      const {facturas,avisos}=_impLeer(wb);
+      if(!facturas.length){alert("No he encontrado facturas en el archivo."+(avisos.length?"\n\n"+avisos.slice(0,8).join("\n"):""));return;}
+      const existentes=(window.WF||[]).filter(f=>f.clienteDespachoId===cid);
+      const clave=f=>[f.tipo,String(f.numero||"").trim().toLowerCase(),String(f.nif||f.nombre||"").trim().toLowerCase()].join("|");
+      const ya=new Set(existentes.map(clave));
+      const nuevas=[],dup=[];
+      facturas.forEach(f=>{(f.numero&&ya.has(clave(f))?dup:nuevas).push(f);});
+      const nE=nuevas.filter(f=>f.tipo==="IVR").length,nR=nuevas.length-nE;
+      const sum=a=>a.reduce((s,f)=>s+f.base1+f.base2,0).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2});
+      let msg="Importar a: "+cl.nombre+"\n\n"+
+        "Emitidas: "+nE+"  (base "+sum(nuevas.filter(f=>f.tipo==="IVR"))+" EUR)\n"+
+        "Recibidas: "+nR+"  (base "+sum(nuevas.filter(f=>f.tipo==="IVS"))+" EUR)\n";
+      if(dup.length)msg+="\nSe omiten "+dup.length+" que ya estaban en la app (mismo nº y NIF).";
+      if(avisos.length)msg+="\n\nAvisos:\n"+avisos.slice(0,6).join("\n")+(avisos.length>6?"\n...":"");
+      if(!nuevas.length){alert(msg+"\n\nNo hay nada nuevo que importar.");return;}
+      if(!confirm(msg+"\n\n¿Importar?"))return;
+      const base=Date.now();
+      for(let i=0;i<nuevas.length;i+=20){
+        await Promise.all(nuevas.slice(i,i+20).map((f,j)=>{
+          const id=String(base+i+j);
+          const cc=(window.WCC||[]).find(c=>c.clienteDespachoId===cid&&((f.nif&&c.nif&&c.nif.toUpperCase()===f.nif)||(c.nombre||"").toLowerCase()===f.nombre.toLowerCase()));
+          const d={...f};delete d._fila;
+          if(cc){if(!d.cuenta)d.cuenta=cc.cuenta||"";if(!d.nombre)d.nombre=cc.nombre;if(!d.nif)d.nif=cc.nif||"";}
+          return fbS("iva_facturas",id,{id,...d,clienteDespachoId:cid,clienteDespachoNombre:cl.nombre,importado:file.name,creado:new Date().toISOString()});
+        }));
+      }
+      const sinCta=nuevas.filter(f=>!f.cuenta&&!(window.WCC||[]).some(c=>c.clienteDespachoId===cid&&((f.nif&&c.nif&&c.nif.toUpperCase()===f.nif)||(c.nombre||"").toLowerCase()===f.nombre.toLowerCase()))).length;
+      alert("Importadas "+nuevas.length+" facturas a "+cl.nombre+"."+(sinCta?"\n\nOjo: "+sinCta+" no tienen cuenta contable (proveedor/cliente nuevo). Revísalas en Cuentas antes de exportar a Delsol.":""));
+    }catch(err){console.error(err);alert("Error al leer el Excel: "+(err.message||err));}
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function openFM(tipo){
