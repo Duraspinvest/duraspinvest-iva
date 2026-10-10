@@ -349,10 +349,12 @@ body.visor-open .modal-overlay.open{display:flex;}
 </div>
 
 <!-- VISOR LATERAL -->
-<div id="visorOverlay" onclick="cerrarVisor()"></div>
+<div id="visorOverlay"></div>
 <div id="visorPanel" style="display:none;">
   <div id="visorHeader">
     <span id="visorTitle">Documento</span>
+    <button class="zoom-btn" onclick="girarVisor(-90)" title="Girar a la izquierda">⟲</button>
+    <button class="zoom-btn" onclick="girarVisor(90)" title="Girar a la derecha">⟳</button>
     <button class="zoom-btn" onclick="zoomVisor(-1)" title="Reducir">−</button>
     <button class="zoom-btn" onclick="zoomVisor(0)" title="Ajustar">⊡</button>
     <button class="zoom-btn" onclick="zoomVisor(1)" title="Ampliar">+</button>
@@ -537,7 +539,13 @@ function showSection(id,btn){
   if(btn)btn.classList.add("active");
 }
 function closeM(id){document.getElementById(id).classList.remove("open");}
-function closeMO(e,id){if(e.target===document.getElementById(id))closeM(id);}
+function closeMO(e,id){
+  const el=document.getElementById(id);
+  // Las ventanas con campos de datos solo se cierran con Guardar / Cancelar / X
+  if(el && el.querySelector('input,textarea,select')) return;
+  if(e.target===el && window._mdTarget===el) closeM(id);
+}
+document.addEventListener('mousedown',e=>{window._mdTarget=e.target;},true);
 async function fbS(col,id,d){try{await window.fsSetDoc(window.fsDoc(window.db,col,String(id)),d);}catch(e){console.error(e);}}
 async function fbD(col,id){try{await window.fsDeleteDoc(window.fsDoc(window.db,col,String(id)));}catch(e){console.error(e);}}
 function eur(n){if(n===undefined||n===null||n==="")return"";return parseFloat(n).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2})+" EUR";}
@@ -935,6 +943,9 @@ function openFM(tipo){
   document.getElementById("fP1").value="21";document.getElementById("fP2").value="";
   document.getElementById("fRP").value="";document.getElementById("f347").value="0";
   document.getElementById("acList").style.display="none";
+  document.getElementById("fCD").value="";
+  const _fFC=document.getElementById("fFC");
+  if(_fFC && _fFC.value && (window.WC||[]).some(c=>c.id===_fFC.value)){document.getElementById("fCD").value=_fFC.value;onFCDChange();}
   document.getElementById("fModal").classList.add("open");
 }
 
@@ -1039,6 +1050,12 @@ async function saveF(mantenerAbierto){
   });
   // Si viene del portal, marcar documento como procesado y cargar el siguiente
   if(window._portalDocId) {
+    try{
+      const pd=(window.portalDocs||[]).find(x=>x.id===window._portalDocId);
+      if(pd && pd.userEmail && cl && cl.portalEmail!==pd.userEmail){
+        await window.fsSetDoc(window.fsDoc(window.db,"clients",cl.id),{portalEmail:pd.userEmail},{merge:true});
+      }
+    }catch(e){console.warn("No se pudo vincular el usuario del portal",e);}
     marcarProcesada(window._portalDocId);
     const idActual = window._portalDocId;
     window._portalDocId = null;
@@ -1047,24 +1064,11 @@ async function saveF(mantenerAbierto){
     if(pendientes.length > 0) {
       // Hay más pendientes - cargar el siguiente en el visor y limpiar el formulario
       const siguiente = pendientes[0];
+      openFM('IVS');
       abrirVisor(siguiente);
       window._portalDocId = siguiente.id;
-      ['fNom','fNif','fCta','fNum','fB1','fB2','fI1','fI2','fTot','fRI'].forEach(function(id){
-        const el=document.getElementById(id); if(el) el.value='';
-      });
-      document.getElementById('fId').value='';
-      document.getElementById('fFecha').value=new Date().toISOString().slice(0,10);
-      if(document.getElementById('fP1')) document.getElementById('fP1').value='21';
-      if(document.getElementById('fP2')) document.getElementById('fP2').value='';
-      if(document.getElementById('fRP')) document.getElementById('fRP').value='';
-      const acList = document.getElementById('acList');
-      if(acList) acList.style.display='none';
-      // Autorellenar cliente si hay filtro activo
-      const filtroCliente = (document.getElementById('filtroPortalCliente')||{value:''}).value;
-      if(filtroCliente) onFCDChange();
-      showToast('Siguiente factura cargada. ' + (pendientes.length-1) + ' pendientes más.');
-      const nom = document.getElementById('fNom');
-      if(nom) nom.focus();
+      showToast('Siguiente factura: ' + (pendientes.length-1) + ' pendientes más.');
+      prepararDocPortal(siguiente);
       return;
     } else {
       // No hay más pendientes - cerrar todo
@@ -1445,6 +1449,13 @@ let _visorUrl = '';
 function zoomVisor(dir) {
   const content = document.getElementById('visorContent');
   const img = content ? content.querySelector('img') : null;
+  const cv = content ? content.querySelector('canvas') : null;
+  if(cv) {
+    if(dir === 99) { if(_visorUrl) window.open(_visorUrl, '_blank'); return; }
+    _visorZoom = dir === 0 ? 1 : Math.min(Math.max(_visorZoom + dir * 0.5, 0.5), 5);
+    cv.style.width = (100 * _visorZoom) + '%';
+    return;
+  }
   if(dir === 0) {
     _visorZoom = 1;
     if(img) { img.style.transform = 'scale(1)'; img.style.maxWidth = '100%'; }
@@ -1465,6 +1476,7 @@ function zoomVisor(dir) {
   content.style.cursor = 'grab';
 }
 
+let _visorRot = 0, _visorImg = null, _visorDocId = null;
 function abrirVisor(d) {
   const panel = document.getElementById('visorPanel');
   const content = document.getElementById('visorContent');
@@ -1472,15 +1484,130 @@ function abrirVisor(d) {
   if(!panel || !content) return;
   title.textContent = d.descripcion || d.nombreArchivo || 'Documento';
   _visorUrl = d.storageUrl || d.datos || '';
-  const url = d.storageUrl || d.datos || '';
+  _visorZoom = 1; _visorImg = null; _visorDocId = d.id || null;
+  const url = _visorUrl;
   if(d.tipo === 'application/pdf') {
     content.innerHTML = '<embed src="'+url+'" width="100%" height="100%" style="min-height:calc(100vh - 44px);">';
   } else {
-    content.innerHTML = '<img src="'+url+'" style="max-width:100%;display:block;margin:0 auto;">';
+    content.innerHTML = '<canvas id="visorCanvas" style="display:block;margin:0 auto;width:100%;"></canvas>';
+    const img = new Image();
+    img.onload = () => {
+      if(_visorDocId !== (d.id || null)) return;
+      _visorImg = img;
+      if(typeof d.rotacion === 'number') _visorRot = d.rotacion;
+      else _visorRot = (img.naturalWidth > img.naturalHeight * 1.1) ? 90 : 0; // foto apaisada de un documento: girarla
+      pintarVisor();
+    };
+    img.src = url;
   }
   panel.style.display = 'flex';
   document.getElementById('visorOverlay').style.display = 'block';
   document.body.classList.add('visor-open');
+}
+
+function pintarVisor() {
+  const cv = document.getElementById('visorCanvas');
+  if(!cv || !_visorImg) return;
+  const w = _visorImg.naturalWidth, h = _visorImg.naturalHeight;
+  const giro = ((_visorRot % 360) + 360) % 360;
+  const lado = (giro === 90 || giro === 270);
+  cv.width = lado ? h : w; cv.height = lado ? w : h;
+  const ctx = cv.getContext('2d');
+  ctx.save(); ctx.translate(cv.width/2, cv.height/2); ctx.rotate(giro * Math.PI/180);
+  ctx.drawImage(_visorImg, -w/2, -h/2); ctx.restore();
+  cv.style.width = (100 * _visorZoom) + '%';
+  cv.style.maxWidth = 'none';
+}
+
+function girarVisor(g) {
+  if(!_visorImg) return;
+  _visorRot = (((_visorRot + g) % 360) + 360) % 360;
+  pintarVisor();
+  // Recordar el giro para la próxima vez
+  if(_visorDocId) {
+    const d = (window.portalDocs||[]).find(x => x.id === _visorDocId);
+    if(d) { d.rotacion = _visorRot;
+      try { window.fsSetDoc(window.fsDoc(window.db,'portal_documentos',_visorDocId), {rotacion:_visorRot}, {merge:true}); } catch(e) {}
+    }
+  }
+}
+
+function _norm(s){ return (s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); }
+
+// Averigua de qué cliente es un usuario del portal
+function clienteDePortal(email) {
+  const cl = window.WC || []; const e = _norm(email);
+  if(!e) return null;
+  const exacto = cl.find(x => _norm(x.portalEmail) === e);
+  if(exacto) return exacto;
+  const pre = e.split('@')[0].replace(/[._\-0-9]+/g,' ').trim();
+  if(!pre) return null;
+  const palabras = pre.split(/\s+/);
+  const cands = cl.filter(x => { const n = _norm(x.nombre).split(/[\s,.]+/); return palabras.every(p => n.includes(p)); });
+  return cands.length === 1 ? cands[0] : null;
+}
+
+async function registrarFacturaPortal(id) {
+  const d = (window.portalDocs||[]).find(x => x.id === id);
+  if(!d || (!d.datos && !d.storageUrl)) { alert("No hay datos en este documento."); return; }
+  openFM('IVS');
+  abrirVisor(d);
+  window._portalDocId = id;
+  prepararDocPortal(d);
+}
+
+// Selecciona el cliente, lee la factura con IA y rellena la ventana. Tú solo revisas y guardas.
+async function prepararDocPortal(d) {
+  const docId = d.id;
+  const set = (id, v) => { const el = document.getElementById(id); if(el && v !== undefined && v !== null && v !== '' && v !== 0) el.value = v; };
+  // 1. Cliente
+  let c = clienteDePortal(d.userEmail);
+  if(!c) { const f = document.getElementById('fFC'); if(f && f.value) c = (window.WC||[]).find(x => x.id === f.value); }
+  if(c) { document.getElementById('fCD').value = c.id; onFCDChange(); }
+  else showToast('No sé de qué cliente es ' + (d.userEmail||'este documento') + ': elígelo en la ventana.', 6000);
+  // 2. Lectura con IA
+  showToast('Leyendo la factura con IA…', 20000);
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    let body;
+    if(d.datos) body = { datos: d.datos, tipo: d.tipo || 'application/pdf', modo: 'factura' };
+    else if(d.storagePath) {
+      const u = window.auth && window.auth.currentUser;
+      if(u) headers['Authorization'] = 'Bearer ' + await u.getIdToken();
+      body = { storagePath: d.storagePath, tipo: d.tipo || 'image/jpeg', modo: 'factura' };
+    } else throw new Error('Sin archivo');
+    const resp = await fetch('https://leerdocumento-gyc3opqqlq-ew.a.run.app', { method:'POST', headers, body: JSON.stringify(body) });
+    const result = await resp.json();
+    if(window._portalDocId !== docId) return; // ya has pasado a otro documento
+    if(!(result.ok && result.datos)) throw new Error(result.error || 'sin datos');
+    const f = result.datos;
+    set('fNum', f.numero);
+    if(f.fecha) { const p = String(f.fecha).split('/'); if(p.length === 3) document.getElementById('fFecha').value = p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0'); }
+    set('fNom', f.nombre); set('fNif', f.nif);
+    set('fB1', f.base1); set('fP1', f.pct1); set('fI1', f.iva1);
+    set('fB2', f.base2); set('fP2', f.pct2); set('fI2', f.iva2);
+    set('fRP', f.retPct); set('fTot', f.total);
+    if(f.concepto) set('fConc', f.concepto);
+    if(f.retPct) { try { calcRet(); } catch(e){} }
+    // 3. Si el proveedor ya existe en este cliente, usar su cuenta y lo de su última factura
+    const cid = document.getElementById('fCD').value;
+    if(cid) {
+      const nif = _norm(f.nif).replace(/[^a-z0-9]/g,''), nom = _norm(f.nombre).slice(0,8);
+      const cc = (window.WCC||[]).find(x => x.clienteDespachoId === cid && x.tipo !== 'cliente' && ((nif && _norm(x.nif).replace(/[^a-z0-9]/g,'') === nif) || (nom && _norm(x.nombre).includes(nom))));
+      if(cc) { document.getElementById('fNom').value = cc.nombre; if(cc.nif) document.getElementById('fNif').value = cc.nif; document.getElementById('fCta').value = cc.cuenta || ''; }
+      const ult = (window.WF||[]).filter(x => x.clienteDespachoId === cid && x.tipo === 'IVS' && ((nif && _norm(x.nif).replace(/[^a-z0-9]/g,'') === nif) || (cc && x.nombre === cc.nombre))).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''))[0];
+      if(ult) {
+        if(!document.getElementById('fCP').value && ult.contrapartida) document.getElementById('fCP').value = ult.contrapartida;
+        if(!document.getElementById('fConc').value && ult.concepto) document.getElementById('fConc').value = ult.concepto;
+        if(ult.deducible) document.getElementById('fDed').value = ult.deducible;
+        if(!document.getElementById('fCta').value && ult.cuenta) document.getElementById('fCta').value = ult.cuenta;
+      }
+    }
+    showToast('Datos leídos. Revísalos y pulsa Guardar.', 5000);
+  } catch(err) {
+    console.error('Lectura IA:', err);
+    if(window._portalDocId === docId) showToast('No he podido leer la factura: rellénala mirando la imagen.', 6000);
+  }
 }
 
 function cerrarVisor() {
@@ -1493,66 +1620,6 @@ function cerrarVisor() {
   if(content) content.innerHTML = '';
 }
 
-async function registrarFacturaPortal(id) {
-  const d = (window.portalDocs||[]).find(x => x.id === id);
-  if(!d || (!d.datos && !d.storageUrl)) { alert("No hay datos en este documento."); return; }
-
-  // Abrir el documento en el visor lateral
-  abrirVisor(d);
-
-  // Abrir modal de factura (recibida por defecto)
-  openFM('IVS');
-
-  // Guardar ID para marcarlo procesado al guardar
-  window._portalDocId = id;
-
-  // Intentar extracción automática con IA via Cloud Function
-  if(d.datos) {
-    showToast("Extrayendo datos con IA...", 6000);
-    try {
-      const resp = await fetch("https://leerdocumento-gyc3opqqlq-ew.a.run.app", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ datos: d.datos, tipo: d.tipo || "application/pdf", modo: "factura" })
-      });
-      const result = await resp.json();
-      if(result.ok && result.datos) {
-        const f = result.datos;
-        if(f.numero) document.getElementById("fNum").value = f.numero;
-        if(f.fecha) {
-          const parts = f.fecha.split("/");
-          if(parts.length === 3) document.getElementById("fFecha").value = parts[2]+"-"+parts[1].padStart(2,"0")+"-"+parts[0].padStart(2,"0");
-        }
-        if(f.nombre) document.getElementById("fNom").value = f.nombre;
-        if(f.nif) document.getElementById("fNif").value = f.nif;
-        if(f.base1) document.getElementById("fB1").value = f.base1;
-        if(f.pct1) document.getElementById("fP1").value = f.pct1;
-        if(f.iva1) document.getElementById("fI1").value = f.iva1;
-        if(f.base2) document.getElementById("fB2").value = f.base2;
-        if(f.pct2) document.getElementById("fP2").value = f.pct2;
-        if(f.iva2) document.getElementById("fI2").value = f.iva2;
-        if(f.total) document.getElementById("fTot").value = f.total;
-        if(f.retPct) document.getElementById("fRP").value = f.retPct;
-        // Buscar cuenta contable por nombre
-        if(f.nombre) {
-          const match = (window.WCC||[]).find(cc => (cc.nombre||"").toLowerCase().includes((f.nombre||"").toLowerCase().slice(0,8)));
-          if(match) {
-            document.getElementById("fNif").value = match.nif || f.nif || "";
-            document.getElementById("fCta").value = match.cuenta || "";
-          }
-        }
-        showToast("Datos extraidos automaticamente. Revisa y confirma.");
-      } else {
-        showToast("No se pudieron extraer datos. Rellena manualmente.");
-      }
-    } catch(err) {
-      console.error("Error extraccion IA:", err);
-      showToast("Rellena los datos manualmente.");
-    }
-  } else {
-    showToast("Documento en Storage — rellena los datos mirando la imagen.");
-  }
-}
 
 function verDocumento(id) {
   const d = (window.portalDocs||[]).find(x => x.id === id);
