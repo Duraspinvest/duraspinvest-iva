@@ -450,6 +450,8 @@ body.visor-open .modal-overlay.open{display:flex;}
       <input type="text" class="fi2" id="cNif" placeholder="A81948077"></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Codigo / Cuenta <span class="ob">*</span></label>
       <input type="text" class="fi2" id="cCta" placeholder="41000001 o numero correlativo"></div>
+    <div class="fg" style="margin-bottom:12px;"><label class="fl">Cuenta de gasto / ingreso habitual</label>
+      <input type="text" class="fi2" id="cContra" placeholder="62800000 (suministros), 62900000 (otros)..." title="Se pondrá sola al meter facturas de este proveedor/cliente"></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Tipo</label>
       <select class="fi2" id="cTip"><option value="proveedor">Proveedor (40x/41x)</option><option value="cliente">Cliente (43x)</option><option value="otro">Otro</option></select></div>
     <div class="fg" style="margin-bottom:12px;"><label class="fl">Domicilio</label>
@@ -1025,6 +1027,7 @@ function openFM(tipo){
   document.getElementById("fRP").value="";document.getElementById("f347").value="0";
   document.getElementById("acList").style.display="none";
   document.getElementById("fCD").value="";
+  document.getElementById("fCta").value=tipo==="IVR"?"43000001":"40000001";   // cuenta por defecto (sin contabilidad)
   const _fFC=document.getElementById("fFC");
   if(_fFC && _fFC.value && (window.WC||[]).some(c=>c.id===_fFC.value)){document.getElementById("fCD").value=_fFC.value;onFCDChange();}
   document.getElementById("fModal").classList.add("open");
@@ -1033,7 +1036,7 @@ function openFM(tipo){
 function onFCDChange(){
   document.getElementById("fNom").value="";
   document.getElementById("fNif").value="";
-  document.getElementById("fCta").value="";
+  document.getElementById("fCta").value=document.getElementById("fTipo").value==="IVR"?"43000001":"40000001";
   document.getElementById("acList").style.display="none";
   // Autorellenar 347 y retención del cliente seleccionado
   const cid = document.getElementById("fCD").value;
@@ -1062,7 +1065,7 @@ function acNombre(v){
   });
   if(!ccs.length){lista.style.display="none";return;}
   lista.innerHTML=ccs.map(cc=>
-    "<div class='ac-item' data-n='"+cc.nombre+"' data-nif='"+(cc.nif||"")+"' data-cta='"+cc.cuenta+"' data-ret='"+(cc.retPct||"")+"' data-m347='"+(cc.m347||"0")+"' onclick='selCC(this)'>"+
+    "<div class='ac-item' data-n='"+cc.nombre+"' data-nif='"+(cc.nif||"")+"' data-cta='"+cc.cuenta+"' data-ret='"+(cc.retPct||"")+"' data-m347='"+(cc.m347||"0")+"' data-cp='"+(cc.contrapartida||"")+"' onclick='selCC(this)'>"+
     cc.nombre+"<div class='ac-sub'>"+(cc.nif?cc.nif+" · ":"")+"Cta: "+cc.cuenta+(cc.retPct?" · Ret:"+cc.retPct+"%":"")+(cc.m347==="1"?" · 347":"")+"</div></div>"
   ).join("");
   lista.style.display="block";
@@ -1075,6 +1078,7 @@ function selCC(el){
   // Autorellenar retención y 347 desde la ficha de cuenta
   const elRP=document.getElementById("fRP"); if(elRP&&el.dataset.ret) elRP.value=el.dataset.ret;
   const el347=document.getElementById("f347"); if(el347&&el.dataset.m347) el347.value=el.dataset.m347;
+  if(el.dataset.cp) document.getElementById("fCP").value=el.dataset.cp;
   document.getElementById("acList").style.display="none";
 }
 
@@ -1156,6 +1160,21 @@ async function saveF(mantenerAbierto){
     deducible:tipo==="IVS"?document.getElementById("fDed").value:"",
     creado:prev.creado||new Date().toISOString()
   });
+  // Recordar el proveedor/cliente y su cuenta de gasto/ingreso para la próxima vez
+  try{
+    const _nif=(document.getElementById("fNif").value||"").trim(), _cp=(document.getElementById("fCP").value||"").trim();
+    const _cta=(document.getElementById("fCta").value||"").trim()||(tipo==="IVR"?"43000001":"40000001");
+    const _norm2=x=>String(x||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    const _tipoC=tipo==="IVR"?"cliente":"proveedor";
+    const ex=(window.WCC||[]).find(x=>x.clienteDespachoId===cid&&((x.tipo==="cliente")===(tipo==="IVR"))&&((_nif&&_norm2(x.nif)===_norm2(_nif))||(String(x.nombre||"").trim().toLowerCase()===nom.toLowerCase())));
+    if(!ex){
+      const nid="cc"+Date.now();
+      await fbS("iva_cuentas",nid,{id:nid,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",nombre:nom,nif:_nif,cuenta:_cta,tipo:_tipoC,
+        contrapartida:_cp,retPct:document.getElementById("fRP").value||"",m347:document.getElementById("f347").value||"0",creado:new Date().toISOString(),auto:true});
+    } else if(_cp && ex.contrapartida!==_cp){
+      await window.fsSetDoc(window.fsDoc(window.db,"iva_cuentas",String(ex.id)),{contrapartida:_cp},{merge:true});
+    }
+  }catch(e){console.warn("No se pudo guardar la cuenta del tercero",e);}
   // Si viene del portal, marcar documento como procesado y cargar el siguiente
   if(window._portalDocId) {
     try{
@@ -1168,7 +1187,8 @@ async function saveF(mantenerAbierto){
     const idActual = window._portalDocId;
     window._portalDocId = null;
     // Buscar siguiente documento pendiente
-    const pendientes = (window.portalDocs||[]).filter(d => d.estado === 'pendiente' && d.id !== idActual && !d.archivada);
+    const _act = (window.portalDocs||[]).find(d => d.id === idActual) || {};
+    const pendientes = (window.portalDocs||[]).filter(d => d.estado === 'pendiente' && d.id !== idActual && !d.archivada && d.userEmail === _act.userEmail);
     if(pendientes.length > 0) {
       // Hay más pendientes - cargar el siguiente en el visor y limpiar el formulario
       const siguiente = pendientes[0];
@@ -1179,10 +1199,12 @@ async function saveF(mantenerAbierto){
       prepararDocPortal(siguiente);
       return;
     } else {
-      // No hay más pendientes - cerrar todo
+      // No hay más pendientes de este cliente - cerrar todo
       cerrarVisor();
       closeM('fModal');
-      showToast('Todas las facturas procesadas.');
+      const _cl = clienteDePortal(_act.userEmail);
+      const _quien = _cl ? _cl.nombre : (String(_act.userEmail||'este cliente').split('@')[0]);
+      setTimeout(()=>alert('No hay más facturas para registrar de ' + _quien + '.'), 150);
       return;
     }
   }
@@ -1247,6 +1269,7 @@ function openCM(cc){
   document.getElementById("cTip").value=cc?cc.tipo:"proveedor";
   const elRP=document.getElementById("cRetPct"); if(elRP) elRP.value=cc?cc.retPct||"":"";
   const el347=document.getElementById("c347"); if(el347) el347.value=cc?cc.m347||"0":"0";
+  const elCo=document.getElementById("cContra"); if(elCo) elCo.value=cc?cc.contrapartida||"":"";
   document.getElementById("cModal").classList.add("open");
 }
 
@@ -1268,6 +1291,7 @@ async function saveC(){
     telefono:document.getElementById("cTel").value.trim(),
     retPct:(document.getElementById("cRetPct")||{value:""}).value,
     m347:(document.getElementById("c347")||{value:"0"}).value,
+    contrapartida:((document.getElementById("cContra")||{value:""}).value||"").trim(),
     creado:new Date().toISOString()
   });
   closeM("cModal");
@@ -1705,7 +1729,9 @@ async function prepararDocPortal(d) {
     if(cid) {
       const nif = _norm(f.nif).replace(/[^a-z0-9]/g,''), nom = _norm(f.nombre).slice(0,8);
       const cc = (window.WCC||[]).find(x => x.clienteDespachoId === cid && x.tipo !== 'cliente' && ((nif && _norm(x.nif).replace(/[^a-z0-9]/g,'') === nif) || (nom && _norm(x.nombre).includes(nom))));
-      if(cc) { document.getElementById('fNom').value = cc.nombre; if(cc.nif) document.getElementById('fNif').value = cc.nif; document.getElementById('fCta').value = cc.cuenta || ''; }
+      if(cc) { document.getElementById('fNom').value = cc.nombre; if(cc.nif) document.getElementById('fNif').value = cc.nif; if(cc.cuenta) document.getElementById('fCta').value = cc.cuenta;
+        if(cc.contrapartida) document.getElementById('fCP').value = cc.contrapartida;
+        if(cc.retPct && !document.getElementById('fRP').value) { document.getElementById('fRP').value = cc.retPct; try{calcRet();}catch(e){} } }
       const ult = (window.WF||[]).filter(x => x.clienteDespachoId === cid && x.tipo === 'IVS' && ((nif && _norm(x.nif).replace(/[^a-z0-9]/g,'') === nif) || (cc && x.nombre === cc.nombre))).sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''))[0];
       if(ult) {
         if(!document.getElementById('fCP').value && ult.contrapartida) document.getElementById('fCP').value = ult.contrapartida;
