@@ -422,7 +422,7 @@ body.visor-open .modal-overlay.open{display:flex;}
     <div class="mg2" style="margin-top:12px;">
       <div class="fg"><label class="fl">Total factura <span class="ob">*</span></label><input type="number" step="0.01" class="fi2" id="fTot" placeholder="0.00" oninput="if(document.getElementById('fTipo').value==='IVR'&&document.getElementById('fOp').value==='rebu')calcRebu()"></div>
       <div class="fg"><label class="fl">% Retencion</label>
-        <select class="fi2" id="fRP" onchange="calcRet()"><option value="">Sin retencion</option><option value="7">7%</option><option value="15">15%</option><option value="19">19%</option><option value="21">21%</option></select></div>
+        <select class="fi2" id="fRP" onchange="calcRet()"><option value="">Sin retencion</option><option value="1">1% (módulos)</option><option value="2">2% (agrarias)</option><option value="7">7%</option><option value="15">15%</option><option value="19">19%</option><option value="21">21%</option></select></div>
       <div class="fg"><label class="fl">Importe retencion</label><input type="number" step="0.01" class="fi2" id="fRI" placeholder="0.00"></div>
       <div class="fg"><label class="fl">Modelo 347</label>
         <select class="fi2" id="f347"><option value="0">No incluir</option><option value="1">Incluir</option></select></div>
@@ -468,6 +468,8 @@ body.visor-open .modal-overlay.open{display:flex;}
       <div class="fg"><label class="fl">% Retención habitual</label>
         <select class="fi2" id="cRetPct">
           <option value="">Sin retención</option>
+          <option value="1">1% (módulos)</option>
+          <option value="2">2% (agrarias)</option>
           <option value="7">7%</option>
           <option value="15">15%</option>
           <option value="19">19%</option>
@@ -1139,6 +1141,23 @@ async function saveF(mantenerAbierto){
   const cl=(window.WC||[]).find(c=>c.id===cid);
   const id=document.getElementById("fId").value||String(Date.now());
   const prev=(window.WF||[]).find(x=>String(x.id)===String(id))||{};
+  // Aviso de factura duplicada: mismo cliente del despacho, tipo, número y proveedor/cliente (NIF o nombre)
+  {
+    const _nn=x=>String(x||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+    const _nif0=_nn(document.getElementById("fNif").value), _nom0=_nn(nom), _num0=_nn(num);
+    const dups=(window.WF||[]).filter(x=>String(x.id)!==String(id)&&x.clienteDespachoId===cid&&x.tipo===tipo&&_nn(x.numero)===_num0&&
+      ((_nif0&&_nn(x.nif)===_nif0)||_nn(x.nombre)===_nom0));
+    if(dups.length){
+      const d=dups[0], mismaFecha=dups.some(x=>x.fecha===fec);
+      const fd=String(d.fecha||"").split("-").reverse().join("/");
+      const imp=(parseFloat(d.total)||0).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2});
+      const msg=(mismaFecha?"⚠ ESTA FACTURA YA ESTÁ REGISTRADA":"⚠ Ya hay una factura con este número")+" para "+(cl?cl.nombre:"este cliente")+":\n\n"+
+        (tipo==="IVR"?"Cliente: ":"Proveedor: ")+d.nombre+"\nNº "+d.numero+" · fecha "+fd+" · total "+imp+" €"+
+        (dups.length>1?"\n(y "+(dups.length-1)+" más con el mismo número)":"")+
+        "\n\n¿Guardarla igualmente?";
+      if(!confirm(msg))return;
+    }
+  }
   await fbS("iva_facturas",id,{
     ...prev,
     contrapartida:(document.getElementById("fCP").value||"").trim(),
@@ -1957,11 +1976,16 @@ function calcLiq(){
     const res4=cuotaAnual-icReal;
     let pend=compAnt,q4Pagar;
     if(res4>=0){const usa=Math.min(res4,pend);q4Pagar=res4-usa;pend-=usa;}else{pend+=(-res4);q4Pagar=0;}
+    // 131: al pago fraccionado del trimestre se le restan las retenciones soportadas en el trimestre (p. ej. 1% de transportistas);
+    // si sale negativo, el exceso se descuenta en los trimestres siguientes del mismo ano
+    const ret131=[1,2,3,4].map(t=>emit.filter(f=>trimOf(f.fecha)===t).reduce((s,f)=>s+retSop(f),0));
+    let neg131=0; const irpf131=[1,2,3,4].map(t=>{const ft=fac[t-1].f; if(ft<=0)return 0;
+      const r=irpfTrim*ft-ret131[t-1]-neg131; if(r<0){neg131=-r;return 0;} neg131=0; return r;});
     const rows=[1,2,3,4].map(t=>{const ft=fac[t-1].f;
-      if(ft<=0)return "<tr style='color:var(--gray-300);'><td>"+t+"T</td><td class='td-r'>&mdash;</td><td class='td-r'>&mdash;</td></tr>";
+      if(ft<=0)return "<tr style='color:var(--gray-300);'><td>"+t+"T</td><td class='td-r'>&mdash;</td><td class='td-r'>&mdash;</td><td class='td-r'>&mdash;</td></tr>";
       const ivaT=(t<regQ)?ivaAc*ft:q4Pagar;                              // el trimestre de regularizacion lleva cuota anual - ingresos a cuenta
       const nota=ft<1?" <span style='font-size:10px;color:var(--gray-400);'>("+fac[t-1].act+"/"+fac[t-1].tot+" dias)</span>":"";
-      return "<tr><td>"+t+"T"+nota+"</td><td class='td-r'>"+eur2(ivaT)+"</td><td class='td-r'>"+eur2(irpfTrim*ft)+"</td></tr>";}).join("");
+      return "<tr><td>"+t+"T"+nota+"</td><td class='td-r'>"+eur2(ivaT)+"</td><td class='td-r' style='color:var(--gray-400);'>"+(ret131[t-1]?eur2(ret131[t-1]):"&mdash;")+"</td><td class='td-r'>"+eur2(irpf131[t-1])+"</td></tr>";}).join("");
     cont.innerHTML=modBanner+"<div style='background:var(--gray-50);border-radius:7px;padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;'>"+
       "<strong>Datos base (objetiva &middot; epigrafe "+e.id+")</strong>"+(per.parcial?" <span style='color:var(--gold);font-weight:600;'>&middot; alta parcial "+per.ini.split('-').reverse().join('/')+" &rarr; "+per.ces.split('-').reverse().join('/')+" ("+per.diasAct+"/"+per.diasAnio+" dias, "+(per.factorAnual*100).toFixed(1)+"%)</span>":"")+"<br>"+
       "Rend. modulos IRPF: "+eur2(rendPrevio)+(incEmpleo?(" &minus; inc. empleo "+eur2(incEmpleo)):"")+(incInver?(" &minus; inc. inversion "+eur2(incInver)):"")+((incEmpleo||incInver)?(" = minorado "+eur2(rendMinorado)):"")+" &nbsp;&rarr;&nbsp; x indice "+indice+" x reduc. "+redFactor.toFixed(2)+" = base pagos fraccionados <strong>"+eur2(rendPF)+"</strong><br>"+
@@ -1971,7 +1995,7 @@ function calcLiq(){
       "Ingresos a cuenta previos "+(icRaw!==""&&icRaw!=null?"(introducidos)":"(calculados)")+": "+eur2(icReal)+" &nbsp;&middot;&nbsp; resultado "+regQ+"T (regularizacion): <strong>"+eur2(res4)+"</strong>"+
       (res4<0?" &rarr; <span style='color:var(--success);'>a compensar</span>":"")+
       ((compAnt>0||res4<0)?"<br>Pendiente de compensar tras el "+regQ+"T: <strong>"+eur2(pend)+"</strong>":"")+"</div>"+
-      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA (reg. simplificado)</th><th class='td-r'>IRPF (131)</th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
+      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA (reg. simplificado)</th><th class='td-r'>Ret. soport.</th><th class='td-r'>IRPF (131)</th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
       "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingreso a cuenta = "+(e.ingresoCuentaIvaPct||0)+"% de la cuota devengada, en cada trimestre de alta salvo el ultimo. El ultimo trimestre de alta ("+regQ+"T) regulariza: cuota anual [max(cuota devengada &minus; soportado, cuota minima)] &minus; ingresos a cuenta previos."+(per.parcial?" <strong>Alta/baja durante el ano:</strong> los trimestres sin actividad no se pagan, el de inicio/cese se prorratea por dias, y la cuota anual de IVA se prorratea al "+(per.factorAnual*100).toFixed(1)+"% de los dias.":"")+" Si dejas el campo de ingresos a cuenta vacio uso el calculado; metelo a mano si lo real fue distinto.</div>"+b115;
     return;
   }
