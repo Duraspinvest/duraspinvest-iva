@@ -379,6 +379,7 @@ body.visor-open .modal-overlay.open{display:flex;}
           <input type="text" class="fi2" id="fNom" placeholder="Escribe para buscar..." oninput="acNombre(this.value)" autocomplete="off">
           <div id="acList" class="ac-list"></div>
         </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-600);margin-top:5px;cursor:pointer;"><input type="checkbox" id="fOcas" style="width:auto;margin:0;"> Ocasional: no guardar en Cuentas (cliente o proveedor de una sola vez)</label>
       </div>
       <div class="fg"><label class="fl">NIF/CIF</label><input type="text" class="fi2" id="fNif" placeholder="B12345678"></div>
       <div class="fg"><label class="fl">Cuenta contable</label><input type="text" class="fi2" id="fCta" placeholder="43000001"></div>
@@ -1004,6 +1005,7 @@ function editF(id){
   set("fB3",f.base3||"");set("fI3",f.iva3||"");set("fEx",f.exento||"");set("fRebuC",f.rebuCoste||"");
   set("fOp",f.op||"int");
   set("fRI",f.retImporte||"");set("f347",f.m347||"0");
+  {const oc=document.getElementById("fOcas");if(oc)oc.checked=!!f.ocasional;}
   const selVal=(el,v)=>{const e=document.getElementById(el);if(!e)return;v=String(v===undefined||v===null?"":v);
     if(v!==""&&![...e.options].some(o=>o.value===v)){const o=document.createElement("option");o.value=v;o.textContent=v+"%";e.appendChild(o);}e.value=v;};
   selVal("fP1",f.pct1===undefined?"21":f.pct1);selVal("fP2",f.pct2||"");selVal("fP3",f.pct3||"");selVal("fRP",f.retPct||"");
@@ -1028,6 +1030,7 @@ function openFM(tipo){
   document.getElementById("fP1").value="21";document.getElementById("fP2").value="";
   document.getElementById("fRP").value="";document.getElementById("f347").value="0";
   document.getElementById("acList").style.display="none";
+  {const oc=document.getElementById("fOcas");if(oc)oc.checked=false;}
   document.getElementById("fCD").value="";
   document.getElementById("fCta").value=tipo==="IVR"?"43000001":"40000001";   // cuenta por defecto (sin contabilidad)
   const _fFC=document.getElementById("fFC");
@@ -1177,10 +1180,11 @@ async function saveF(mantenerAbierto){
     retPct:document.getElementById("fRP").value,retImporte:parseFloat(document.getElementById("fRI").value)||0,
     m347:document.getElementById("f347").value,
     deducible:tipo==="IVS"?document.getElementById("fDed").value:"",
+    ocasional:!!(document.getElementById("fOcas")||{}).checked,
     creado:prev.creado||new Date().toISOString()
   });
-  // Recordar el proveedor/cliente y su cuenta de gasto/ingreso para la próxima vez
-  try{
+  // Recordar el proveedor/cliente y su cuenta de gasto/ingreso para la próxima vez (salvo si es ocasional)
+  if(!(document.getElementById("fOcas")||{}).checked) try{
     const _nif=(document.getElementById("fNif").value||"").trim(), _cp=(document.getElementById("fCP").value||"").trim();
     const _cta=(document.getElementById("fCta").value||"").trim()||(tipo==="IVR"?"43000001":"40000001");
     const _norm2=x=>String(x||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
