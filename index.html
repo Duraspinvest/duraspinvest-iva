@@ -130,6 +130,9 @@ body.visor-open .modal-overlay.open{display:flex;}
       <input type="password" id="loginPassword" placeholder="..."  style="width:100%;padding:9px 11px;border:1.5px solid #D6DEE8;border-radius:7px;font-size:13px;outline:none;font-family:inherit;"></div>
     <div id="loginError" style="color:#EF4444;font-size:12px;margin-bottom:10px;display:none;">Email o contrasena incorrectos</div>
     <button onclick="doLogin()" style="width:100%;padding:11px;background:#0A2540;color:white;border:none;border-radius:7px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;">Entrar</button>
+    <div id="emMsg" style="display:none;margin-top:12px;font-size:12px;color:#B45309;background:#FFFBEB;border-radius:7px;padding:8px 10px;">No hay conexión con la base de datos. Si no se recupera, puedes trabajar con tu última copia en modo emergencia.</div>
+    <button onclick="emAbrir()" style="width:100%;margin-top:10px;padding:9px;background:none;color:#8A9BB0;border:1px dashed #D6DEE8;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;">Abrir una copia (modo emergencia)</button>
+    <input type="file" id="emFile" accept=".json" style="display:none;" onchange="emCargar(this)">
   </div>
 </div>
 
@@ -629,6 +632,7 @@ body.visor-open .modal-overlay.open{display:flex;}
       document.getElementById("userBadge").textContent=user.email.split("@")[0];
       act();
     } else {
+      if(window.__EMON)return;   // trabajando en modo emergencia: no volver a la pantalla de acceso
       des();
       document.getElementById("loginScreen").style.display="flex";
       document.getElementById("appContent").style.display="none";
@@ -647,6 +651,70 @@ function showSection(id,btn){
   if(btn)btn.classList.add("active");
 }
 function closeM(id){document.getElementById(id).classList.remove("open");}
+// ===================================================================================
+// ===== MODO EMERGENCIA: trabajar con una copia (.json) sin Firebase ni internet propio.
+// ===== Los cambios se guardan en memoria; al terminar, «Descargar copia con los cambios»
+// ===== y restaurarla después desde la app Despacho (Backup → Restaurar → SOBRESCRIBIR).
+// ===================================================================================
+window.__EMON=false;
+function emAbrir(){document.getElementById("emFile").click();}
+async function emCargar(input){
+  const file=input.files&&input.files[0];input.value="";if(!file)return;
+  let c;try{c=JSON.parse(await file.text());}catch(e){alert("El archivo no es una copia válida (.json de Durespin).");return;}
+  if(!c||!c.datos){alert("El archivo no es una copia de Durespin.");return;}
+  if(c.version!==2){const d=c.datos;Object.keys(d).forEach(k=>{if(Array.isArray(d[k])){const o={};d[k].forEach(x=>{if(x&&x.id!=null)o[String(x.id)]=x;});d[k]=o;}});}
+  window.__EM=c.datos;window.__EMfecha=c.fecha||"";window.__EMON=true;window.__EMcambios=0;
+  window.db=window.db||{};
+  window.fsDoc=(db,col,id)=>({c:col,id:String(id)});
+  window.fsCollection=(db,col)=>({c:col});
+  window.fsSetDoc=async(r,d,opt)=>{const E=window.__EM;E[r.c]=E[r.c]||{};E[r.c][r.id]=(opt&&opt.merge)?{...(E[r.c][r.id]||{}),...JSON.parse(JSON.stringify(d))}:JSON.parse(JSON.stringify(d));window.__EMcambios++;emSync();};
+  window.fsDeleteDoc=async r=>{const E=window.__EM;if(E[r.c])delete E[r.c][r.id];window.__EMcambios++;emSync();};
+  window.fsSignOut=async()=>{if(window.__EMcambios&&!confirm("Tienes "+window.__EMcambios+" cambios sin descargar. ¿Salir igualmente?"))return;location.reload();};
+  document.getElementById("loginScreen").style.display="none";
+  document.getElementById("appContent").style.display="flex";
+  const ub=document.getElementById("userBadge");if(ub)ub.textContent="emergencia";
+  let b=document.getElementById("emBanner");
+  if(!b){b=document.createElement("div");b.id="emBanner";b.style.cssText="position:sticky;top:0;z-index:900;background:#B45309;color:white;font-size:13px;padding:8px 16px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;";document.getElementById("appContent").prepend(b);}
+  emSync();
+}
+function emBanner(){
+  const b=document.getElementById("emBanner");if(!b)return;
+  b.innerHTML="<strong>MODO EMERGENCIA</strong> · datos de la copia del "+String(window.__EMfecha).slice(0,16).replace("T"," ")+
+    " · los cambios NO se guardan en la base de datos"+(window.__EMcambios?" · <strong>"+window.__EMcambios+" cambios</strong>":"")+
+    " <button onclick='emDescargar()' style='background:white;color:#B45309;border:none;border-radius:6px;padding:4px 10px;font-weight:600;cursor:pointer;'>Descargar copia con los cambios</button>";
+}
+function emSync(){
+  const E=window.__EM||{};const arr=c=>Object.entries(E[c]||{}).map(([id,d])=>({...d,id}));const map=c=>{const m={};Object.entries(E[c]||{}).forEach(([id,d])=>m[id]={...d,id});return m;};
+  window.WC=arr("clients").filter(c=>(c.categoria||"despacho")!=="auxiliar");
+  window.WF=arr("iva_facturas");window.WCC=arr("iva_cuentas");window.WEP=arr("epigrafes");
+  window.WFI=map("iva_fiscal");window.WIN=map("iva_ingresos");window.WDOC=map("iva_docs");
+  window.WAS=arr("conta_asientos");window.WINM=arr("conta_inmov");window.WCP=map("conta_plan");
+  window.portalDocs=arr("portal_documentos");
+  const call=f=>{try{if(typeof window[f]==="function")window[f]();}catch(e){console.warn(f,e);}};
+  ["poblarSel","renderF","renderSt","renderC","renderEpis"].forEach(call);
+  if(window.ctRefresh)try{window.ctRefresh();}catch(e){}
+  const dsec=document.getElementById("docs");if(dsec&&dsec.classList.contains("active"))call("renderDocs");
+  const csec=document.getElementById("contab");if(csec&&csec.classList.contains("active")&&typeof ctRender==="function")try{ctInit();ctRender();}catch(e){}
+  emBanner();
+}
+function emDescargar(){
+  const ahora=new Date().toISOString();
+  const copia={tipo:"copia-durespin",version:2,fecha:ahora,emergencia:true,origen:window.__EMfecha,datos:window.__EM};
+  copia.resumen={};copia.total=0;Object.entries(window.__EM).forEach(([c,o])=>{copia.resumen[c]=Object.keys(o).length;copia.total+=copia.resumen[c];});
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(copia)],{type:"application/json"}));
+  a.download="durespin_copia_emergencia_"+ahora.slice(0,16).replace(/[T:]/g,"-")+".json";document.body.appendChild(a);a.click();document.body.removeChild(a);
+  window.__EMcambios=0;emBanner();
+  alert("Copia descargada.\n\nCuando la base de datos vuelva a funcionar: app Despacho → Backup → Restaurar desde una copia → elige este archivo → SOBRESCRIBIR.");
+}
+// Si la base de datos no responde (sin conexión con Firebase), mostrar el acceso con la opción de modo emergencia
+setTimeout(()=>{
+  const ls=document.getElementById("loginScreen"),ac=document.getElementById("appContent");
+  if(!window.__EMON&&ls&&ac&&ls.style.display!=="flex"&&ac.style.display!=="flex"){
+    ls.style.display="flex";const m=document.getElementById("emMsg");if(m)m.style.display="block";
+  }
+},8000);
+window.addEventListener("beforeunload",e=>{if(window.__EMON&&window.__EMcambios){e.preventDefault();e.returnValue="";}});
+
 // ===================================================================================
 // ===== CONTABILIDAD: diario, mayor, sumas y saldos, balance y PyG, banco, inmovilizado,
 // ===== impuestos y cierre. Los asientos de las facturas se generan solos (no se guardan):
