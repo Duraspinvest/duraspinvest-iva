@@ -154,6 +154,7 @@ body.visor-open .modal-overlay.open{display:flex;}
   <button class="nav-btn" onclick="showSection('fiscal',this)">&#128203; Fiscal / Liquidacion</button>
   <button class="nav-btn" onclick="showSection('portal',this)">&#128229; Portal clientes</button>
   <button class="nav-btn" onclick="showSection('docs',this);renderDocs()">&#9989; Documentación</button>
+  <button class="nav-btn" onclick="showSection('contab',this);ctInit();ctRender()">&#128210; Contabilidad</button>
 </nav>
 <main>
 
@@ -318,6 +319,49 @@ body.visor-open .modal-overlay.open{display:flex;}
       <button class="btn btn-success" id="dgBtn" onclick="expDG()" style="display:none;">Descargar Excel</button>
     </div>
     <div id="dgRes"></div>
+  </div>
+</div>
+
+<!-- CONTABILIDAD -->
+<div id="contab" class="section">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+    <div>
+      <div style="font-size:16px;font-weight:600;color:var(--navy);">Contabilidad</div>
+      <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Los asientos de las facturas se generan solos. Añade el banco, la amortización, los impuestos y los asientos manuales.</div>
+    </div>
+    <div class="filtros" style="margin-bottom:0;">
+      <div class="filtro-group"><span class="filtro-label">Cliente</span><select class="fi" id="ctCli" onchange="window._ctMovs=null;ctRender()" style="min-width:200px;"><option value="">Seleccionar cliente...</option></select></div>
+      <div class="filtro-group"><span class="filtro-label">Año</span><select class="fi" id="ctAnio" onchange="ctRender()"><option>2025</option><option selected>2026</option><option>2027</option></select></div>
+      <div class="filtro-group"><span class="filtro-label">Periodo</span><select class="fi" id="ctPer" onchange="ctRender()"><option value="">Año completo</option><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
+    </div>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+    <button class="btn btn-secondary ct-tab btn-primary" onclick="ctTab('diario',this)">Diario</button>
+    <button class="btn btn-secondary ct-tab" onclick="ctTab('mayor',this)">Mayor</button>
+    <button class="btn btn-secondary ct-tab" onclick="ctTab('sumas',this)">Sumas y saldos</button>
+    <button class="btn btn-secondary ct-tab" onclick="ctTab('balance',this)">Balance y PyG</button>
+    <button class="btn btn-secondary ct-tab" onclick="ctTab('banco',this)">Banco</button>
+    <button class="btn btn-secondary ct-tab" onclick="ctTab('inmov',this)">Inmovilizado</button>
+    <button class="btn btn-secondary ct-tab" onclick="ctTab('imp',this)">Impuestos</button>
+    <button class="btn btn-secondary ct-tab" onclick="ctTab('cierre',this)">Cierre y apertura</button>
+    <button class="btn btn-secondary ct-tab" onclick="ctTab('revision',this)">Revisión</button>
+  </div>
+  <div id="ctBox"></div>
+</div>
+<div class="modal-overlay" id="ctAsModal" onclick="closeMO(event,'ctAsModal')">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-title" id="ctAsTitle">Nuevo asiento</div>
+    <div class="mg2">
+      <div class="fg"><label class="fl">Fecha</label><input type="date" class="fi2" id="ctAsFecha"></div>
+      <div class="fg"><label class="fl">Concepto</label><input type="text" class="fi2" id="ctAsConc" placeholder="p. ej. Pago préstamo octubre"></div>
+    </div>
+    <datalist id="ctCtaList"></datalist>
+    <table style="width:100%;margin-top:8px;"><thead><tr><th style="width:130px;">Cuenta</th><th>Nombre</th><th style="width:120px;" class="td-r">Debe</th><th style="width:120px;" class="td-r">Haber</th><th></th></tr></thead><tbody id="ctAsLin"></tbody></table>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+      <button class="btn btn-secondary" onclick="window._ctEdit.lineas.push({c:'',d:0,h:0});ctPintaLineas()">+ Línea</button>
+      <div id="ctAsCuadre" style="font-size:13px;"></div>
+    </div>
+    <div class="ma"><button class="btn btn-secondary" onclick="closeM('ctAsModal')">Cancelar</button><button class="btn btn-primary" onclick="ctGuardaAs()">Guardar asiento</button></div>
   </div>
 </div>
 
@@ -532,7 +576,7 @@ body.visor-open .modal-overlay.open{display:flex;}
       poblarSel();renderF();
     });
     u2=onSnapshot(collection(db,"iva_facturas"),s=>{
-      window.WF=s.docs.map(d=>({...d.data(),id:d.id}));renderF();renderSt();
+      window.WF=s.docs.map(d=>({...d.data(),id:d.id}));renderF();renderSt();if(window.ctRefresh)window.ctRefresh();
     });
     u3=onSnapshot(collection(db,"iva_cuentas"),s=>{
       window.WCC=s.docs.map(d=>({...d.data(),id:d.id}));renderC();
@@ -552,6 +596,12 @@ body.visor-open .modal-overlay.open{display:flex;}
       const m={};s.docs.forEach(d=>{m[d.id]={...d.data(),id:d.id};});window.WIN=m;
       if(typeof loadIngresos==="function")loadIngresos();
     });
+    // Contabilidad
+    const _ctAct=()=>{const sec=document.getElementById("contab");if(sec&&sec.classList.contains("active")&&typeof ctRender==="function")ctRender();};
+    window.ctRefresh=_ctAct;
+    onSnapshot(collection(db,"conta_asientos"),s=>{window.WAS=s.docs.map(d=>({...d.data(),id:d.id}));_ctAct();});
+    onSnapshot(collection(db,"conta_inmov"),s=>{window.WINM=s.docs.map(d=>({...d.data(),id:d.id}));_ctAct();});
+    onSnapshot(collection(db,"conta_plan"),s=>{const m={};s.docs.forEach(d=>{m[d.id]={...d.data(),id:d.id};});window.WCP=m;});
     // Control de documentación por cliente y trimestre
     onSnapshot(collection(db,"iva_docs"),s=>{
       const m={};s.docs.forEach(d=>{m[d.id]={...d.data(),id:d.id};});window.WDOC=m;
@@ -597,6 +647,580 @@ function showSection(id,btn){
   if(btn)btn.classList.add("active");
 }
 function closeM(id){document.getElementById(id).classList.remove("open");}
+// ===================================================================================
+// ===== CONTABILIDAD: diario, mayor, sumas y saldos, balance y PyG, banco, inmovilizado,
+// ===== impuestos y cierre. Los asientos de las facturas se generan solos (no se guardan):
+// ===== siempre coinciden con las facturas. El resto se guarda en conta_asientos.
+// ===================================================================================
+window.WAS=window.WAS||[];window.WINM=window.WINM||[];window.WCP=window.WCP||{};
+const CT_IVA_R="47700000",CT_IVA_S="47200000",CT_RET_E="47300000",CT_RET_R="47510000",CT_BANCO="57200000";
+const PGC={
+"1":"Financiación básica","10":"Capital","100":"Capital social","101":"Fondo social","102":"Capital","103":"Socios por desembolsos no exigidos","108":"Acciones o participaciones propias","11":"Reservas","110":"Prima de emisión","112":"Reserva legal","113":"Reservas voluntarias","118":"Aportaciones de socios o propietarios","12":"Resultados pendientes de aplicación","120":"Remanente","121":"Resultados negativos de ejercicios anteriores","129":"Resultado del ejercicio","13":"Subvenciones y donaciones","130":"Subvenciones oficiales de capital","14":"Provisiones","16":"Deudas a l/p con partes vinculadas","17":"Deudas a l/p por préstamos","170":"Deudas a l/p con entidades de crédito","171":"Deudas a largo plazo","173":"Proveedores de inmovilizado a l/p","174":"Acreedores por arrendamiento financiero a l/p","18":"Fianzas recibidas a l/p","180":"Fianzas recibidas a l/p",
+"2":"Activo no corriente","20":"Inmovilizaciones intangibles","203":"Propiedad industrial","206":"Aplicaciones informáticas","21":"Inmovilizaciones materiales","210":"Terrenos y bienes naturales","211":"Construcciones","212":"Instalaciones técnicas","213":"Maquinaria","214":"Utillaje","215":"Otras instalaciones","216":"Mobiliario","217":"Equipos para procesos de información","218":"Elementos de transporte","219":"Otro inmovilizado material","22":"Inversiones inmobiliarias","220":"Inversiones en terrenos","221":"Inversiones en construcciones","23":"Inmovilizado material en curso","25":"Otras inversiones financieras a l/p","26":"Fianzas y depósitos constituidos a l/p","260":"Fianzas constituidas a l/p","28":"Amortización acumulada del inmovilizado","280":"Amortización acumulada del inmovilizado intangible","281":"Amortización acumulada del inmovilizado material","2811":"A.A. construcciones","2812":"A.A. instalaciones técnicas","2813":"A.A. maquinaria","2815":"A.A. otras instalaciones","2816":"A.A. mobiliario","2817":"A.A. equipos informáticos","2818":"A.A. elementos de transporte","282":"Amortización acumulada inversiones inmobiliarias",
+"3":"Existencias","300":"Mercaderías","310":"Materias primas","350":"Productos terminados",
+"4":"Acreedores y deudores","400":"Proveedores","401":"Proveedores, efectos a pagar","407":"Anticipos a proveedores","410":"Acreedores por prestaciones de servicios","430":"Clientes","431":"Clientes, efectos a cobrar","436":"Clientes de dudoso cobro","438":"Anticipos de clientes","440":"Deudores","460":"Anticipos de remuneraciones","465":"Remuneraciones pendientes de pago","470":"Hacienda Pública, deudora por diversos conceptos","4700":"H.P. deudora por IVA","4709":"H.P. deudora por devolución de impuestos","471":"Organismos de la S.S., deudores","472":"H.P. IVA soportado","473":"H.P. retenciones y pagos a cuenta","474":"Activos por impuesto diferido","475":"Hacienda Pública, acreedora por conceptos fiscales","4750":"H.P. acreedora por IVA","4751":"H.P. acreedora por retenciones practicadas","4752":"H.P. acreedora por impuesto sobre sociedades","476":"Organismos de la S.S., acreedores","477":"H.P. IVA repercutido","480":"Gastos anticipados","485":"Ingresos anticipados","490":"Deterioro de créditos comerciales",
+"5":"Cuentas financieras","520":"Deudas a c/p con entidades de crédito","5200":"Préstamos a c/p de entidades de crédito","5201":"Deudas a c/p por crédito dispuesto","523":"Proveedores de inmovilizado a c/p","524":"Acreedores por arrendamiento financiero a c/p","551":"Cuenta corriente con socios y administradores","555":"Partidas pendientes de aplicación","560":"Fianzas recibidas a c/p","565":"Fianzas constituidas a c/p","57":"Tesorería","570":"Caja, euros","572":"Bancos e instituciones de crédito c/c vista, euros",
+"6":"Compras y gastos","600":"Compras de mercaderías","601":"Compras de materias primas","602":"Compras de otros aprovisionamientos","606":"Descuentos sobre compras por pronto pago","607":"Trabajos realizados por otras empresas","608":"Devoluciones de compras","609":"Rappels por compras","610":"Variación de existencias de mercaderías","62":"Servicios exteriores","621":"Arrendamientos y cánones","622":"Reparaciones y conservación","623":"Servicios de profesionales independientes","624":"Transportes","625":"Primas de seguros","626":"Servicios bancarios y similares","627":"Publicidad, propaganda y relaciones públicas","628":"Suministros","629":"Otros servicios","63":"Tributos","630":"Impuesto sobre beneficios","631":"Otros tributos","64":"Gastos de personal","640":"Sueldos y salarios","641":"Indemnizaciones","642":"Seguridad Social a cargo de la empresa","649":"Otros gastos sociales","66":"Gastos financieros","662":"Intereses de deudas","6623":"Intereses de deudas con entidades de crédito","665":"Intereses por descuento de efectos","669":"Otros gastos financieros","67":"Pérdidas procedentes de activos no corrientes y gastos excepcionales","678":"Gastos excepcionales","68":"Dotaciones para amortizaciones","680":"Amortización del inmovilizado intangible","681":"Amortización del inmovilizado material","682":"Amortización de las inversiones inmobiliarias","69":"Pérdidas por deterioro y otras dotaciones","694":"Pérdidas por deterioro de créditos comerciales",
+"7":"Ventas e ingresos","700":"Ventas de mercaderías","701":"Ventas de productos terminados","704":"Ventas de envases y embalajes","705":"Prestaciones de servicios","706":"Descuentos sobre ventas por pronto pago","708":"Devoluciones de ventas","709":"Rappels sobre ventas","74":"Subvenciones a la explotación","740":"Subvenciones, donaciones y legados a la explotación","746":"Subvenciones de capital transferidas al resultado","75":"Otros ingresos de gestión","752":"Ingresos por arrendamientos","759":"Ingresos por servicios diversos","76":"Ingresos financieros","769":"Otros ingresos financieros","77":"Beneficios procedentes de activos no corrientes e ingresos excepcionales","778":"Ingresos excepcionales","79":"Excesos y aplicaciones de provisiones"
+};
+const _r2c=n=>Math.round((n||0)*100)/100;
+function ctEsc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+function ctE(n){return (n||n===0)&&Math.abs(n)>=0.005?_r2c(n).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2}):"";}
+function ctFD(f){return f?String(f).split("-").reverse().join("/"):"";}
+function ctNorm(c){c=String(c||"").replace(/\D/g,"");return c;}
+function ctNombre(cid,cta){
+  cta=ctNorm(cta);
+  const k=(window.WCP||{})[cid+"_"+cta];if(k&&k.nombre)return k.nombre;
+  const cc=(window.WCC||[]).find(x=>x.clienteDespachoId===cid&&ctNorm(x.cuenta)===cta);if(cc&&cc.nombre)return cc.nombre;
+  for(let l=Math.min(4,cta.length);l>=1;l--){const p=cta.slice(0,l);if(PGC[p])return PGC[p];}
+  return "";
+}
+async function ctSave(col,id,data){
+  try{await window.fsSetDoc(window.fsDoc(window.db,col,String(id)),data);return true;}
+  catch(e){console.error(e);alert("No se ha podido guardar en la base de datos ("+col+").\n\n"+(e.message||e)+"\n\nSi dice «permission», hay que permitir esta colección en las reglas de Firestore.");return false;}
+}
+async function ctDel(col,id){try{await window.fsDeleteDoc(window.fsDoc(window.db,col,String(id)));}catch(e){console.error(e);alert("No se ha podido borrar: "+(e.message||e));}}
+
+// ---------- Asiento de una factura (mismo criterio que la exportación a ContaSOL) ----------
+function ctLineasFactura(f){
+  const cc=getCuentaParaFactura(f),L=[];
+  const total=_r2c(parseFloat(f.total)||0),ret=_r2c(parseFloat(f.retImporte)||0);
+  const add=(c,d,h)=>{d=_r2c(d);h=_r2c(h);if(d||h)L.push({c:ctNorm(c),d,h});};
+  if(f.tipo==="IVR"){
+    const cli=cc.cuenta||f.cuenta||"43000000",contra=cc.contrapartida||"70000000";
+    add(cli,total,0); if(ret>0)add(CT_RET_E,ret,0);
+    add(contra,0,fIngreso(f)); const cu=fRep(f); if(cu>0)add(CT_IVA_R,0,cu);
+  }else{
+    const prov=cc.cuenta||f.cuenta||"40000000",contra=cc.contrapartida||"60000000";
+    const auto=esAuto(f),cuota=fCuota(f),noDed=String(f.deducible)==="0";
+    const base=fBaseTot(f);
+    add(contra,base+(noDed?cuota:0),0);
+    if(cuota>0&&!noDed&&fOpDe(f)!=="rebu")add(CT_IVA_S,cuota,0);
+    if(auto&&cuota>0)add(CT_IVA_R,0,cuota);
+    add(prov,0,total); if(ret>0)add(CT_RET_R,0,ret);
+  }
+  // Cuadre por redondeos del documento (diferencias de céntimos) contra la cuenta de gasto/ingreso
+  const dif=_r2c(L.reduce((s,l)=>s+l.d-l.h,0));
+  if(dif&&Math.abs(dif)<0.05){const i=L.findIndex(l=>/^[67]/.test(l.c));if(i>-1){if(L[i].d)L[i].d=_r2c(L[i].d-dif);else L[i].h=_r2c(L[i].h+dif);}}
+  return L;
+}
+const CT_ORD={apertura:0,factura:1,banco:2,manual:2,impuesto:3,amort:4,nomina:2,regularizacion:8,cierre:9};
+const CT_ORIG={apertura:"Apertura",factura:"Factura",banco:"Banco",manual:"Manual",impuesto:"Impuestos",amort:"Amortización",nomina:"Nómina",regularizacion:"Regularización",cierre:"Cierre"};
+function ctAsientos(cid,anio){
+  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&String(fR(f)).slice(0,4)===anio).map(f=>({
+    id:"F"+f.id,fid:f.id,fecha:fR(f),origen:"factura",
+    concepto:(f.tipo==="IVR"?"N/Fra. ":"S/Fra. ")+(f.numero||"")+" "+(f.nombre||""),lineas:ctLineasFactura(f)}));
+  const gs=(window.WAS||[]).filter(a=>a.cid===cid&&String(a.fecha||"").slice(0,4)===anio);
+  const all=[...fs,...gs].sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")||(CT_ORD[a.origen]||2)-(CT_ORD[b.origen]||2)||String(a.creado||a.id).localeCompare(String(b.creado||b.id)));
+  all.forEach((a,i)=>a.num=i+1);
+  return all;
+}
+function ctPeriodo(){
+  const anio=document.getElementById("ctAnio").value,p=document.getElementById("ctPer").value;
+  if(!p)return {anio,desde:anio+"-01-01",hasta:anio+"-12-31",txt:anio};
+  const t=parseInt(p,10);return {anio,desde:anio+"-"+String((t-1)*3+1).padStart(2,"0")+"-01",hasta:anio+"-"+["03-31","06-30","09-30","12-31"][t-1],txt:t+"T "+anio};
+}
+function ctSaldos(cid,anio,hasta,desde,sinReg){ // {cuenta:{d,h}}
+  const m={};
+  ctAsientos(cid,anio).filter(a=>a.fecha<=hasta&&(!desde||a.fecha>=desde)&&!(sinReg&&a.origen==="regularizacion")).forEach(a=>(a.lineas||[]).forEach(l=>{const k=ctNorm(l.c);m[k]=m[k]||{d:0,h:0};m[k].d+=l.d||0;m[k].h+=l.h||0;}));
+  return m;
+}
+
+// ---------- Pantalla ----------
+window._ctTab="diario";
+function ctInit(){
+  const s=document.getElementById("ctCli");if(!s)return;
+  const v=s.value;s.innerHTML="<option value=''>Seleccionar cliente...</option>"+(window.WC||[]).slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es")).map(c=>"<option value='"+c.id+"'>"+ctEsc(c.nombre)+"</option>").join("");
+  s.value=v;
+}
+function ctTab(t,btn){window._ctTab=t;document.querySelectorAll(".ct-tab").forEach(b=>b.classList.remove("btn-primary"));if(btn)btn.classList.add("btn-primary");ctRender();}
+function ctRender(){
+  const box=document.getElementById("ctBox");if(!box)return;
+  const cid=document.getElementById("ctCli").value;
+  if(!cid){box.innerHTML="<div class='empty'><div class='empty-icon'>&#128210;</div><div>Selecciona un cliente.</div></div>";return;}
+  const t=window._ctTab;
+  try{
+    if(t==="diario")ctDiario(box,cid);
+    else if(t==="mayor")ctMayor(box,cid);
+    else if(t==="sumas")ctSumas(box,cid);
+    else if(t==="balance")ctBalance(box,cid);
+    else if(t==="banco")ctBanco(box,cid);
+    else if(t==="inmov")ctInmov(box,cid);
+    else if(t==="imp")ctImpuestos(box,cid);
+    else if(t==="cierre")ctCierre(box,cid);
+    else if(t==="revision")ctRevision(box,cid);
+  }catch(e){console.error(e);box.innerHTML="<div style='color:#DC2626;'>Error: "+ctEsc(e.message)+"</div>";}
+}
+
+// ---------- Diario ----------
+function ctDiario(box,cid){
+  const P=ctPeriodo();
+  const as=ctAsientos(cid,P.anio).filter(a=>a.fecha>=P.desde&&a.fecha<=P.hasta);
+  let td=0,th=0;
+  const rows=as.map(a=>{
+    const ls=a.lineas||[];const d=ls.reduce((s,l)=>s+(l.d||0),0),h=ls.reduce((s,l)=>s+(l.h||0),0);td+=d;th+=h;
+    const desc=Math.abs(d-h)>0.005;
+    const acc=a.origen==="factura"?"<button class='icon-btn' title='Abrir la factura' onclick=\"editF('"+a.fid+"')\">&#9998;</button>"
+      :"<button class='icon-btn' title='Editar' onclick=\"ctEditAs('"+a.id+"')\">&#9998;</button><button class='icon-btn' title='Borrar' onclick=\"ctBorrarAs('"+a.id+"')\">x</button>";
+    return "<tr style='background:var(--gray-50);'><td style='font-weight:600;'>"+a.num+"</td><td>"+ctFD(a.fecha)+"</td><td colspan='2' style='font-weight:500;'>"+ctEsc(a.concepto||"")+
+      " <span style='font-size:10px;color:var(--gray-400);'>"+(CT_ORIG[a.origen]||a.origen)+"</span>"+(desc?" <span style='color:#DC2626;font-weight:600;'>⚠ descuadrado "+ctE(d-h)+"</span>":"")+"</td><td></td><td></td><td style='white-space:nowrap;'>"+acc+"</td></tr>"+
+      ls.map(l=>"<tr><td></td><td></td><td style='font-family:monospace;font-size:12px;'>"+l.c+"</td><td style='font-size:12px;color:var(--gray-600);'>"+ctEsc(ctNombre(cid,l.c))+"</td><td class='td-r'>"+ctE(l.d)+"</td><td class='td-r'>"+ctE(l.h)+"</td><td></td></tr>").join("");
+  }).join("");
+  box.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;'><div style='font-size:13px;color:var(--gray-600);'><strong>"+as.length+"</strong> asientos · "+P.txt+" · Debe "+ctE(td)+" · Haber "+ctE(th)+"</div>"+
+    "<div style='display:flex;gap:6px;'><button class='btn btn-primary' onclick='ctEditAs()'>+ Asiento manual</button><button class='btn btn-secondary' onclick='ctExpDiario()'>&#8681; Excel</button></div></div>"+
+    "<div class='tabla-wrapper'><table><thead><tr><th>Nº</th><th>Fecha</th><th>Cuenta</th><th>Concepto / nombre</th><th class='td-r'>Debe</th><th class='td-r'>Haber</th><th></th></tr></thead><tbody>"+
+    (rows||"<tr><td colspan='7'><div class='empty'><div>No hay asientos en este periodo.</div></div></td></tr>")+"</tbody></table></div>";
+}
+function ctExpDiario(){
+  const cid=document.getElementById("ctCli").value,P=ctPeriodo();const cn=(window.WC||[]).find(c=>c.id===cid)||{};
+  const as=ctAsientos(cid,P.anio).filter(a=>a.fecha>=P.desde&&a.fecha<=P.hasta);
+  const aoa=[["Asiento","Fecha","Cuenta","Nombre cuenta","Concepto","Debe","Haber","Origen"]];
+  as.forEach(a=>(a.lineas||[]).forEach(l=>aoa.push([a.num,ctFD(a.fecha),l.c,ctNombre(cid,l.c),a.concepto||"",l.d||0,l.h||0,CT_ORIG[a.origen]||a.origen])));
+  ctXlsx([["Diario",aoa,[8,11,11,30,40,12,12,12]]],"Diario_"+(cn.nombre||"")+"_"+P.txt);
+}
+function ctXlsx(hojas,nombre){
+  const wb=XLSX.utils.book_new();
+  hojas.forEach(([n,aoa,w])=>{const ws=XLSX.utils.aoa_to_sheet(aoa);if(w)ws["!cols"]=w.map(x=>({wch:x}));XLSX.utils.book_append_sheet(wb,ws,n);});
+  XLSX.writeFile(wb,String(nombre).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Za-z0-9_-]+/g,"_")+".xlsx");
+}
+
+// ---------- Asiento manual ----------
+function ctEditAs(id){
+  const cid=document.getElementById("ctCli").value;if(!cid){alert("Selecciona un cliente.");return;}
+  const a=id?(window.WAS||[]).find(x=>x.id===id):null;
+  const P=ctPeriodo();
+  window._ctEdit={id:a?a.id:null,cid,origen:a?a.origen:"manual",ref:a?a.ref||"":"",lineas:a?(a.lineas||[]).map(l=>({...l})):[{c:"",d:0,h:0},{c:"",d:0,h:0}]};
+  document.getElementById("ctAsFecha").value=a?a.fecha:(new Date().toISOString().slice(0,10)<=P.hasta&&new Date().toISOString().slice(0,10)>=P.desde?new Date().toISOString().slice(0,10):P.hasta);
+  document.getElementById("ctAsConc").value=a?a.concepto||"":"";
+  document.getElementById("ctAsTitle").textContent=a?"Editar asiento":"Nuevo asiento";
+  ctPintaLineas();document.getElementById("ctAsModal").classList.add("open");
+}
+function ctPintaLineas(){
+  const E=window._ctEdit,cid=E.cid;
+  const tb=document.getElementById("ctAsLin");
+  tb.innerHTML=E.lineas.map((l,i)=>"<tr><td><input class='fi2' list='ctCtaList' style='font-family:monospace;' value='"+ctEsc(l.c)+"' oninput='window._ctEdit.lineas["+i+"].c=this.value;document.getElementById(\"ctN"+i+"\").textContent=ctNombre(window._ctEdit.cid,this.value)'></td>"+
+    "<td id='ctN"+i+"' style='font-size:11px;color:var(--gray-400);'>"+ctEsc(ctNombre(cid,l.c))+"</td>"+
+    "<td><input class='fi2' type='number' step='0.01' style='text-align:right;' value='"+(l.d||"")+"' oninput='window._ctEdit.lineas["+i+"].d=parseFloat(this.value)||0;ctCuadre()'></td>"+
+    "<td><input class='fi2' type='number' step='0.01' style='text-align:right;' value='"+(l.h||"")+"' oninput='window._ctEdit.lineas["+i+"].h=parseFloat(this.value)||0;ctCuadre()'></td>"+
+    "<td><button class='icon-btn' onclick='window._ctEdit.lineas.splice("+i+",1);ctPintaLineas()'>x</button></td></tr>").join("");
+  // lista de cuentas: las usadas por el cliente + PGC
+  const usadas=new Set();ctAsientos(cid,document.getElementById("ctAnio").value).forEach(a=>(a.lineas||[]).forEach(l=>usadas.add(l.c)));
+  (window.WCC||[]).filter(x=>x.clienteDespachoId===cid).forEach(x=>{if(x.cuenta)usadas.add(ctNorm(x.cuenta));if(x.contrapartida)usadas.add(ctNorm(x.contrapartida));});
+  Object.keys(PGC).filter(k=>k.length>=3).forEach(k=>usadas.add(k.padEnd(8,"0")));
+  document.getElementById("ctCtaList").innerHTML=[...usadas].sort().map(c=>"<option value='"+c+"'>"+ctEsc(ctNombre(cid,c))+"</option>").join("");
+  ctCuadre();
+}
+function ctCuadre(){
+  const L=window._ctEdit.lineas,d=L.reduce((s,l)=>s+(l.d||0),0),h=L.reduce((s,l)=>s+(l.h||0),0),x=document.getElementById("ctAsCuadre");
+  x.innerHTML="Debe "+ctE(d)+" · Haber "+ctE(h)+(Math.abs(d-h)>0.005?" · <span style='color:#DC2626;font-weight:600;'>Diferencia "+ctE(d-h)+"</span>":" · <span style='color:var(--success);'>Cuadrado</span>");
+}
+async function ctGuardaAs(){
+  const E=window._ctEdit;const fecha=document.getElementById("ctAsFecha").value,conc=document.getElementById("ctAsConc").value.trim();
+  const L=E.lineas.map(l=>({c:ctNorm(l.c),d:_r2c(l.d),h:_r2c(l.h)})).filter(l=>l.c&&(l.d||l.h));
+  if(!fecha||L.length<2){alert("Pon la fecha y al menos dos líneas con cuenta e importe.");return;}
+  const d=L.reduce((s,l)=>s+l.d,0),h=L.reduce((s,l)=>s+l.h,0);
+  if(Math.abs(d-h)>0.005&&!confirm("El asiento no cuadra (diferencia "+ctE(d-h)+"). ¿Guardarlo igualmente?"))return;
+  const id=E.id||("A"+Date.now());const prev=(window.WAS||[]).find(x=>x.id===id)||{};
+  const rec={...prev,id,cid:E.cid,fecha,concepto:conc,origen:E.origen||"manual",ref:E.ref||"",lineas:L,creado:prev.creado||new Date().toISOString(),modificado:new Date().toISOString()};
+  if(await ctSave("conta_asientos",id,rec)){closeM("ctAsModal");}
+}
+async function ctBorrarAs(id){if(!confirm("¿Borrar este asiento?"))return;await ctDel("conta_asientos",id);}
+
+// ---------- Mayor ----------
+function ctMayor(box,cid){
+  const P=ctPeriodo();const as=ctAsientos(cid,P.anio);
+  const ctas=new Set();as.forEach(a=>(a.lineas||[]).forEach(l=>ctas.add(l.c)));
+  const sel=window._ctMayorCta&&ctas.has(window._ctMayorCta)?window._ctMayorCta:[...ctas].sort()[0]||"";
+  let html="<div style='display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;'><span class='filtro-label'>Cuenta</span><select class='fi' onchange='window._ctMayorCta=this.value;ctRender()'>"+
+    [...ctas].sort().map(c=>"<option value='"+c+"'"+(c===sel?" selected":"")+">"+c+" · "+ctEsc(ctNombre(cid,c))+"</option>").join("")+"</select>"+
+    "<button class='btn btn-secondary' onclick='ctExpMayor()'>&#8681; Excel</button></div>";
+  if(!sel){box.innerHTML=html+"<div class='empty'><div>Sin movimientos.</div></div>";return;}
+  let saldo=0,rows="",td=0,th=0;
+  as.forEach(a=>(a.lineas||[]).forEach(l=>{if(l.c!==sel)return;
+    if(a.fecha<P.desde){saldo+=(l.d||0)-(l.h||0);return;}
+    if(a.fecha>P.hasta)return;
+    if(!rows&&saldo)rows+="<tr style='color:var(--gray-400);'><td></td><td></td><td>Saldo anterior</td><td></td><td></td><td class='td-r'>"+ctE(saldo)+"</td></tr>";
+    saldo+=(l.d||0)-(l.h||0);td+=l.d||0;th+=l.h||0;
+    rows+="<tr><td>"+a.num+"</td><td>"+ctFD(a.fecha)+"</td><td>"+ctEsc(a.concepto||"")+"</td><td class='td-r'>"+ctE(l.d)+"</td><td class='td-r'>"+ctE(l.h)+"</td><td class='td-r' style='font-weight:500;'>"+ctE(saldo)+"</td></tr>";}));
+  box.innerHTML=html+"<div class='tabla-wrapper'><table><thead><tr><th>Asiento</th><th>Fecha</th><th>Concepto</th><th class='td-r'>Debe</th><th class='td-r'>Haber</th><th class='td-r'>Saldo</th></tr></thead><tbody>"+
+    (rows||"<tr><td colspan='6'><div class='empty'><div>Sin movimientos en "+P.txt+".</div></div></td></tr>")+
+    "<tr style='font-weight:600;background:var(--gray-50);'><td></td><td></td><td>Totales del periodo</td><td class='td-r'>"+ctE(td)+"</td><td class='td-r'>"+ctE(th)+"</td><td class='td-r'>"+ctE(saldo)+"</td></tr></tbody></table></div>";
+}
+function ctExpMayor(){
+  const cid=document.getElementById("ctCli").value,P=ctPeriodo();const cn=(window.WC||[]).find(c=>c.id===cid)||{};
+  const as=ctAsientos(cid,P.anio);const ctas=new Set();as.forEach(a=>(a.lineas||[]).forEach(l=>ctas.add(l.c)));
+  const aoa=[["Cuenta","Nombre","Asiento","Fecha","Concepto","Debe","Haber","Saldo"]];
+  [...ctas].sort().forEach(c=>{let s=0;as.forEach(a=>(a.lineas||[]).forEach(l=>{if(l.c!==c||a.fecha>P.hasta)return;s+=(l.d||0)-(l.h||0);if(a.fecha>=P.desde)aoa.push([c,ctNombre(cid,c),a.num,ctFD(a.fecha),a.concepto||"",l.d||0,l.h||0,_r2c(s)]);}));});
+  ctXlsx([["Mayor",aoa,[11,28,8,11,40,12,12,12]]],"Mayor_"+(cn.nombre||"")+"_"+P.txt);
+}
+
+// ---------- Sumas y saldos ----------
+function ctSumasDatos(cid,P,niv){
+  const m=ctSaldos(cid,P.anio,P.hasta),g={};
+  Object.entries(m).forEach(([c,v])=>{const k=niv==="sub"?c:c.slice(0,parseInt(niv,10));g[k]=g[k]||{d:0,h:0};g[k].d+=v.d;g[k].h+=v.h;});
+  return Object.keys(g).sort().map(k=>({c:k,n:ctNombre(cid,niv==="sub"?k:k),d:g[k].d,h:g[k].h,sd:Math.max(0,g[k].d-g[k].h),sa:Math.max(0,g[k].h-g[k].d)}));
+}
+function ctSumas(box,cid){
+  const P=ctPeriodo();const niv=window._ctNiv||"sub";
+  const R=ctSumasDatos(cid,P,niv);const T=R.reduce((t,r)=>({d:t.d+r.d,h:t.h+r.h,sd:t.sd+r.sd,sa:t.sa+r.sa}),{d:0,h:0,sd:0,sa:0});
+  box.innerHTML="<div style='display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;'><span class='filtro-label'>Nivel</span><select class='fi' onchange='window._ctNiv=this.value;ctRender()'>"+
+    [["sub","Subcuentas"],["3","3 dígitos"],["4","4 dígitos"],["2","2 dígitos"]].map(([v,t])=>"<option value='"+v+"'"+(v===niv?" selected":"")+">"+t+"</option>").join("")+"</select>"+
+    "<span style='font-size:12px;color:var(--gray-400);'>Acumulado desde el 1 de enero hasta "+ctFD(P.hasta)+"</span><button class='btn btn-secondary' onclick='ctExpSumas()'>&#8681; Excel</button></div>"+
+    "<div class='tabla-wrapper'><table><thead><tr><th>Cuenta</th><th>Nombre</th><th class='td-r'>Sumas debe</th><th class='td-r'>Sumas haber</th><th class='td-r'>Saldo deudor</th><th class='td-r'>Saldo acreedor</th></tr></thead><tbody>"+
+    R.map(r=>"<tr><td style='font-family:monospace;'>"+r.c+"</td><td>"+ctEsc(r.n)+"</td><td class='td-r'>"+ctE(r.d)+"</td><td class='td-r'>"+ctE(r.h)+"</td><td class='td-r'>"+ctE(r.sd)+"</td><td class='td-r'>"+ctE(r.sa)+"</td></tr>").join("")+
+    "<tr style='font-weight:600;background:var(--gray-50);'><td></td><td>TOTALES"+(Math.abs(T.d-T.h)>0.005?" <span style='color:#DC2626;'>⚠ no cuadra</span>":"")+"</td><td class='td-r'>"+ctE(T.d)+"</td><td class='td-r'>"+ctE(T.h)+"</td><td class='td-r'>"+ctE(T.sd)+"</td><td class='td-r'>"+ctE(T.sa)+"</td></tr></tbody></table></div>";
+}
+function ctExpSumas(){
+  const cid=document.getElementById("ctCli").value,P=ctPeriodo();const cn=(window.WC||[]).find(c=>c.id===cid)||{};
+  const R=ctSumasDatos(cid,P,window._ctNiv||"sub");
+  ctXlsx([["Sumas y saldos",[["Cuenta","Nombre","Sumas debe","Sumas haber","Saldo deudor","Saldo acreedor"],...R.map(r=>[r.c,r.n,_r2c(r.d),_r2c(r.h),_r2c(r.sd),_r2c(r.sa)])],[11,34,14,14,14,14]]],"Sumas_y_saldos_"+(cn.nombre||"")+"_"+P.txt);
+}
+
+// ---------- Balance de situación y PyG (modelo pymes, orientativo) ----------
+function ctBalanceDatos(cid,P){
+  const m=ctSaldos(cid,P.anio,P.hasta);const S={};Object.entries(m).forEach(([c,v])=>S[c]=v.d-v.h); // saldo deudor +
+  const mp=ctSaldos(cid,P.anio,P.hasta,P.desde,true);const SP={};Object.entries(mp).forEach(([c,v])=>SP[c]=v.d-v.h); // PyG del periodo, sin regularización
+  const sumP=(fn)=>Object.entries(SP).filter(([c])=>fn(c)).reduce((s,[,v])=>s+v,0);
+  const sum=(fn)=>Object.entries(S).filter(([c])=>fn(c)).reduce((s,[,v])=>s+v,0);
+  const st=(c,...p)=>p.some(x=>c.startsWith(x));
+  // PyG (ingresos en positivo)
+  const pyg=[
+    ["1. Importe neto de la cifra de negocios",-sumP(c=>st(c,"70")),"ex"],
+    ["4. Aprovisionamientos",-sumP(c=>st(c,"60","61")),"ex"],
+    ["5. Otros ingresos de explotación",-sumP(c=>st(c,"73","74","75")&&!st(c,"746")),"ex"],
+    ["6. Gastos de personal",-sumP(c=>st(c,"64")),"ex"],
+    ["7. Otros gastos de explotación",-sumP(c=>st(c,"62","631","634","636","639","65","694","695","794","7954")),"ex"],
+    ["8. Amortización del inmovilizado",-sumP(c=>st(c,"68")),"ex"],
+    ["9. Imputación de subvenciones de inmovilizado",-sumP(c=>st(c,"746")),"ex"],
+    ["11. Deterioro y resultado por enajenaciones del inmovilizado",-sumP(c=>st(c,"670","671","672","690","691","692","770","771","772","790","791","792")),"ex"],
+    ["12. Otros resultados",-sumP(c=>st(c,"678","778")),"ex"],
+    ["13. Ingresos financieros",-sumP(c=>st(c,"76")),"fi"],
+    ["14. Gastos financieros",-sumP(c=>st(c,"66")),"fi"],
+    ["17. Impuesto sobre beneficios",-sumP(c=>st(c,"630","633","638")),"im"]
+  ];
+  const resExp=pyg.filter(x=>x[2]==="ex").reduce((s,x)=>s+x[1],0),resFin=pyg.filter(x=>x[2]==="fi").reduce((s,x)=>s+x[1],0);
+  const resAI=resExp+resFin,resEj=resAI+pyg.filter(x=>x[2]==="im").reduce((s,x)=>s+x[1],0);
+  const resPend=-sum(c=>st(c,"6","7")); // resultado aún no regularizado contra la 129
+  // Balance
+  const sgn=(pref,deud)=>sum(c=>st(c,...pref)&&(deud?S[c]>0:S[c]<0));
+  const activo=[
+    ["A) ACTIVO NO CORRIENTE",null],
+    ["I. Inmovilizado intangible",sum(c=>st(c,"20","280","290"))],
+    ["II. Inmovilizado material",sum(c=>st(c,"21","23","281","291"))],
+    ["III. Inversiones inmobiliarias",sum(c=>st(c,"22","282","292"))],
+    ["V. Inversiones financieras a largo plazo",sum(c=>st(c,"24","25","26","297","298"))],
+    ["B) ACTIVO CORRIENTE",null],
+    ["II. Existencias",sum(c=>st(c,"3","407"))],
+    ["III. Deudores comerciales y otras cuentas a cobrar: clientes",sgn(["43","490"],true)+sum(c=>st(c,"490"))],
+    ["III. Deudores comerciales y otras cuentas a cobrar: otros deudores",sgn(["44","460","470","471","472","473","474","544","551","555","40","41"],true)],
+    ["V. Inversiones financieras a corto plazo",sum(c=>st(c,"53","54","565","566"))],
+    ["VI. Periodificaciones a corto plazo",sum(c=>st(c,"480","567"))],
+    ["VII. Efectivo y otros activos líquidos",sgn(["57"],true)]
+  ];
+  const pn=[
+    ["A) PATRIMONIO NETO",null],
+    ["I. Capital",-sum(c=>st(c,"100","101","102","103","104"))],
+    ["II. Prima de emisión",-sum(c=>st(c,"110"))],
+    ["III. Reservas",-sum(c=>st(c,"11")&&!st(c,"110","118"))],
+    ["V. Resultados de ejercicios anteriores",-sum(c=>st(c,"120","121"))],
+    ["VI. Otras aportaciones de socios",-sum(c=>st(c,"118"))],
+    ["VII. Resultado del ejercicio",-sum(c=>st(c,"129"))+resPend],
+    ["Subvenciones, donaciones y legados recibidos",-sum(c=>st(c,"13"))],
+    ["B) PASIVO NO CORRIENTE",null],
+    ["II. Deudas a largo plazo",-sum(c=>st(c,"14","16","17","18"))],
+    ["C) PASIVO CORRIENTE",null],
+    ["III. Deudas a corto plazo",-sgn(["50","51","52","555","56"],false)-sum(c=>st(c,"50","51","52","56"))+sgn(["50","51","52","56"],false)],
+    ["IV. Acreedores comerciales: proveedores",-sgn(["400","401","403","404","405","406"],false)],
+    ["IV. Acreedores comerciales: otros acreedores",-sgn(["41","43","44","465","466","47","551"],false)],
+    ["V. Periodificaciones a corto plazo",-sum(c=>st(c,"485","568"))]
+  ];
+  // deudas a c/p con entidades: saldo acreedor de 52/51/50/56 + saldo acreedor de 555 + bancos en descubierto
+  pn[11][1]=-sgn(["50","51","52","56","555"],false)-sgn(["57"],false);
+  const tA=activo.filter(x=>x[1]!=null).reduce((s,x)=>s+x[1],0),tP=pn.filter(x=>x[1]!=null).reduce((s,x)=>s+x[1],0);
+  return {pyg,resExp,resFin,resAI,resEj,activo,pn,tA,tP};
+}
+function ctBalance(box,cid){
+  const P=ctPeriodo();const B=ctBalanceDatos(cid,P);
+  const fila=(t,v,b)=>v==null?"<tr><td colspan='2' style='font-weight:700;color:var(--navy);padding-top:12px;'>"+t+"</td></tr>":"<tr"+(b?" style='font-weight:700;background:var(--gray-50);'":"")+"><td"+(b?"":" style='padding-left:18px;'")+">"+t+"</td><td class='td-r'>"+(Math.abs(v)>=0.005?ctE(v):"—")+"</td></tr>";
+  const pygRows=B.pyg.slice(0,9).map(x=>fila(x[0],x[1])).join("")+fila("A) RESULTADO DE EXPLOTACIÓN",B.resExp,1)+
+    B.pyg.slice(9,11).map(x=>fila(x[0],x[1])).join("")+fila("B) RESULTADO FINANCIERO",B.resFin,1)+fila("C) RESULTADO ANTES DE IMPUESTOS",B.resAI,1)+
+    fila(B.pyg[11][0],B.pyg[11][1])+fila("D) RESULTADO DEL EJERCICIO",B.resEj,1);
+  const cuad=Math.abs(B.tA-B.tP)<0.01;
+  box.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;'><div style='font-size:12px;color:var(--gray-400);'>Modelo abreviado de pymes, a "+ctFD(P.hasta)+". Orientativo: las cuentas anuales oficiales se presentan con el programa D2 del Registro Mercantil.</div><button class='btn btn-secondary' onclick='ctExpBalance()'>&#8681; Excel</button></div>"+
+    "<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;'>"+
+    "<div class='card' style='margin:0;'><div style='font-weight:600;color:var(--navy);margin-bottom:6px;'>Balance de situación</div><table style='width:100%;font-size:12px;'><tbody>"+
+      B.activo.map(x=>fila(x[0],x[1])).join("")+fila("TOTAL ACTIVO",B.tA,1)+B.pn.map(x=>fila(x[0],x[1])).join("")+fila("TOTAL PATRIMONIO NETO Y PASIVO",B.tP,1)+
+      "</tbody></table>"+(cuad?"<div style='font-size:11px;color:var(--success);margin-top:6px;'>✓ El balance cuadra</div>":"<div style='font-size:11px;color:#DC2626;margin-top:6px;'>⚠ Diferencia de "+ctE(B.tA-B.tP)+": revisa la pestaña Revisión</div>")+"</div>"+
+    "<div class='card' style='margin:0;'><div style='font-weight:600;color:var(--navy);margin-bottom:6px;'>Cuenta de pérdidas y ganancias ("+P.txt+")</div><table style='width:100%;font-size:12px;'><tbody>"+pygRows+"</tbody></table></div></div>";
+}
+function ctExpBalance(){
+  const cid=document.getElementById("ctCli").value,P=ctPeriodo();const cn=(window.WC||[]).find(c=>c.id===cid)||{};const B=ctBalanceDatos(cid,P);
+  const r=x=>[x[0],x[1]==null?"":_r2c(x[1])];
+  const bal=[["Balance de situación a "+ctFD(P.hasta),""],...B.activo.map(r),["TOTAL ACTIVO",_r2c(B.tA)],[],...B.pn.map(r),["TOTAL PATRIMONIO NETO Y PASIVO",_r2c(B.tP)]];
+  const pyg=[["Pérdidas y ganancias "+P.txt,""],...B.pyg.slice(0,9).map(r),["A) RESULTADO DE EXPLOTACIÓN",_r2c(B.resExp)],...B.pyg.slice(9,11).map(r),["B) RESULTADO FINANCIERO",_r2c(B.resFin)],["C) RESULTADO ANTES DE IMPUESTOS",_r2c(B.resAI)],r(B.pyg[11]),["D) RESULTADO DEL EJERCICIO",_r2c(B.resEj)]];
+  ctXlsx([["Balance",bal,[60,16]],["PyG",pyg,[60,16]]],"Balance_PyG_"+(cn.nombre||"")+"_"+P.txt);
+}
+
+// ---------- Banco: importar extracto (Norma 43, Excel o CSV) y proponer asientos ----------
+function ctBanco(box,cid){
+  box.innerHTML="<div class='card' style='margin-bottom:10px;'><div style='display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;'>"+
+    "<div><div class='filtro-label'>Cuenta del banco</div><input class='fi' id='ctBcoCta' value='"+(window._ctBcoCta||CT_BANCO)+"' style='width:120px;font-family:monospace;' onchange='window._ctBcoCta=this.value'></div>"+
+    "<input type='file' id='ctBcoFile' accept='.xlsx,.xls,.csv,.txt,.n43,.aeb,.q43' style='display:none;' onchange='ctLeerBanco(this)'>"+
+    "<button class='btn btn-primary' onclick=\"document.getElementById('ctBcoFile').click()\">&#8679; Importar extracto</button>"+
+    "<div style='font-size:12px;color:var(--gray-400);max-width:520px;'>Norma 43 (fichero del banco) o Excel/CSV con columnas de fecha, concepto e importe (o cargo y abono). La app propone la contrapartida: cobros y pagos de facturas, Seguridad Social, Hacienda, nóminas, comisiones... Revísala y pulsa «Crear asientos».</div></div></div>"+
+    "<div id='ctBcoRes'></div>";
+  if(window._ctMovs&&window._ctMovs.cid===cid)ctPintaMovs();
+}
+function ctLeerBanco(input){
+  const file=input.files&&input.files[0];input.value="";if(!file)return;
+  const cid=document.getElementById("ctCli").value;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const buf=new Uint8Array(e.target.result);let movs=[];
+      const txt=new TextDecoder("latin1").decode(buf);
+      if(/^11\d{8}/m.test(txt)&&/^22/m.test(txt))movs=ctN43(txt);
+      else if(/\.(csv|txt)$/i.test(file.name)){  // CSV a mano: importes y fechas en formato español
+        const t2=/\uFFFD/.test(new TextDecoder("utf-8").decode(buf))?txt:new TextDecoder("utf-8").decode(buf);
+        const ls=t2.split(/\r?\n/).filter(x=>x.trim());const sep=[";","\t",","].sort((a,b)=>(ls[0].split(b).length)-(ls[0].split(a).length))[0];
+        movs=ctMovsRows(ls.map(l=>l.split(sep).map(x=>x.replace(/^"|"$/g,"").trim())));
+      }else{const wb=XLSX.read(buf,{type:"array"});movs=ctMovsExcel(wb);}
+      if(!movs.length){alert("No he encontrado movimientos en el archivo.");return;}
+      window._ctMovs={cid,movs:movs.map(m=>({...m,...ctProponer(cid,m),ok:true}))};
+      ctPintaMovs();
+    }catch(err){console.error(err);alert("No he podido leer el extracto: "+(err.message||err));}
+  };
+  rd.readAsArrayBuffer(file);
+}
+function ctN43(txt){
+  const out=[];let cur=null;
+  txt.split(/\r?\n/).forEach(l=>{
+    if(l.startsWith("22")){
+      const f="20"+l.slice(10,12)+"-"+l.slice(12,14)+"-"+l.slice(14,16);
+      const imp=parseInt(l.slice(28,42),10)/100*(l[27]==="1"?-1:1);
+      cur={fecha:f,importe:_r2c(imp),concepto:(l.slice(52,64)+" "+l.slice(64,80)).replace(/\s+/g," ").trim()};out.push(cur);
+    }else if(l.startsWith("23")&&cur){cur.concepto=(cur.concepto+" "+l.slice(4,42)+" "+l.slice(42,80)).replace(/\s+/g," ").trim();}
+  });
+  return out;
+}
+function ctMovsExcel(wb){return ctMovsRows(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""}));}
+function ctMovsRows(rows){
+  const N=v=>_impNorm(v);let hi=-1,M={};
+  for(let i=0;i<Math.min(rows.length,25);i++){const n=rows[i].map(N);
+    const fi=n.findIndex(x=>/^f(echa)?\.? ?(operacion|op|contable)?$|^fecha/.test(x));
+    if(fi>-1&&n.some(x=>/importe|cargo|abono|debe|haber|cantidad/.test(x))){hi=i;
+      M.fecha=fi;M.concepto=n.findIndex(x=>/concepto|descripcion|detalle|movimiento/.test(x));
+      M.importe=n.findIndex(x=>/^importe|cantidad/.test(x));M.cargo=n.findIndex(x=>/cargo|debe|salida/.test(x));M.abono=n.findIndex(x=>/abono|haber|entrada|ingreso/.test(x));
+      M.mas=n.findIndex((x,j)=>j!==M.concepto&&/mas datos|observ|referencia|beneficiario|ordenante/.test(x));break;}}
+  if(hi<0)throw new Error("no encuentro la fila de cabecera (fecha, concepto, importe)");
+  const out=[];
+  for(let i=hi+1;i<rows.length;i++){const r=rows[i];const f=_impFecha(r[M.fecha]);if(!f)continue;
+    let imp=M.importe>-1?_impNum(r[M.importe]):(_impNum(r[M.abono])-Math.abs(_impNum(r[M.cargo])));
+    if(!imp)continue;
+    out.push({fecha:f,importe:_r2c(imp),concepto:(String(M.concepto>-1?r[M.concepto]:"")+" "+String(M.mas>-1?r[M.mas]:"")).replace(/\s+/g," ").trim()});}
+  return out;
+}
+function ctProponer(cid,m){
+  const t=_impNorm(m.concepto),imp=m.importe,abs=Math.abs(imp);
+  // 1) factura con el mismo total (emitida si es cobro, recibida si es pago), la más cercana en fecha
+  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&f.tipo===(imp>0?"IVR":"IVS")&&Math.abs((parseFloat(f.total)||0)-abs)<0.011)
+    .sort((a,b)=>Math.abs(new Date(a.fecha)-new Date(m.fecha))-Math.abs(new Date(b.fecha)-new Date(m.fecha)));
+  if(fs.length){const f=fs[0],cc=getCuentaParaFactura(f);return {cta:ctNorm(cc.cuenta||f.cuenta||(imp>0?"43000000":"40000000")),txt:(imp>0?"Cobro":"Pago")+" fra. "+(f.numero||"")+" "+(f.nombre||""),por:"factura"};}
+  const R=[
+    [/tgss|seguridad social|r ?e ?autonom|reta\b|cotizacion/,()=>/autonom|reta/.test(t)?"64200000":"47600000","Seguridad Social"],
+    [/aeat|agencia tributaria|agencia estatal|hacienda|impuesto|modelo|mod\.? ?\d{3}/,()=>/130/.test(t)?"47300000":/111|115/.test(t)?"47510000":/200|202/.test(t)?"47300000":"47500000","Hacienda"],
+    [/nomina|salario/,()=>"46500000","Nómina"],
+    [/comision|cuota mantenimiento|mantenimiento cuenta|tarjeta.*cuota/,()=>"62600000","Comisión bancaria"],
+    [/interes/,()=>imp<0?"66230000":"76900000","Intereses"],
+    [/prestamo|amortizacion/,()=>"52000000","Préstamo"],
+    [/seguro|mapfre|axa|allianz|mutua|zurich|generali|ocaso|linea directa/,()=>"62500000","Seguro"],
+    [/iberdrola|endesa|naturgy|repsol|holaluz|aguas|agua|movistar|vodafone|orange|telefonica|digi|avatel|jazztel|masmovil/,()=>"62800000","Suministro"],
+    [/alquiler|arrendamiento|renta local/,()=>imp<0?"62100000":"75200000","Alquiler"],
+    [/traspaso|entre cuentas/,()=>"57200001","Traspaso"]
+  ];
+  for(const [re,fn,txt] of R)if(re.test(t))return {cta:fn(),txt:txt+": "+m.concepto,por:"regla"};
+  return {cta:"55500000",txt:m.concepto,por:""};
+}
+function ctPintaMovs(){
+  const res=document.getElementById("ctBcoRes");if(!res||!window._ctMovs)return;
+  const cid=window._ctMovs.cid,M=window._ctMovs.movs;
+  const ya=new Set((window.WAS||[]).filter(a=>a.cid===cid&&a.origen==="banco").map(a=>a.ref));
+  M.forEach(m=>{m.ref=m.fecha+"|"+m.importe+"|"+m.concepto.slice(0,60);m.dup=ya.has(m.ref);if(m.dup)m.ok=false;});
+  res.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'><div style='font-size:13px;'><strong>"+M.length+"</strong> movimientos · "+M.filter(m=>m.dup).length+" ya contabilizados · en gris los que no tienen propuesta (555)</div>"+
+    "<button class='btn btn-primary' onclick='ctCrearBanco()'>Crear asientos marcados</button></div>"+
+    "<datalist id='ctCtaList2'>"+[...new Set(M.map(m=>m.cta))].map(c=>"<option value='"+c+"'>").join("")+"</datalist>"+
+    "<div class='tabla-wrapper'><table><thead><tr><th></th><th>Fecha</th><th>Concepto del banco</th><th class='td-r'>Importe</th><th>Contrapartida</th><th>Concepto del asiento</th></tr></thead><tbody>"+
+    M.map((m,i)=>"<tr style='"+(m.dup?"opacity:0.45;":m.cta==="55500000"?"background:var(--gray-50);":"")+"'><td><input type='checkbox' style='width:auto;' "+(m.ok?"checked":"")+(m.dup?" disabled title='Ya contabilizado'":"")+" onchange='window._ctMovs.movs["+i+"].ok=this.checked'></td>"+
+      "<td>"+ctFD(m.fecha)+"</td><td style='font-size:12px;max-width:320px;'>"+ctEsc(m.concepto)+"</td><td class='td-r' style='color:"+(m.importe<0?"#DC2626":"var(--success)")+";'>"+ctE(m.importe)+"</td>"+
+      "<td><input class='fi2' list='ctCtaList2' style='font-family:monospace;width:110px;' value='"+m.cta+"' onchange='window._ctMovs.movs["+i+"].cta=this.value;this.nextElementSibling.textContent=ctNombre(\""+cid+"\",this.value)'><div style='font-size:10px;color:var(--gray-400);'>"+ctEsc(ctNombre(cid,m.cta))+"</div></td>"+
+      "<td><input class='fi2' style='font-size:12px;' value='"+ctEsc(m.txt)+"' onchange='window._ctMovs.movs["+i+"].txt=this.value'></td></tr>").join("")+"</tbody></table></div>";
+}
+async function ctCrearBanco(){
+  const cid=window._ctMovs.cid,bco=ctNorm(document.getElementById("ctBcoCta").value)||CT_BANCO;
+  const sel=window._ctMovs.movs.filter(m=>m.ok&&!m.dup);if(!sel.length){alert("No hay movimientos marcados.");return;}
+  if(!confirm("Se crearán "+sel.length+" asientos de banco. ¿Seguir?"))return;
+  let n=0;const base=Date.now();
+  for(const [i,m] of sel.entries()){const a=_r2c(Math.abs(m.importe)),c=ctNorm(m.cta)||"55500000";
+    const lineas=m.importe>0?[{c:bco,d:a,h:0},{c,d:0,h:a}]:[{c,d:a,h:0},{c:bco,d:0,h:a}];
+    const id="B"+(base+i);
+    if(await ctSave("conta_asientos",id,{id,cid,fecha:m.fecha,concepto:m.txt,origen:"banco",ref:m.ref,lineas,creado:new Date().toISOString()}))n++;}
+  alert("Creados "+n+" asientos de banco."+(sel.some(m=>ctNorm(m.cta)==="55500000")?"\n\nLos que han ido a la 555 (partidas pendientes) hay que reclasificarlos: edítalos en el Diario.":""));
+  window._ctMovs=null;ctRender();
+}
+
+// ---------- Inmovilizado y amortizaciones ----------
+function ctInmov(box,cid){
+  const L=(window.WINM||[]).filter(x=>x.cid===cid);const anio=document.getElementById("ctAnio").value;
+  const acum=b=>(window.WAS||[]).filter(a=>a.cid===cid&&a.origen==="amort").reduce((s,a)=>s+(a.lineas||[]).filter(l=>l.b===b.id).reduce((t,l)=>t+(l.h||0),0),0);
+  box.innerHTML="<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;'><div style='font-size:12px;color:var(--gray-400);'>Fichas de inmovilizado. La amortización se calcula por días (lineal) y se contabiliza con un asiento por periodo.</div>"+
+    "<div style='display:flex;gap:6px;'><button class='btn btn-secondary' onclick='ctFichaInm()'>+ Bien</button><button class='btn btn-primary' onclick='ctGenAmort()'>Contabilizar amortización del periodo</button></div></div>"+
+    "<div class='tabla-wrapper'><table><thead><tr><th>Bien</th><th>Cuenta</th><th>Alta</th><th class='td-r'>Valor</th><th class='td-r'>% anual</th><th class='td-r'>Amortizado</th><th class='td-r'>Pendiente</th><th></th></tr></thead><tbody>"+
+    (L.length?L.map(b=>{const ac=acum(b)+(parseFloat(b.previa)||0);return "<tr><td>"+ctEsc(b.desc)+"</td><td style='font-family:monospace;'>"+b.cta+"</td><td>"+ctFD(b.alta)+"</td><td class='td-r'>"+ctE(b.valor)+"</td><td class='td-r'>"+b.pct+"</td><td class='td-r'>"+ctE(ac)+"</td><td class='td-r'>"+ctE(b.valor-ac)+"</td>"+
+      "<td><button class='icon-btn' onclick=\"ctFichaInm('"+b.id+"')\">&#9998;</button><button class='icon-btn' onclick=\"if(confirm('¿Borrar la ficha?'))ctDel('conta_inmov','"+b.id+"')\">x</button></td></tr>";}).join(""):"<tr><td colspan='8'><div class='empty'><div>Sin bienes. Pulsa «+ Bien».</div></div></td></tr>")+"</tbody></table></div>";
+}
+async function ctFichaInm(id){
+  const cid=document.getElementById("ctCli").value;const b=id?(window.WINM||[]).find(x=>x.id===id):{};
+  const desc=prompt("Descripción del bien:",b.desc||"");if(desc==null)return;
+  const cta=prompt("Cuenta del inmovilizado (p. ej. 21600000 mobiliario, 21700000 informática, 21800000 vehículos):",b.cta||"21600000");if(cta==null)return;
+  const alta=prompt("Fecha de alta (dd/mm/aaaa):",b.alta?ctFD(b.alta):"");if(alta==null)return;
+  const valor=prompt("Valor de adquisición (sin IVA deducible):",b.valor||"");if(valor==null)return;
+  const pct=prompt("% de amortización anual (tablas: mobiliario 10, informática 25, vehículos 16, instalaciones 10, edificios 3):",b.pct||"10");if(pct==null)return;
+  const previa=prompt("Amortización acumulada de años anteriores (si viene de Delsol; si no, 0):",b.previa||"0");if(previa==null)return;
+  const nid=id||("I"+Date.now());const c=ctNorm(cta);
+  await ctSave("conta_inmov",nid,{...b,id:nid,cid,desc,cta:c,ctaAA:"281"+c.slice(2,3)+"0000",ctaG:"68100000",alta:_impFecha(alta),valor:_impNum(valor),pct:_impNum(pct),previa:_impNum(previa)});
+}
+async function ctGenAmort(){
+  const cid=document.getElementById("ctCli").value,P=ctPeriodo();
+  const L=(window.WINM||[]).filter(x=>x.cid===cid&&x.alta&&x.alta<=P.hasta);if(!L.length){alert("No hay bienes dados de alta antes del "+ctFD(P.hasta)+".");return;}
+  const ref="AM-"+P.desde+"-"+P.hasta;
+  const prev=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="amort"&&a.ref===ref);
+  if(prev&&!confirm("Ya hay un asiento de amortización de "+P.txt+". ¿Rehacerlo?"))return;
+  const dias=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5)+1;const dA=dias(P.anio+"-01-01",P.anio+"-12-31");
+  const lineas=[];
+  L.forEach(b=>{
+    const ini=b.alta>P.desde?b.alta:P.desde;let q=_r2c(b.valor*b.pct/100*dias(ini,P.hasta)/dA);
+    const ac=(window.WAS||[]).filter(a=>a.cid===cid&&a.origen==="amort"&&a.ref!==ref).reduce((s,a)=>s+(a.lineas||[]).filter(l=>l.b===b.id).reduce((t,l)=>t+(l.h||0),0),0)+(b.previa||0);
+    q=Math.max(0,Math.min(q,_r2c(b.valor-ac)));if(!q)return;
+    lineas.push({c:b.ctaG||"68100000",d:q,h:0,b:b.id});lineas.push({c:b.ctaAA||"28100000",d:0,h:q,b:b.id});
+  });
+  if(!lineas.length){alert("No hay nada que amortizar en "+P.txt+".");return;}
+  const id=prev?prev.id:("M"+Date.now());
+  if(await ctSave("conta_asientos",id,{id,cid,fecha:P.hasta,concepto:"Amortización "+P.txt,origen:"amort",ref,lineas,creado:prev?prev.creado:new Date().toISOString()}))alert("Asiento de amortización de "+P.txt+" creado.");
+}
+
+// ---------- Impuestos: regularización del IVA por trimestre ----------
+function ctImpuestos(box,cid){
+  const anio=document.getElementById("ctAnio").value;
+  const rows=[1,2,3,4].map(t=>{
+    const d=anio+"-"+String((t-1)*3+1).padStart(2,"0")+"-01",h=anio+"-"+["03-31","06-30","09-30","12-31"][t-1];
+    const m=ctSaldos(cid,anio,h,d),rep=(m[CT_IVA_R]?m[CT_IVA_R].h-m[CT_IVA_R].d:0),sop=(m[CT_IVA_S]?m[CT_IVA_S].d-m[CT_IVA_S].h:0);
+    const hecho=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="impuesto"&&a.ref==="303-"+anio+"-"+t);
+    return "<tr><td>"+t+"T</td><td class='td-r'>"+ctE(rep)+"</td><td class='td-r'>"+ctE(sop)+"</td><td class='td-r' style='font-weight:600;'>"+ctE(rep-sop)+"</td><td>"+(rep-sop>=0?"a ingresar (4750)":"a compensar (4700)")+"</td>"+
+      "<td>"+(hecho?"<span style='color:var(--success);'>✓ contabilizado</span> ":"")+"<button class='btn btn-secondary' style='padding:3px 10px;font-size:12px;' onclick='ctGen303("+t+")'>"+(hecho?"Rehacer":"Contabilizar")+"</button></td></tr>";}).join("");
+  box.innerHTML="<div style='font-size:12px;color:var(--gray-400);margin-bottom:8px;'>Asiento de liquidación del IVA de cada trimestre (cierra la 477 y la 472 contra la 4750 o la 4700), con los importes de la contabilidad. Los pagos a Hacienda (303, 111, 115, 130) entran con el extracto del banco.</div>"+
+    "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA repercutido (477)</th><th class='td-r'>IVA soportado (472)</th><th class='td-r'>Resultado</th><th></th><th></th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
+    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Si un trimestre sale a compensar, el siguiente con resultado a ingresar puede descontarlo: hazlo con un asiento manual (4750 a 4700) por el importe compensado en el 303.</div>";
+}
+async function ctGen303(t){
+  const cid=document.getElementById("ctCli").value,anio=document.getElementById("ctAnio").value;
+  const d=anio+"-"+String((t-1)*3+1).padStart(2,"0")+"-01",h=anio+"-"+["03-31","06-30","09-30","12-31"][t-1],ref="303-"+anio+"-"+t;
+  const prev=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="impuesto"&&a.ref===ref);
+  // saldo de 477/472 del trimestre sin contar la propia regularización
+  const m={};ctAsientos(cid,anio).filter(a=>a.fecha>=d&&a.fecha<=h&&a.ref!==ref).forEach(a=>(a.lineas||[]).forEach(l=>{m[l.c]=m[l.c]||{d:0,h:0};m[l.c].d+=l.d||0;m[l.c].h+=l.h||0;}));
+  const rep=_r2c(m[CT_IVA_R]?m[CT_IVA_R].h-m[CT_IVA_R].d:0),sop=_r2c(m[CT_IVA_S]?m[CT_IVA_S].d-m[CT_IVA_S].h:0),res=_r2c(rep-sop);
+  if(!rep&&!sop){alert("No hay IVA en el "+t+"T.");return;}
+  const L=[];if(rep)L.push({c:CT_IVA_R,d:rep,h:0});if(sop)L.push({c:CT_IVA_S,d:0,h:sop});
+  if(res>0)L.push({c:"47500000",d:0,h:res});else if(res<0)L.push({c:"47000000",d:-res,h:0});
+  const id=prev?prev.id:("T"+Date.now());
+  if(await ctSave("conta_asientos",id,{id,cid,fecha:h,concepto:"Liquidación IVA "+t+"T "+anio+" (modelo 303)",origen:"impuesto",ref,lineas:L,creado:prev?prev.creado:new Date().toISOString()}))ctRender();
+}
+
+// ---------- Cierre del ejercicio y apertura ----------
+function ctCierre(box,cid){
+  const anio=document.getElementById("ctAnio").value,sig=String(parseInt(anio,10)+1);
+  const reg=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="regularizacion"&&a.fecha.slice(0,4)===anio);
+  const ap=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="apertura"&&a.fecha.slice(0,4)===sig);
+  const apA=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="apertura"&&a.fecha.slice(0,4)===anio);
+  box.innerHTML="<div class='card'><div style='font-weight:600;color:var(--navy);margin-bottom:6px;'>Cierre de "+anio+"</div>"+
+    "<div style='font-size:13px;line-height:1.7;'>1. <strong>Regularización</strong>: lleva todas las cuentas de gastos (6) e ingresos (7) a la 129 Resultado del ejercicio. "+(reg?"<span style='color:var(--success);'>✓ hecha</span>":"")+
+    "<br>2. <strong>Apertura de "+sig+"</strong>: crea el asiento de apertura con los saldos de las cuentas de balance a 31/12/"+anio+". "+(ap?"<span style='color:var(--success);'>✓ hecha</span>":"")+
+    "<br><span style='font-size:12px;color:var(--gray-400);'>Antes de cerrar: contabiliza la amortización del año, la liquidación del IVA del 4T y, en sociedades, el Impuesto sobre Sociedades (6300 a 4752). Después, la aplicación del resultado (129 a 112/113/121) se hace con un asiento manual en "+sig+".</span></div>"+
+    "<div style='display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;'><button class='btn btn-primary' onclick='ctRegularizar()'>"+(reg?"Rehacer regularización":"Regularizar "+anio)+"</button><button class='btn btn-primary' onclick='ctApertura()'>"+(ap?"Rehacer apertura de "+sig:"Crear apertura de "+sig)+"</button></div></div>"+
+    "<div class='card'><div style='font-weight:600;color:var(--navy);margin-bottom:6px;'>Saldos iniciales de "+anio+" desde Delsol</div>"+
+    "<div style='font-size:13px;'>Si el cliente viene de Delsol, exporta de ContaSOL el <strong>balance de sumas y saldos a 31/12/"+(parseInt(anio,10)-1)+"</strong> a Excel (subcuentas) e impórtalo aquí: la app crea el asiento de apertura del 01/01/"+anio+" con las cuentas de balance (grupos 1 a 5). "+(apA?"<span style='color:var(--success);'>✓ Ya hay apertura en "+anio+"</span>":"")+"</div>"+
+    "<input type='file' id='ctApFile' accept='.xlsx,.xls,.csv' style='display:none;' onchange='ctImportApertura(this)'><button class='btn btn-secondary' style='margin-top:8px;' onclick=\"document.getElementById('ctApFile').click()\">&#8679; Importar saldos de Delsol</button></div>";
+}
+async function ctRegularizar(){
+  const cid=document.getElementById("ctCli").value,anio=document.getElementById("ctAnio").value;
+  const prev=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="regularizacion"&&a.fecha.slice(0,4)===anio);
+  const m={};ctAsientos(cid,anio).filter(a=>a.origen!=="regularizacion"&&a.origen!=="cierre").forEach(a=>(a.lineas||[]).forEach(l=>{if(!/^[67]/.test(l.c))return;m[l.c]=(m[l.c]||0)+(l.d||0)-(l.h||0);}));
+  const L=[];let res=0;Object.entries(m).forEach(([c,s])=>{s=_r2c(s);if(!s)return;res+=s;L.push(s>0?{c,d:0,h:s}:{c,d:-s,h:0});});
+  if(!L.length){alert("No hay gastos ni ingresos en "+anio+".");return;}
+  res=_r2c(res);L.push(res>0?{c:"12900000",d:res,h:0}:{c:"12900000",d:0,h:-res});
+  if(!confirm("Resultado de "+anio+": "+ctE(-res)+" € ("+(res>0?"pérdidas":"beneficio")+"). ¿Crear el asiento de regularización a 31/12/"+anio+"?"))return;
+  const id=prev?prev.id:("R"+Date.now());
+  if(await ctSave("conta_asientos",id,{id,cid,fecha:anio+"-12-31",concepto:"Regularización "+anio,origen:"regularizacion",ref:"REG-"+anio,lineas:L,creado:prev?prev.creado:new Date().toISOString()}))ctRender();
+}
+async function ctApertura(){
+  const cid=document.getElementById("ctCli").value,anio=document.getElementById("ctAnio").value,sig=String(parseInt(anio,10)+1);
+  const m=ctSaldos(cid,anio,anio+"-12-31");
+  const pend=Object.entries(m).some(([c,v])=>/^[67]/.test(c)&&Math.abs(v.d-v.h)>0.005);
+  if(pend&&!confirm("Las cuentas de gastos e ingresos de "+anio+" no están regularizadas. ¿Crear la apertura igualmente? (el resultado no pasará a la 129)"))return;
+  const L=[];Object.entries(m).forEach(([c,v])=>{if(!/^[1-5]/.test(c))return;const s=_r2c(v.d-v.h);if(s)L.push(s>0?{c,d:s,h:0}:{c,d:0,h:-s});});
+  if(!L.length){alert("No hay saldos de balance a 31/12/"+anio+".");return;}
+  const prev=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="apertura"&&a.fecha.slice(0,4)===sig);
+  const id=prev?prev.id:("P"+Date.now());
+  if(await ctSave("conta_asientos",id,{id,cid,fecha:sig+"-01-01",concepto:"Asiento de apertura "+sig,origen:"apertura",ref:"AP-"+sig,lineas:L,creado:prev?prev.creado:new Date().toISOString()}))alert("Apertura de "+sig+" creada con "+L.length+" cuentas.");
+}
+function ctImportApertura(input){
+  const file=input.files&&input.files[0];input.value="";if(!file)return;
+  const cid=document.getElementById("ctCli").value,anio=document.getElementById("ctAnio").value;
+  const rd=new FileReader();
+  rd.onload=async e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""});
+      let hi=-1,M={};
+      for(let i=0;i<Math.min(rows.length,25);i++){const n=rows[i].map(_impNorm);const c=n.findIndex(x=>/^(cuenta|subcuenta|codigo)/.test(x));
+        if(c>-1&&n.some(x=>/saldo/.test(x))){hi=i;M.c=c;M.n=n.findIndex(x=>/nombre|descripcion|titulo/.test(x));M.sd=n.findIndex(x=>/saldo deudor|deudor/.test(x));M.sa=n.findIndex(x=>/saldo acreedor|acreedor/.test(x));M.s=n.findIndex(x=>/^saldo$/.test(x));break;}}
+      if(hi<0)throw new Error("no encuentro las columnas Cuenta y Saldo");
+      const L=[],nombres={};
+      for(let i=hi+1;i<rows.length;i++){const r=rows[i];const c=ctNorm(r[M.c]);if(c.length<6||!/^[1-5]/.test(c))continue;
+        const s=M.s>-1?_impNum(r[M.s]):(_impNum(r[M.sd])-_impNum(r[M.sa]));if(!_r2c(s))continue;
+        L.push(s>0?{c,d:_r2c(s),h:0}:{c,d:0,h:_r2c(-s)});if(M.n>-1&&r[M.n])nombres[c]=String(r[M.n]).trim();}
+      if(!L.length)throw new Error("no hay cuentas de balance (grupos 1 a 5) con saldo");
+      const d=L.reduce((s,l)=>s+l.d,0),h=L.reduce((s,l)=>s+l.h,0);
+      if(!confirm("Apertura del 01/01/"+anio+" con "+L.length+" cuentas.\nDebe "+ctE(d)+" · Haber "+ctE(h)+(Math.abs(d-h)>0.01?"\n\n⚠ No cuadra: puede que el resultado del año anterior siga en las cuentas 6 y 7. Revísalo después.":"")+"\n\n¿Crear?"))return;
+      const prev=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="apertura"&&a.fecha.slice(0,4)===anio);
+      const id=prev?prev.id:("P"+Date.now());
+      await ctSave("conta_asientos",id,{id,cid,fecha:anio+"-01-01",concepto:"Asiento de apertura "+anio+" (saldos de Delsol)",origen:"apertura",ref:"AP-"+anio,lineas:L,creado:prev?prev.creado:new Date().toISOString()});
+      for(const [c,n] of Object.entries(nombres)){if(!(window.WCP||{})[cid+"_"+c]&&!(window.WCC||[]).some(x=>x.clienteDespachoId===cid&&ctNorm(x.cuenta)===c))await ctSave("conta_plan",cid+"_"+c,{id:cid+"_"+c,cid,cuenta:c,nombre:n});}
+      alert("Apertura creada.");
+    }catch(err){console.error(err);alert("No he podido importar los saldos: "+(err.message||err));}
+  };
+  rd.readAsArrayBuffer(file);
+}
+
+// ---------- Revisión: avisos ----------
+function ctRevision(box,cid){
+  const P=ctPeriodo();const as=ctAsientos(cid,P.anio).filter(a=>a.fecha<=P.hasta);const av=[];
+  as.forEach(a=>{const d=(a.lineas||[]).reduce((s,l)=>s+(l.d||0)-(l.h||0),0);if(Math.abs(d)>0.005)av.push(["⚠","Asiento "+a.num+" ("+ctFD(a.fecha)+") descuadrado en "+ctE(d)+": "+(a.concepto||"")]);
+    (a.lineas||[]).forEach(l=>{if(!l.c||l.c.length<8)av.push(["⚠","Asiento "+a.num+": cuenta incompleta «"+l.c+"»"]);});});
+  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&String(fR(f)).slice(0,4)===P.anio&&fR(f)<=P.hasta);
+  const sinCta=fs.filter(f=>!getCuentaParaFactura(f).cuenta&&!f.cuenta);if(sinCta.length)av.push(["•",sinCta.length+" facturas sin cuenta de cliente/proveedor: van a la 43000000 / 40000000 genérica. Asígnalas en «Cuentas contables» si quieres el detalle por tercero."]);
+  const m=ctSaldos(cid,P.anio,P.hasta);
+  Object.entries(m).forEach(([c,v])=>{const s=_r2c(v.d-v.h);
+    if(c.startsWith("555")&&s)av.push(["•","La 555 (partidas pendientes) tiene saldo "+ctE(s)+": hay movimientos del banco sin reclasificar."]);
+    if(c.startsWith("57")&&s<-0.005)av.push(["⚠","La cuenta de banco "+c+" tiene saldo acreedor ("+ctE(s)+"): falta algún cobro o el extracto no está completo."]);
+    if(c.startsWith("40")&&s>0.005)av.push(["•","Proveedor "+c+" "+ctNombre(cid,c)+" con saldo deudor "+ctE(s)+" (¿pago duplicado o factura sin registrar?)."]);
+    if(c.startsWith("43")&&s<-0.005)av.push(["•","Cliente "+c+" "+ctNombre(cid,c)+" con saldo acreedor "+ctE(s)+" (¿cobro sin factura?)."]);
+  });
+  const sinBanco=!(window.WAS||[]).some(a=>a.cid===cid&&a.origen==="banco"&&a.fecha.slice(0,4)===P.anio);
+  if(sinBanco&&fs.length)av.push(["•","Todavía no hay movimientos de banco en "+P.anio+": proveedores y clientes quedan con todo pendiente de pago/cobro."]);
+  box.innerHTML="<div class='card'><div style='font-weight:600;color:var(--navy);margin-bottom:8px;'>Revisión hasta "+ctFD(P.hasta)+"</div>"+
+    (av.length?av.map(x=>"<div style='font-size:13px;padding:5px 0;border-bottom:1px solid var(--gray-100);'><span style='color:"+(x[0]==="⚠"?"#DC2626":"var(--gold)")+";font-weight:700;'>"+x[0]+"</span> "+ctEsc(x[1])+"</div>").join(""):"<div style='color:var(--success);font-size:13px;'>✓ Sin avisos.</div>")+"</div>";
+}
+
 // ===== Control de documentación por cliente y trimestre (colección iva_docs, id cliente_año_trimestre) =====
 const DOC_ITEMS=[["emitidas","Emitidas","facturas emitidas"],["recibidas","Recibidas","facturas recibidas (gastos)"],["banco","Banco","extractos del banco"],["otros","Nóminas / otros","nóminas y recibos de autónomos"]];
 (function(){ // por defecto: hasta el día 20 del primer mes del trimestre, el trimestre anterior (el que se está declarando)
@@ -1074,7 +1698,8 @@ function _impLeer(wb){
     f.base1=r2(f.base1);f.iva1=r2(f.iva1);f.base2=r2(f.base2);f.iva2=r2(f.iva2);f.base3=r2(f.base3||0);f.iva3=r2(f.iva3||0);f.exento=r2(f.exento||0);
     if(f.retPct&&!f.retImporte)f.retImporte=r2((f.base1+f.base2+f.base3)*_impNum(f.retPct)/100);
     // Total igual que en la app: bases + exento + cuotas - retencion
-    f.total=r2(f.base1+f.iva1+f.base2+f.iva2+f.base3+f.iva3+f.exento-f.retImporte);
+    const _auto=f.tipo==="IVS"&&["aib","ais","isp"].includes(f.op);   // autoliquidación: el IVA no se paga al proveedor
+    f.total=r2(f.base1+f.base2+f.base3+f.exento+(_auto?0:f.iva1+f.iva2+f.iva3)-f.retImporte);
     delete f._tot2;
   });
   return {facturas:out,avisos};
