@@ -903,9 +903,18 @@ async function ctBorrarAs(id){if(!confirm("¿Borrar este asiento?"))return;await
 function ctMayor(box,cid){
   const P=ctPeriodo();const as=ctAsientos(cid,P.anio);
   const ctas=new Set();as.forEach(a=>(a.lineas||[]).forEach(l=>ctas.add(l.c)));
-  const sel=window._ctMayorCta&&ctas.has(window._ctMayorCta)?window._ctMayorCta:[...ctas].sort()[0]||"";
-  let html="<div style='display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;'><span class='filtro-label'>Cuenta</span><select class='fi' onchange='window._ctMayorCta=this.value;ctRender()'>"+
-    [...ctas].sort().map(c=>"<option value='"+c+"'"+(c===sel?" selected":"")+">"+c+" · "+ctEsc(ctNombre(cid,c))+"</option>").join("")+"</select>"+
+  const lista=[...ctas].sort();
+  const sel=window._ctMayorCta&&ctas.has(window._ctMayorCta)?window._ctMayorCta:lista[0]||"";
+  window._ctMayLista=lista.map(c=>({c,n:ctNombre(cid,c)}));
+  const ix=lista.indexOf(sel);
+  let html="<div style='display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;'><span class='filtro-label'>Cuenta</span>"+
+    "<button class='btn btn-secondary' title='Cuenta anterior' onclick='ctMayIr(-1)'"+(ix<=0?" disabled":"")+">&#9664;</button>"+
+    "<div style='position:relative;min-width:320px;flex:0 1 420px;'>"+
+    "<input type='text' class='fi' id='ctMayBus' autocomplete='off' style='width:100%;' placeholder='Escribe número o nombre (ej. 400, 572, Makro…)' value='"+ctEsc(sel?sel+" · "+ctNombre(cid,sel):"")+"' "+
+    "onfocus='this.select();ctMayFiltra(\"\")' oninput='ctMayFiltra(this.value)' onkeydown='ctMayTecla(event)' onblur='setTimeout(()=>{const d=document.getElementById(\"ctMayRes\");if(d)d.style.display=\"none\";},180)'>"+
+    "<div id='ctMayRes' style='display:none;position:absolute;z-index:50;left:0;right:0;top:100%;max-height:320px;overflow:auto;background:#fff;border:1px solid var(--gray-200,#e5e7eb);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);margin-top:2px;'></div></div>"+
+    "<button class='btn btn-secondary' title='Cuenta siguiente' onclick='ctMayIr(1)'"+(ix<0||ix>=lista.length-1?" disabled":"")+">&#9654;</button>"+
+    "<span style='font-size:12px;color:var(--gray-400);'>"+(ix+1)+" de "+lista.length+"</span>"+
     "<button class='btn btn-secondary' onclick='ctExpMayor()'>&#8681; Excel</button></div>";
   if(!sel){box.innerHTML=html+"<div class='empty'><div>Sin movimientos.</div></div>";return;}
   let saldo=0,rows="",td=0,th=0;
@@ -919,6 +928,31 @@ function ctMayor(box,cid){
     (rows||"<tr><td colspan='6'><div class='empty'><div>Sin movimientos en "+P.txt+".</div></div></td></tr>")+
     "<tr style='font-weight:600;background:var(--gray-50);'><td></td><td></td><td>Totales del periodo</td><td class='td-r'>"+ctE(td)+"</td><td class='td-r'>"+ctE(th)+"</td><td class='td-r'>"+ctE(saldo)+"</td></tr></tbody></table></div>";
 }
+function ctMayNorm(t){return String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();}
+function ctMayFiltra(q){
+  const d=document.getElementById("ctMayRes");if(!d)return;
+  q=ctMayNorm(q).replace(/·/g," ").trim();
+  const L=window._ctMayLista||[];let R;
+  if(!q)R=L;
+  else{const pal=q.split(/\s+/).filter(Boolean);
+    R=L.filter(x=>{const t=ctMayNorm(x.c+" "+x.n);return pal.every(p=>/^[0-9.]+$/.test(p)?x.c.startsWith(p.replace(/\./g,""))||x.c.includes(p):t.includes(p));});
+    R.sort((a,b)=>{const pa=a.c.startsWith(q)?0:1,pb=b.c.startsWith(q)?0:1;return pa-pb||a.c.localeCompare(b.c);});}
+  window._ctMayRes=R;window._ctMayPos=0;
+  d.innerHTML=R.length?R.slice(0,200).map((x,i)=>"<div class='ctMayOp' data-i='"+i+"' onmousedown='event.preventDefault();ctMayElige(\""+x.c+"\")' style='padding:7px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6;"+(i===0?"background:#EEF2FF;":"")+"'><span style='font-family:monospace;font-weight:600;'>"+x.c+"</span> · "+ctEsc(x.n)+"</div>").join("")+(R.length>200?"<div style='padding:7px 10px;font-size:12px;color:#9CA3AF;'>…y "+(R.length-200)+" más, afina la búsqueda</div>":"")
+    :"<div style='padding:8px 10px;font-size:13px;color:#9CA3AF;'>Ninguna cuenta con movimientos coincide</div>";
+  d.style.display="block";
+}
+function ctMayTecla(e){
+  const d=document.getElementById("ctMayRes"),R=window._ctMayRes||[];
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();if(d.style.display==="none")ctMayFiltra(e.target.value);
+    const n=Math.min(R.length,200);if(!n)return;window._ctMayPos=((window._ctMayPos||0)+(e.key==="ArrowDown"?1:-1)+n)%n;
+    d.querySelectorAll(".ctMayOp").forEach((o,i)=>{o.style.background=i===window._ctMayPos?"#EEF2FF":"";if(i===window._ctMayPos)o.scrollIntoView({block:"nearest"});});}
+  else if(e.key==="Enter"){e.preventDefault();const x=R[window._ctMayPos||0];if(x)ctMayElige(x.c);}
+  else if(e.key==="Escape"){d.style.display="none";e.target.blur();}
+}
+function ctMayElige(c){window._ctMayorCta=c;ctRender();}
+function ctMayIr(k){const L=window._ctMayLista||[];const i=L.findIndex(x=>x.c===window._ctMayorCta);const j=(i<0?0:i)+k;if(L[j])ctMayElige(L[j].c);}
+function ctVerMayor(c){window._ctMayorCta=c;const b=[...document.querySelectorAll(".ct-tab")].find(x=>/ctTab\('mayor'/.test(x.getAttribute("onclick")||""));if(b)b.click();}
 function ctExpMayor(){
   const cid=document.getElementById("ctCli").value,P=ctPeriodo();const cn=(window.WC||[]).find(c=>c.id===cid)||{};
   const as=ctAsientos(cid,P.anio);const ctas=new Set();as.forEach(a=>(a.lineas||[]).forEach(l=>ctas.add(l.c)));
@@ -940,7 +974,7 @@ function ctSumas(box,cid){
     [["sub","Subcuentas"],["3","3 dígitos"],["4","4 dígitos"],["2","2 dígitos"]].map(([v,t])=>"<option value='"+v+"'"+(v===niv?" selected":"")+">"+t+"</option>").join("")+"</select>"+
     "<span style='font-size:12px;color:var(--gray-400);'>Acumulado desde el 1 de enero hasta "+ctFD(P.hasta)+"</span><button class='btn btn-secondary' onclick='ctExpSumas()'>&#8681; Excel</button></div>"+
     "<div class='tabla-wrapper'><table><thead><tr><th>Cuenta</th><th>Nombre</th><th class='td-r'>Sumas debe</th><th class='td-r'>Sumas haber</th><th class='td-r'>Saldo deudor</th><th class='td-r'>Saldo acreedor</th></tr></thead><tbody>"+
-    R.map(r=>"<tr><td style='font-family:monospace;'>"+r.c+"</td><td>"+ctEsc(r.n)+"</td><td class='td-r'>"+ctE(r.d)+"</td><td class='td-r'>"+ctE(r.h)+"</td><td class='td-r'>"+ctE(r.sd)+"</td><td class='td-r'>"+ctE(r.sa)+"</td></tr>").join("")+
+    R.map(r=>"<tr"+(niv==="sub"?" style='cursor:pointer;' title='Ver mayor' onclick='ctVerMayor(\""+r.c+"\")'":"")+"><td style='font-family:monospace;'>"+r.c+"</td><td>"+ctEsc(r.n)+"</td><td class='td-r'>"+ctE(r.d)+"</td><td class='td-r'>"+ctE(r.h)+"</td><td class='td-r'>"+ctE(r.sd)+"</td><td class='td-r'>"+ctE(r.sa)+"</td></tr>").join("")+
     "<tr style='font-weight:600;background:var(--gray-50);'><td></td><td>TOTALES"+(Math.abs(T.d-T.h)>0.005?" <span style='color:#DC2626;'>⚠ no cuadra</span>":"")+"</td><td class='td-r'>"+ctE(T.d)+"</td><td class='td-r'>"+ctE(T.h)+"</td><td class='td-r'>"+ctE(T.sd)+"</td><td class='td-r'>"+ctE(T.sa)+"</td></tr></tbody></table></div>";
 }
 function ctExpSumas(){
