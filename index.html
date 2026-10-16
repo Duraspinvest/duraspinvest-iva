@@ -1100,8 +1100,10 @@ function ctProponer(cid,m){
     [/nomina|salario/,()=>"46500000","Nómina"],
     [/comision|cuota mantenimiento|mantenimiento cuenta|tarjeta.*cuota/,()=>"62600000","Comisión bancaria"],
     [/interes/,()=>imp<0?"66230000":"76900000","Intereses"],
-    [/prestamo|amortizacion/,()=>"52000000","Préstamo"],
-    [/seguro|mapfre|axa|allianz|mutua|zurich|generali|ocaso|linea directa/,()=>"62500000","Seguro"],
+    [/prestamo|\bprest\b|\bpres\b|amortizacion/,()=>"52000000","Préstamo"],
+    [/seguro|segur|mapfre|axa|allianz|mutua|zurich|generali|ocaso|linea directa/,()=>"62500000","Seguro"],
+    [/mycommerce|\btpv\b|tarifa plana|com reclam|descub|serv certif|\bcomis/,()=>imp<0?"62600000":"76900000","Banco / TPV"],
+    [/comunidad|\bcp\b/,()=>"62900000","Comunidad de propietarios"],
     [/iberdrola|endesa|naturgy|repsol|holaluz|aguas|agua|movistar|vodafone|orange|telefonica|digi|avatel|jazztel|masmovil/,()=>"62800000","Suministro"],
     [/alquiler|arrendamiento|renta local/,()=>imp<0?"62100000":"75200000","Alquiler"],
     [/traspaso|entre cuentas/,()=>"57200001","Traspaso"]
@@ -3028,7 +3030,7 @@ function exportRegistro(){
 let _c347={wf:null,m:null};
 function _k347(f){const t=String(f.nif||"").toUpperCase().replace(/[^A-Z0-9]/g,"")||String(f.nombre||"").trim().toLowerCase();
   return f.clienteDespachoId+"|"+String(fR(f)).slice(0,4)+"|"+f.tipo+"|"+t;}
-function _el347(f){return ["int","isp","rebu"].includes(fOpDe(f))&&!(_n(f.retImporte)>0)&&!!(f.nif||f.nombre);}
+function _el347(f){return ["int","isp","rebu"].includes(fOpDe(f))&&!(_n(f.retImporte)>0)&&!!String(f.nif||"").trim();} // sin NIF (ventas a clientes varios) no va al 347
 function _tot347(){
   if(_c347.wf!==window.WF){const m={};(window.WF||[]).forEach(f=>{if(String(f.m347)==="1"||_el347(f)){const k=_k347(f);m[k]=(m[k]||0)+_n(f.total);}});_c347={wf:window.WF,m};}
   return _c347.m;
