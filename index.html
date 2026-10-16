@@ -588,6 +588,7 @@ body.visor-open .modal-overlay.open{display:flex;}
       window.WEP=s.docs.map(d=>({...d.data(),id:d.id}));
       if(typeof renderEpis==="function") renderEpis();
     });
+    onSnapshot(collection(db,"nom_nominas"),s=>{window.WN=s.docs.map(d=>({...d.data(),id:d.id}));},e=>console.warn("nom_nominas",e));
     onSnapshot(collection(db,"fichas_fiscales"),s=>{
       window.WFF=s.docs.map(d=>({...d.data(),id:d.id}));
     });
@@ -2799,7 +2800,8 @@ function calcLiq(){
   const compAnt=parseFloat(document.getElementById("lqComp").value)||0;
   const cont=document.getElementById("lqRes");
   if(!cid){cont.innerHTML="<div style='color:var(--warning);font-size:12px;'>Selecciona un cliente.</div>";return;}
-  const ficha=(window.WFI||{})[cid]||{regimen:"directa"};
+  const ficha={...((window.WFI||{})[cid]||{})};if(!ficha.regimen)ficha.regimen=fichaRegDefecto(cid);
+  const esSoc=ficha.regimen==="sociedad";
   const sinIva=!!ficha.sinIva;                                          // actividad exenta: no presenta 303
   const modList=(Array.isArray(ficha.modelos)&&ficha.modelos.length)?ficha.modelos:modelosPropuestos(ficha.regimen||"directa",sinIva);
   const modBanner="<div style='background:rgba(212,160,23,0.12);border-radius:7px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:var(--navy);'><strong>Modelos que presenta:</strong> "+(modList.length?modList.join(" &middot; "):"&mdash;")+"</div>";
@@ -2926,6 +2928,7 @@ function calcLiq(){
       ((compAnt>0||res4<0)?"<br>Pendiente de compensar tras el "+regQ+"T: <strong>"+eur2(pend)+"</strong>":"")+"</div>"+
       "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA (reg. simplificado)</th><th class='td-r'>Ret. soport.</th><th class='td-r'>IRPF (131)</th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
       "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingreso a cuenta = "+(e.ingresoCuentaIvaPct||0)+"% de la cuota devengada, en cada trimestre de alta salvo el ultimo. El ultimo trimestre de alta ("+regQ+"T) regulariza: cuota anual [max(cuota devengada &minus; soportado, cuota minima)] &minus; ingresos a cuenta previos."+(per.parcial?" <strong>Alta/baja durante el ano:</strong> los trimestres sin actividad no se pagan, el de inicio/cese se prorratea por dias, y la cuota anual de IVA se prorratea al "+(per.factorAnual*100).toFixed(1)+"% de los dias.":"")+" Si dejas el campo de ingresos a cuenta vacio uso el calculado; metelo a mano si lo real fue distinto.</div>"+b115;
+    window._liq={cid,anio,compAnt,tiene303:false,tiene130:false,mods:modList};cont.innerHTML+=aeatPanel();
     return;
   }
 
@@ -2959,7 +2962,7 @@ function calcLiq(){
       "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>Ingresos</th><th class='td-r'>Gastos</th><th class='td-r'>Rendimiento</th><th class='td-r'>Ret. soport.</th><th class='td-r'>IRPF 130</th><th class='td-r'>111 profes.</th><th class='td-r'>115 alquiler</th></tr></thead><tbody>"+
       q.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.ingAcum)+"</td><td class='td-r'>"+eur2(x.gasAcum)+"</td><td class='td-r'>"+eur2(x.rend)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.retSopAcum)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+(x.pagosAnt?"<div style='font-size:9px;color:var(--gray-400);font-weight:400;'>c.05: "+eur2(x.pagosAnt)+"</div>":"")+"</td><td class='td-r'>"+eur2(x.ret111)+"</td><td class='td-r'>"+eur2(x.ret115)+"</td></tr>").join("")+"</tbody></table></div>"+
       "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Ingresos por mes (arriba) o, si los dejas vacios, de las facturas emitidas. "+(regGasto==="recargo"?"Gasto = base + IVA (todo es coste, tambien el alquiler; la retencion no reduce el gasto)":"Gasto = total factura, salvo facturas con retencion (solo base)")+". <strong>130 = 20% del rendimiento &minus; retenciones soportadas &minus; pagos anteriores.</strong> Si prefieres no restar las retenciones soportadas en el 130 (como en tu hoja), dimelo. 111 = retenciones a profesionales (7/15%); 115 = retenciones de alquiler (19%), del trimestre.</div>"+b115;
-    window._liq={cid,anio,q,compAnt,tiene303:false,tiene130:true};cont.innerHTML+=aeatPanel();
+    window._liq={cid,anio,q,compAnt,tiene303:false,tiene130:!esSoc,mods:modList};cont.innerHTML+=aeatPanel();
     return;
   }
 
@@ -2975,9 +2978,9 @@ function calcLiq(){
     return {...x,repIVA,sopIVA,res,aPagar,pendFin:pend};
   });
   cont.innerHTML=modBanner+"<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA reperc.</th><th class='td-r'>IVA soport.</th><th class='td-r'>Resultado</th><th class='td-r'>IVA a pagar</th><th class='td-r'>Pdte. comp.</th><th class='td-r'>IRPF 130</th></tr></thead><tbody>"+
-    q2.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='color:"+(x.res>=0?"var(--gray-600)":"var(--success)")+";'>"+eur2(x.res)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.aPagar)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.pendFin)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.pago130)+(x.pagosAnt?"<div style='font-size:9px;color:var(--gray-400);font-weight:400;'>c.05: "+eur2(x.pagosAnt)+"</div>":"")+"</td></tr>").join("")+"</tbody></table></div>"+
+    q2.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.repIVA)+"</td><td class='td-r'>"+eur2(x.sopIVA)+"</td><td class='td-r' style='color:"+(x.res>=0?"var(--gray-600)":"var(--success)")+";'>"+eur2(x.res)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.aPagar)+"</td><td class='td-r' style='color:var(--gray-400);'>"+eur2(x.pendFin)+"</td><td class='td-r' style='font-weight:600;'>"+(esSoc?"<span style='color:var(--gray-300);'>—</span>":eur2(x.pago130)+(x.pagosAnt?"<div style='font-size:9px;color:var(--gray-400);font-weight:400;'>c.05: "+eur2(x.pagosAnt)+"</div>":""))+"</td></tr>").join("")+"</tbody></table></div>"+
     "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado (solo IVA deducible). Si es negativo queda pendiente de compensar y se arrastra (hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados &minus; retenciones soportadas, menos lo pagado antes."+(usarMeses?" Los ingresos por mes se toman CON IVA incluido ("+ivaVen+"%): la base va al 130 y el IVA repercutido al 303.":"")+"</div>"+b115;
-  window._liq={cid,anio,q,q2,compAnt,tiene303:true,tiene130:true};
+  window._liq={cid,anio,q,q2,compAnt,tiene303:true,tiene130:!esSoc,mods:modList};
   cont.innerHTML+=desglose303(emit,reci,sinIva);
   cont.innerHTML+=aeatPanel();
 }
@@ -2986,7 +2989,7 @@ function calcLiq(){
 // Motor de registros de longitud fija según los diseños de registro oficiales.
 // Tipos: An/A alfanumérico (izda, blancos) · Num numérico sin signo (dcha, ceros) · N numérico con signo ("N" en la 1ª posición si es negativo)
 function aeatTxt(s){return String(s==null?"":s).toUpperCase().normalize("NFD").replace(/[̀-̃̅-ͯ]/g,"").normalize("NFC")
-  .replace(/[^A-Z0-9ÑÇ ]/g," ").replace(/\s+/g," ").trim();}
+  .replace(/[.·']/g,"").replace(/[^A-Z0-9ÑÇ ]/g," ").replace(/\s+/g," ").trim();}
 function aeatCampo(tipo,len,v,dec){
   if(tipo==="Num"||tipo==="N"){
     let x=(v==null||v==="")?0:Number(v);if(!isFinite(x))x=0;
@@ -3080,15 +3083,77 @@ function aeat130Fichero(d){
   return {txt:aeatEnvoltorio("130","0",d.anio,d.per,[aeatPagina(SPEC130_01,600,v)]),c};
 }
 
+// ---------- Modelos 111 y 115 (diseños DR111 v18 y DR115 v1.3) ----------
+const SPEC111_01=(()=>{const s=[[1,11,"raw","k:<T11101000>"],[12,1,"A",""],[13,1,"A","tipo"],[14,9,"An","nif"],[23,60,"An","apellidos"],[83,20,"An","nombreP"],[103,4,"Num","anio",0],[107,2,"An","per"]];
+  let p=109;const G=(a,b,c)=>{s.push([p,8,"Num","c:"+a,0]);p+=8;s.push([p,17,"Num","c:"+b]);p+=17;s.push([p,17,"Num","c:"+c]);p+=17;};
+  G("01","02","03");G("04","05","06");G("07","08","09");G("10","11","12");G("13","14","15");G("16","17","18");G("19","20","21");G("22","23","24");G("25","26","27");
+  s.push([487,17,"Num","c:28"],[504,17,"N","c:29"],[521,17,"Num","c:30"],[538,1,"An",""],[539,13,"An",""],[552,1,"An",""],[553,34,"An","iban"],[587,389,"An",""],[976,13,"An",""],[989,12,"raw","k:</T11101000>"]);return s;})();
+const SPEC115_01=[[1,11,"raw","k:<T11501000>"],[12,1,"A",""],[13,1,"A","tipo"],[14,9,"An","nif"],[23,60,"An","apellidos"],[83,20,"An","nombreP"],[103,4,"Num","anio",0],[107,2,"An","per"],
+  [109,15,"Num","c:01",0],[124,17,"Num","c:02"],[141,17,"Num","c:03"],[158,17,"Num","c:04"],[175,17,"Num","c:05"],[192,1,"An",""],[193,13,"An",""],[206,34,"An","iban"],[240,236,"An",""],[476,13,"An",""],[489,12,"raw","k:</T11501000>"]];
+function aeat111Totales(c){const g=k=>Number(c[k])||0;c["28"]=r2a(["03","06","09","12","15","18","21","24","27"].reduce((s,k)=>s+g(k),0));c["30"]=r2a(g("28")-g("29"));return c;}
+function aeat115Totales(c){const g=k=>Number(c[k])||0;c["05"]=r2a(g("03")-g("04"));return c;}
+function aeatRetFichero(m,d){
+  const c=(m==="111"?aeat111Totales:aeat115Totales)({...d.c});
+  const v={tipo:d.tipo,nif:d.nif,apellidos:d.apellidos,nombreP:d.nombreP,anio:d.anio,per:d.per,iban:d.tipo==="U"?(d.iban||""):""};
+  Object.keys(c).forEach(k=>v["c:"+k]=c[k]);
+  return {txt:aeatEnvoltorio(m,"0",d.anio,d.per,[aeatPagina(m==="111"?SPEC111_01:SPEC115_01,m==="111"?1000:500,v)]),c};
+}
+// Datos: facturas recibidas con retención (Fiscal) + nóminas cerradas (Laboral)
+function aeatDatosRet(cid,anio,t){
+  const F=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&f.tipo==="IVS"&&String(fR(f)).slice(0,4)===String(anio)&&trimOf(fR(f))===t&&(parseFloat(f.retImporte)||0)>0);
+  const alq=F.filter(f=>(parseFloat(f.retPct)||0)===19), pro=F.filter(f=>(parseFloat(f.retPct)||0)!==19);
+  const per=a=>new Set(a.map(f=>String(f.nif||f.nombre||"").toUpperCase())).size;
+  const sum=(a,fn)=>r2a(a.reduce((s,f)=>s+fn(f),0));
+  const N=(window.WN||[]).filter(n=>n.empresaId===cid&&String(n.anio)===String(anio)&&Math.ceil(n.mes/3)===t);
+  const exenta=n=>(n.conceptos||[]).filter(x=>x.tipo==="indem").reduce((s,x)=>s+(Number(x.i)||0),0);
+  const mesesN=[...new Set(N.map(n=>n.mes))].sort();
+  return {
+    c111:{"01":new Set(N.map(n=>String(n.dni||n.nombre).toUpperCase())).size,"02":r2a(N.reduce((s,n)=>s+(Number(n.devengo)||0)-exenta(n),0)),"03":r2a(N.reduce((s,n)=>s+(Number(n.irpf)||0),0)),
+      "07":per(pro),"08":sum(pro,f=>fBaseTot(f)),"09":sum(pro,f=>parseFloat(f.retImporte)||0)},
+    c115:{"01":per(alq),"02":sum(alq,f=>fBaseTot(f)),"03":sum(alq,f=>parseFloat(f.retImporte)||0)},
+    mesesN,nPro:pro.length,nAlq:alq.length};
+}
+
+// ---------- Modelo 202 · pago fraccionado IS, modalidad A (art. 40.2 LIS) · diseño DR202 v1.3 ----------
+const SPEC202_01=[[1,11,"raw","k:<T20201000>"],[12,1,"An",""],[13,1,"A","tipo"],[14,9,"An","nif"],[23,60,"An","apellidos"],[83,20,"An",""],[103,1,"An",""],[104,4,"Num","anio",0],[108,2,"An","per"],
+  [110,8,"Num","fini",0],[118,4,"Num","cnae",0],[122,1,"An",""],[123,1,"An",""],[124,1,"An",""],[125,1,"An",""],[126,1,"An","erd"],[127,1,"An",""],[128,1,"An",""],[129,1,"An",""],[130,1,"An","inc1m"],[131,1,"An",""],
+  [132,15,"An","tipoIS"],[147,1,"Num","incn",0],[148,1,"An","k:A"],[149,17,"Num","c:01"],[166,17,"Num","c:02"],[183,17,"Num","c:03"],
+  [200,17,"N",""],[217,17,"Num",""],[234,17,"Num",""],[251,17,"Num",""],[268,17,"Num",""],[285,17,"Num",""],[302,17,"Num",""],[319,17,"Num",""],[336,17,"Num",""],[353,17,"N",""],[370,17,"Num",""],[387,17,"Num",""],[404,17,"Num",""],[421,17,"Num",""],
+  [438,251,"An",""],[689,12,"raw","k:</T20201000>"]];
+const SPEC202_02=(()=>{const s=[[1,11,"raw","k:<T20202000>"],[12,1,"An",""]];
+  const L=[[13,17,"Num"],[30,5,"Num"],[35,17,"N"],[52,17,"Num"],[69,17,"Num"],[86,17,"Num"],[103,17,"Num"],[120,17,"Num"],[137,17,"N"],[154,5,"Num"],[159,17,"N"],[176,17,"N"],[193,5,"Num"],[198,17,"N"],[215,17,"N"],[232,5,"Num"],[237,17,"N"],[254,17,"N"],[271,5,"Num"],[276,17,"N"],
+    [293,17,"Num"],[310,17,"Num"],[327,17,"Num"],[344,17,"Num"],[361,17,"Num"],[378,17,"Num"],[395,17,"Num"],[412,5,"Num"],[417,17,"Num"],[434,17,"Num"],[451,17,"Num"],[468,17,"Num"],[485,17,"Num"]];
+  L.forEach(([p,l,t])=>s.push([p,l,t,""]));
+  s.push([502,1,"An",""],[503,22,"An",""]);for(let p=525;p<=695;p+=17)s.push([p,17,"Num",""]);
+  s.push([712,1,"An",""],[713,13,"An",""],[726,34,"An","iban"],[760,116,"An",""],[876,13,"An",""],[889,12,"raw","k:</T20202000>"]);return s;})();
+function aeat202Totales(c){const g=k=>Number(c[k])||0;c["03"]=r2a(Math.max(0,g("01")*0.18-g("02")));return c;}
+function aeat202Fichero(d){
+  const c=aeat202Totales({...d.c});
+  const v={tipo:d.tipo,nif:d.nif,apellidos:d.apellidos,anio:d.anio,per:d.per,fini:d.fini,cnae:d.cnae,erd:d.erd?"X":"",inc1m:d.inc1m?"X":"",tipoIS:d.tipoIS||"",incn:0,iban:d.tipo==="U"?(d.iban||""):""};
+  Object.keys(c).forEach(k=>v["c:"+k]=c[k]);
+  return {txt:aeatEnvoltorio("202","0",d.anio,d.per,[aeatPagina(SPEC202_01,700,v),aeatPagina(SPEC202_02,900,v)]),c};
+}
+
 // ---------- Interfaz: panel en Fiscal / Liquidación ----------
 function aeatPanel(){
   const L=window._liq;if(!L)return "";
-  const tri=[1,2,3,4];
+  const tri=[1,2,3,4], mods=(L.mods||[]).map(String);
   const b=(m,t)=>"<button class='btn btn-secondary' style='padding:6px 10px;font-size:12px;' onclick='aeatAbrir(\""+m+"\","+t+")'>"+t+"T</button>";
+  const fila=(m,txt)=>"<div style='display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;'><span style='width:90px;font-weight:600;font-size:12px;'>"+txt+"</span>"+tri.map(t=>b(m,t)).join("")+"</div>";
+  const quiere=m=>!mods.length||mods.includes(m);
+  let h="";
+  if(L.tiene303&&quiere("303"))h+=fila("303","Modelo 303");
+  if(L.tiene130&&quiere("130"))h+=fila("130","Modelo 130");
+  // 111/115: si están marcados en la ficha o si hay datos (nóminas cerradas o facturas recibidas con retención)
+  const Fr=(window.WF||[]).filter(f=>f.clienteDespachoId===L.cid&&f.tipo==="IVS"&&String(fR(f)).slice(0,4)===String(L.anio)&&(parseFloat(f.retImporte)||0)>0);
+  const hay111=Fr.some(f=>(parseFloat(f.retPct)||0)!==19)||(window.WN||[]).some(n=>n.empresaId===L.cid&&String(n.anio)===String(L.anio));
+  const hay115=Fr.some(f=>(parseFloat(f.retPct)||0)===19);
+  if(mods.includes("111")||hay111)h+=fila("111","Modelo 111");
+  if(mods.includes("115")||hay115)h+=fila("115","Modelo 115");
+  if(mods.includes("202"))h+="<div style='display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;'><span style='width:90px;font-weight:600;font-size:12px;'>Modelo 202</span>"+[1,2,3].map(t=>"<button class='btn btn-secondary' style='padding:6px 10px;font-size:12px;' onclick='aeatAbrir(\"202\","+t+")'>"+t+"P</button>").join("")+"<span style='font-size:11px;color:var(--gray-400);'>abril · octubre · diciembre</span></div>";
+  if(!h)return "";
   return "<div style='margin-top:24px;border-top:2px solid var(--gold);padding-top:14px;'><div style='font-weight:700;color:var(--navy);font-size:14px;'>Ficheros para importar en la Sede (AEAT)</div>"+
-    "<div style='font-size:11px;color:var(--gray-400);margin:2px 0 10px;'>Genera el fichero, revisa las casillas y, en el formulario de la Sede, pulsa «Importar». Comprueba siempre el borrador antes de presentar.</div>"+
-    (L.tiene303?"<div style='display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;'><span style='width:90px;font-weight:600;font-size:12px;'>Modelo 303</span>"+tri.map(t=>b("303",t)).join("")+"</div>":"")+
-    (L.tiene130?"<div style='display:flex;gap:6px;align-items:center;flex-wrap:wrap;'><span style='width:90px;font-weight:600;font-size:12px;'>Modelo 130</span>"+tri.map(t=>b("130",t)).join("")+"</div>":"")+"</div>";
+    "<div style='font-size:11px;color:var(--gray-400);margin:2px 0 10px;'>Genera el fichero, revisa las casillas y, en el formulario de la Sede, pulsa «Importar». Comprueba siempre el borrador antes de presentar. Los modelos que salen son los marcados en la ficha fiscal del cliente.</div>"+h+"</div>";
 }
 function aeatCasillas303(t){
   const L=window._liq,C=(window._liqC||[])[t-1]||{},x=L.q2[t-1];
@@ -3106,27 +3171,47 @@ function aeatCasillas130(t){
 }
 function aeatAbrir(m,t){
   const L=window._liq;const cl=(window.WC||[]).find(x=>x.id===L.cid)||{};
-  const R=m==="303"?aeatCasillas303(t):aeatCasillas130(t);
+  let R,avisoRet="";
+  if(m==="303")R=aeatCasillas303(t);else if(m==="130")R=aeatCasillas130(t);
+  else if(m==="202"){const f=(window.WFI||{})[L.cid]||{};R={c:aeat202Totales({"01":Number(f.is202Base)||0,"02":0}),check:null};
+    avisoRet="[01] = cuota íntegra del último Impuesto sobre Sociedades presentado − deducciones − bonificaciones − retenciones e ingresos a cuenta (modalidad art. 40.2: 18 %). Se recuerda para los siguientes pagos.";}
+  else{const D=aeatDatosRet(L.cid,L.anio,t);R={c:m==="111"?aeat111Totales({...D.c111}):aeat115Totales({...D.c115}),check:null};
+    if(m==="111"){const fal=[0,1,2].map(i=>(t-1)*3+1+i).filter(x=>!D.mesesN.includes(x));
+      avisoRet=fal.length&&D.mesesN.length?"⚠ Faltan nóminas cerradas de: "+fal.map(x=>MESES[x-1]).join(", ")+" (Laboral → Nómina → Cerrar mes).":(!D.mesesN.length?"No hay nóminas cerradas de este trimestre en Laboral (si tiene trabajadores, ciérralas primero).":"Nóminas: "+D.mesesN.map(x=>MESES[x-1]).join(", ")+" · facturas de profesionales con retención: "+D.nPro);}
+    else avisoRet="Facturas de alquiler con retención (19 %): "+D.nAlq;}
   window._aeatM={m,t,c:R.c};
   const lista303=[["01","Base 4%"],["03","Cuota 4%"],["04","Base 10%"],["06","Cuota 10%"],["07","Base 21%"],["09","Cuota 21%"],["10","Adq. intracom. · base"],["11","Adq. intracom. · cuota"],["12","Otras ISP · base"],["13","Otras ISP · cuota"],["14","Modif. bases"],["15","Modif. cuotas"],
     ["28","Soportado corrientes · base"],["29","Soportado corrientes · cuota"],["30","Bienes inversión · base"],["31","Bienes inversión · cuota"],["36","Adq. intracom. corrientes · base"],["37","Adq. intracom. corrientes · cuota"],["40","Rectif. deducciones · base"],["41","Rectif. deducciones · cuota"],
     ["59","Entregas intracomunitarias"],["60","Exportaciones"],["120","No sujetas por localización"],["122","Con ISP (emitidas)"],["110","Pendiente compensar (periodos ant.)"],["78","Compensación aplicada"],["77","IVA importación pdte."]];
   const lista130=[["01","Ingresos computables (acumulado)"],["02","Gastos deducibles (acumulado)"],["05","Pagos trimestres anteriores"],["06","Retenciones soportadas (acumulado)"],["13","Minoración art. 110.3 RIRPF"],["15","Resultados negativos trim. anteriores"],["16","Vivienda habitual"],["18","Complementaria: resultado anterior"]];
-  const lista=m==="303"?lista303:lista130;
+  const lista111=[["01","Trabajo · nº perceptores"],["02","Trabajo · percepciones dinerarias"],["03","Trabajo · retenciones"],["04","Trabajo especie · perceptores"],["05","Trabajo especie · valor"],["06","Trabajo especie · ingresos a cuenta"],
+    ["07","Actividades · nº perceptores"],["08","Actividades · percepciones"],["09","Actividades · retenciones"],["29","Complementaria: resultado anterior"]];
+  const lista115=[["01","Nº perceptores (arrendadores)"],["02","Base de retenciones"],["03","Retenciones"],["04","Complementaria: resultado anterior"]];
+  const lista202=[["01","Base del pago fraccionado (del último IS)"],["02","Complementaria: resultado anterior"]];
+  const lista={"303":lista303,"130":lista130,"111":lista111,"115":lista115,"202":lista202}[m];
   const nom=String(cl.nombre||"");
-  const partes=nom.trim().split(/\s+/);
-  const html="<div style='font-size:17px;font-weight:600;color:var(--navy);margin-bottom:4px;'>Modelo "+m+" · "+t+"T "+L.anio+"</div>"+
+  const pj=/^[ABCDEFGHJNPQRSUVW]/i.test(String(cl.nif||"").trim());           // persona jurídica: razón social completa en «Apellidos»
+  const partes=pj?[nom.trim()]:nom.trim().split(/\s+/);
+  const fi=(window.WFI||{})[L.cid]||{};
+  const extra202=m!=="202"?"":"<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;'>"+
+    "<label style='font-size:11px;'>Inicio periodo impositivo<input id='ae202Ini' class='fi' style='width:100%;' value='"+ctEsc(fi.is202Ini||("01/01/"+L.anio))+"'></label>"+
+    "<label style='font-size:11px;'>CNAE (4 dígitos)<input id='ae202Cnae' class='fi' style='width:100%;' value='"+ctEsc(fi.cnae||"")+"'></label>"+
+    "<label style='font-size:11px;'>Tipo de gravamen IS<input id='ae202Tipo' class='fi' style='width:100%;' value='"+ctEsc(fi.tipoIS||"")+"' placeholder='p. ej. 25 o 21/22'></label>"+
+    "<label style='font-size:11px;display:flex;gap:6px;align-items:center;'><input type='checkbox' id='ae202Erd'"+(fi.erd?" checked":"")+">Empresa de reducida dimensión</label>"+
+    "<label style='font-size:11px;display:flex;gap:6px;align-items:center;grid-column:span 2;'><input type='checkbox' id='ae202Inc'"+(fi.inc1m!==false?" checked":"")+">Cifra de negocios del periodo anterior &lt; 1 M€</label></div>";
+  const html="<div style='font-size:17px;font-weight:600;color:var(--navy);margin-bottom:4px;'>Modelo "+m+" · "+t+(m==="202"?"P ":"T ")+L.anio+"</div>"+
     "<div style='font-size:12px;color:var(--gray-400);margin-bottom:10px;'>"+ctEsc(nom)+"</div>"+
     "<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;'>"+
       "<label style='font-size:11px;'>NIF<input id='aeNif' class='fi' style='width:100%;' value='"+ctEsc(cl.nif||"")+"'></label>"+
-      (m==="303"?"<label style='font-size:11px;'>Nombre / razón social<input id='aeNom' class='fi' style='width:100%;' value='"+ctEsc(nom)+"'></label>"
-        :"<label style='font-size:11px;'>Apellidos<input id='aeApe' class='fi' style='width:100%;' value='"+ctEsc(partes.slice(partes.length>2?partes.length-2:1).join(" "))+"'></label><label style='font-size:11px;'>Nombre<input id='aeNomP' class='fi' style='width:100%;' value='"+ctEsc(partes.slice(0,partes.length>2?partes.length-2:1).join(" "))+"'></label>")+
+      ((m==="303")?"<label style='font-size:11px;'>Nombre / razón social<input id='aeNom' class='fi' style='width:100%;' value='"+ctEsc(nom)+"'></label>"
+        :"<label style='font-size:11px;'>Apellidos / razón social<input id='aeApe' class='fi' style='width:100%;' value='"+ctEsc(pj?nom:partes.slice(partes.length>2?partes.length-2:1).join(" "))+"'></label><label style='font-size:11px;'>Nombre<input id='aeNomP' class='fi' style='width:100%;' value='"+ctEsc(pj?"":partes.slice(0,partes.length>2?partes.length-2:1).join(" "))+"'></label>")+
       "<label style='font-size:11px;'>Tipo de declaración<select id='aeTipo' class='fi' style='width:100%;'></select></label>"+
       "<label style='font-size:11px;'>IBAN (domiciliación/devolución)<input id='aeIban' class='fi' style='width:100%;' value='"+ctEsc(cl.iban||"")+"' placeholder='ES00 0000 …'></label>"+
     "</div>"+
-    "<div style='max-height:44vh;overflow:auto;border:1px solid var(--gray-200);border-radius:8px;'><table style='width:100%;font-size:12px;'><tbody>"+
+    extra202+"<div style='max-height:44vh;overflow:auto;border:1px solid var(--gray-200);border-radius:8px;'><table style='width:100%;font-size:12px;'><tbody>"+
       lista.map(([k,n])=>"<tr><td style='font-family:monospace;padding:4px 8px;'>["+k+"]</td><td>"+n+"</td><td><input class='fi aeC' data-k='"+k+"' type='number' step='0.01' style='width:120px;text-align:right;' value='"+(R.c[k]||0)+"' oninput='aeatRecalc()'></td></tr>").join("")+
     "</tbody></table></div>"+
+    (avisoRet?"<div style='margin-top:8px;font-size:12px;color:"+(avisoRet.startsWith("⚠")?"#B45309":"var(--gray-400)")+";'>"+avisoRet+"</div>":"")+
     "<div id='aeRes' style='margin-top:10px;font-size:13px;'></div>"+
     "<div style='display:flex;gap:8px;justify-content:flex-end;margin-top:12px;'><button class='btn btn-secondary' onclick=\"document.getElementById('aeModal').remove()\">Cerrar</button><button class='btn btn-primary' onclick='aeatGenerar()'>&#8681; Descargar fichero</button></div>";
   let mo=document.getElementById("aeModal");if(mo)mo.remove();
@@ -3142,11 +3227,15 @@ function aeatRecalc(primera){
   if(M.m==="303"){aeat303Totales(c);res=c["71"];
     txt="[27] Devengado "+eur2(c["27"])+" · [45] Deducible "+eur2(c["45"])+" · [46] "+eur2(c["46"])+"<br><b>[71] Resultado: "+eur2(res)+"</b>"+
       (window._aeatCheck!=null&&Math.abs(r2a(c["46"])-window._aeatCheck)>0.01?"<div style='color:#B45309;font-size:12px;'>⚠ El resultado de las casillas ("+eur2(c["46"])+") no coincide con el cálculo de la liquidación ("+eur2(window._aeatCheck)+"). Revísalo antes de presentar.</div>":"");}
+  else if(M.m==="202"){aeat202Totales(c);res=c["03"];txt="18 % de "+eur2(c["01"])+" &nbsp;→&nbsp; <b>A ingresar [03]: "+eur2(res)+"</b>";}
+  else if(M.m==="111"||M.m==="115"){(M.m==="111"?aeat111Totales:aeat115Totales)(c);res=M.m==="111"?c["30"]:c["05"];
+    txt="<b>Resultado a ingresar: "+eur2(res)+"</b>";}
   else{aeat130Totales(c);res=c["19"];txt="[03] Rendimiento "+eur2(c["03"])+" · [04] 20 % "+eur2(c["04"])+" · [07] "+eur2(c["07"])+"<br><b>[19] Resultado: "+eur2(res)+"</b>"+
       (window._aeatCheck!=null&&res>0&&Math.abs(res-window._aeatCheck)>0.01?"<div style='color:#B45309;font-size:12px;'>⚠ No coincide con el cálculo de la liquidación ("+eur2(window._aeatCheck)+").</div>":"");}
   document.getElementById("aeRes").innerHTML=txt;
   const sel=document.getElementById("aeTipo");const cur=primera?"":sel.value;
   const ops=M.m==="303"?(res>0?[["I","Ingreso"],["U","Domiciliación del ingreso"],["G","Ingreso en cuenta corriente tributaria"]]:res<0?(M.t===4?[["C","A compensar"],["D","Devolución (transferencia)"],["V","Devolución en cuenta corriente tributaria"]]:[["C","A compensar"]]):[["N","Sin actividad / resultado cero"]])
+    :(M.m==="111"||M.m==="115"||M.m==="202")?(res>0?[["I","Ingreso"],["U","Domiciliación del ingreso"],["G","Ingreso en cuenta corriente tributaria"]]:[["N","Negativa"]])
     :(res>0?[["I","Ingreso"],["U","Domiciliación del ingreso"],["G","Ingreso en cuenta corriente tributaria"]]:res<0?[["B","Negativa (a deducir)"]]:[["N","Negativa / cero"]]);
   sel.innerHTML=ops.map(([v,n])=>"<option value='"+v+"'>"+v+" · "+n+"</option>").join("");
   if(ops.some(o=>o[0]===cur))sel.value=cur;
@@ -3160,8 +3249,18 @@ function aeatGenerar(){
   try{
     let r;
     if(M.m==="303")r=aeat303Fichero({tipo,nif,nombre:document.getElementById("aeNom").value,anio:L.anio,per:M.t+"T",c,iban});
-    else r=aeat130Fichero({tipo,nif,apellidos:document.getElementById("aeApe").value,nombreP:document.getElementById("aeNomP").value,anio:L.anio,per:M.t+"T",c,iban});
-    aeatDescargar(M.m+"_"+nif+"_"+L.anio+"_"+M.t+"T.txt",r.txt);
+    else if(M.m==="130")r=aeat130Fichero({tipo,nif,apellidos:document.getElementById("aeApe").value,nombreP:document.getElementById("aeNomP").value,anio:L.anio,per:M.t+"T",c,iban});
+    else if(M.m==="202"){
+      const ini=(document.getElementById("ae202Ini").value||"").replace(/\D/g,""),cnae=(document.getElementById("ae202Cnae").value||"").replace(/\D/g,"");
+      if(ini.length!==8){alert("Fecha de inicio del periodo: DD/MM/AAAA.");return;}if(cnae.length!==4){alert("Pon el CNAE de 4 dígitos (CNAE-2025 desde 2026).");return;}
+      const tipoIS=(document.getElementById("ae202Tipo").value||"").trim();if(!tipoIS){alert("Pon el tipo de gravamen del IS (p. ej. 25, o 21/22 si es microempresa).");return;}
+      const erd=document.getElementById("ae202Erd").checked,inc1m=document.getElementById("ae202Inc").checked;
+      r=aeat202Fichero({tipo,nif,apellidos:document.getElementById("aeApe").value,anio:L.anio,per:M.t+"P",c,iban,fini:ini,cnae,tipoIS:tipoIS.replace(/[^0-9 ]/g," "),erd,inc1m});
+      const fi=(window.WFI||{})[L.cid]||{id:L.cid};
+      window.fsSetDoc(window.fsDoc(window.db,"iva_fiscal",L.cid),{...fi,id:L.cid,regimen:fi.regimen||fichaRegDefecto(L.cid),is202Base:c["01"],is202Ini:document.getElementById("ae202Ini").value,cnae,tipoIS,erd,inc1m});
+    }
+    else r=aeatRetFichero(M.m,{tipo,nif,apellidos:document.getElementById("aeApe").value,nombreP:document.getElementById("aeNomP").value,anio:L.anio,per:M.t+"T",c,iban});
+    aeatDescargar(M.m+"_"+nif+"_"+L.anio+"_"+M.t+(M.m==="202"?"P":"T")+".txt",r.txt);
   }catch(e){alert("No se pudo generar el fichero: "+e.message);}
 }
 window.aeatAbrir=aeatAbrir;window.aeatRecalc=aeatRecalc;window.aeatGenerar=aeatGenerar;
@@ -3427,12 +3526,13 @@ function renderFichaForm(){
   const cont=document.getElementById("fichaForm");if(!cont)return;
   const cid=document.getElementById("fiCli").value;
   if(!cid){cont.innerHTML="";return;}
-  const f=(window.WFI||{})[cid]||{regimen:"directa",epigrafe:"",indice:1};
+  const f={epigrafe:"",indice:1,...((window.WFI||{})[cid]||{})};if(!f.regimen)f.regimen=fichaRegDefecto(cid);
   const eps=Object.values(window.WM||{}).sort((a,b)=>(a.id||"").localeCompare(b.id||""));
   cont.innerHTML="<div class='mg2' style='max-width:640px;'>"+
     "<div class='fg'><label class='fl'>Regimen</label><select class='fi2' id='fiReg' onchange='renderFichaForm2()'>"+
       "<option value='directa'"+(f.regimen==="directa"?" selected":"")+">Estimacion directa</option>"+
-      "<option value='objetiva'"+(f.regimen==="objetiva"?" selected":"")+">Estimacion objetiva (modulos)</option></select></div>"+
+      "<option value='objetiva'"+(f.regimen==="objetiva"?" selected":"")+">Estimacion objetiva (modulos)</option>"+
+      "<option value='sociedad'"+(f.regimen==="sociedad"?" selected":"")+">Sociedad (Impuesto sobre Sociedades)</option></select></div>"+
     "<div class='fg'><label class='fl'>IVA</label><label style='display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;color:var(--gray-600);height:38px;'><input type='checkbox' id='fiSinIva' onchange='renderFichaForm2()' style='width:16px;height:16px;'"+(f.sinIva?" checked":"")+"> Actividad exenta / sin IVA (no presenta 303; solo 130/111/115)</label></div>"+
     "<div class='fg' id='fiRegGastoWrap'><label class='fl'>Regla de gasto (sin IVA)</label><select class='fi2' id='fiRegGasto'>"+
       "<option value='exenta'"+((f.regGasto||'exenta')==='exenta'?" selected":"")+">Exenta art.20 &mdash; base+IVA, salvo con retencion (solo base)</option>"+
@@ -3446,9 +3546,10 @@ function renderFichaForm(){
   renderModelos(f);
   renderFichaForm2();
 }
-const MODELOS=[["130","130 IRPF"],["131","131 IRPF modulos"],["303","303 IVA"],["111","111 Retenc. trabajo/prof."],["115","115 Retenc. alquiler"],["349","349 Intracomunitario"],["347","347 Operac. terceros"],["390","390 Resumen IVA"],["180","180 Resumen alquiler"],["190","190 Resumen trab./prof."]];
+const MODELOS=[["130","130 IRPF"],["131","131 IRPF modulos"],["202","202 Pago fracc. IS"],["200","200 Imp. Sociedades"],["303","303 IVA"],["309","309 IVA no periódico"],["111","111 Retenc. trabajo/prof."],["115","115 Retenc. alquiler"],["349","349 Intracomunitario"],["347","347 Operac. terceros"],["390","390 Resumen IVA"],["180","180 Resumen alquiler"],["190","190 Resumen trab./prof."]];
+function fichaRegDefecto(cid){const c=(window.WC||[]).find(x=>x.id===cid)||{};return /^[ABCDEFGHJNPQRSUVW]/i.test(String(c.nif||"").trim())?"sociedad":"directa";}
 function modelosPropuestos(reg,sinIva){
-  const s=[]; s.push(reg==="objetiva"?"131":"130"); if(!sinIva){s.push("303");s.push("390");} return s;
+  const s=[]; if(reg==="sociedad"){s.push("200","202");} else s.push(reg==="objetiva"?"131":"130"); if(!sinIva){s.push("303");s.push("390");} return s;
 }
 function renderModelos(f){
   const cont=document.getElementById("fiModelos");if(!cont)return;
@@ -3489,7 +3590,8 @@ async function saveFicha(){
   const cid=document.getElementById("fiCli").value;if(!cid){alert("Selecciona un cliente.");return;}
   const reg=document.getElementById("fiReg").value;
   const modelos=MODELOS.map(m=>m[0]).filter(c=>{const el=document.getElementById("fiMod_"+c);return el&&el.checked;});
-  const rec={id:cid,regimen:reg,epigrafe:"",unidadesIrpf:{},unidadesIva:{},indice:1,sinIva:!!(document.getElementById("fiSinIva")||{}).checked,regGasto:(document.getElementById("fiRegGasto")||{}).value||"exenta",modelos};
+  const prev=(window.WFI||{})[cid]||{};
+  const rec={...prev,id:cid,regimen:reg,epigrafe:"",unidadesIrpf:{},unidadesIva:{},indice:1,sinIva:!!(document.getElementById("fiSinIva")||{}).checked,regGasto:(document.getElementById("fiRegGasto")||{}).value||"exenta",modelos};
   const ivv=document.getElementById("fiIvaVentas");if(ivv&&ivv.value!=="")rec.ivaVentasPct=parseFloat(ivv.value)||0;
   if(reg==="objetiva"){
     const epi=document.getElementById("fiEpi").value;rec.epigrafe=epi;
