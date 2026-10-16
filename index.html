@@ -605,6 +605,7 @@ body.visor-open .modal-overlay.open{display:flex;}
     onSnapshot(collection(db,"conta_asientos"),s=>{window.WAS=s.docs.map(d=>({...d.data(),id:d.id}));_ctAct();});
     onSnapshot(collection(db,"conta_inmov"),s=>{window.WINM=s.docs.map(d=>({...d.data(),id:d.id}));_ctAct();});
     onSnapshot(collection(db,"conta_plan"),s=>{const m={};s.docs.forEach(d=>{m[d.id]={...d.data(),id:d.id};});window.WCP=m;});
+    onSnapshot(collection(db,"conta_reglas"),s=>{window.WREG=s.docs.map(d=>({...d.data(),id:d.id}));});
     // Control de documentación por cliente y trimestre
     onSnapshot(collection(db,"iva_docs"),s=>{
       const m={};s.docs.forEach(d=>{m[d.id]={...d.data(),id:d.id};});window.WDOC=m;
@@ -688,7 +689,7 @@ function emSync(){
   window.WC=arr("clients").filter(c=>(c.categoria||"despacho")!=="auxiliar");
   window.WF=arr("iva_facturas");window.WCC=arr("iva_cuentas");window.WEP=arr("epigrafes");
   window.WFI=map("iva_fiscal");window.WIN=map("iva_ingresos");window.WDOC=map("iva_docs");
-  window.WAS=arr("conta_asientos");window.WINM=arr("conta_inmov");window.WCP=map("conta_plan");
+  window.WAS=arr("conta_asientos");window.WREG=arr("conta_reglas");window.WINM=arr("conta_inmov");window.WCP=map("conta_plan");
   window.portalDocs=arr("portal_documentos");
   const call=f=>{try{if(typeof window[f]==="function")window[f]();}catch(e){console.warn(f,e);}};
   ["poblarSel","renderF","renderSt","renderC","renderEpis"].forEach(call);
@@ -890,7 +891,11 @@ async function ctGuardaAs(){
   if(Math.abs(d-h)>0.005&&!confirm("El asiento no cuadra (diferencia "+ctE(d-h)+"). ¿Guardarlo igualmente?"))return;
   const id=E.id||("A"+Date.now());const prev=(window.WAS||[]).find(x=>x.id===id)||{};
   const rec={...prev,id,cid:E.cid,fecha,concepto:conc,origen:E.origen||"manual",ref:E.ref||"",lineas:L,creado:prev.creado||new Date().toISOString(),modificado:new Date().toISOString()};
-  if(await ctSave("conta_asientos",id,rec)){closeM("ctAsModal");}
+  if(await ctSave("conta_asientos",id,rec)){
+    closeM("ctAsModal");
+    // Si es un movimiento del banco y lo has reclasificado, recordar la nueva cuenta para ese concepto
+    if(rec.origen==="banco"&&prev.banco){const otras=L.filter(l=>!l.c.startsWith("57"));if(otras.length===1)await ctAprender(E.cid,prev.banco,prev.importe||0,otras[0].c,conc);}
+  }
 }
 async function ctBorrarAs(id){if(!confirm("¿Borrar este asiento?"))return;await ctDel("conta_asientos",id);}
 
@@ -1054,7 +1059,7 @@ function ctLeerBanco(input){
         movs=ctMovsRows(ls.map(l=>l.split(sep).map(x=>x.replace(/^"|"$/g,"").trim())));
       }else{const wb=XLSX.read(buf,{type:"array"});movs=ctMovsExcel(wb);}
       if(!movs.length){alert("No he encontrado movimientos en el archivo.");return;}
-      window._ctMovs={cid,movs:movs.map(m=>({...m,...ctProponer(cid,m),ok:true}))};
+      window._ctMovs={cid,movs:movs.map(m=>{const pr=ctProponer(cid,m);return {...m,...pr,cta0:pr.cta,ok:true};})};
       ctPintaMovs();
     }catch(err){console.error(err);alert("No he podido leer el extracto: "+(err.message||err));}
   };
@@ -1094,6 +1099,10 @@ function ctProponer(cid,m){
   const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&f.tipo===(imp>0?"IVR":"IVS")&&Math.abs((parseFloat(f.total)||0)-abs)<0.011)
     .sort((a,b)=>Math.abs(new Date(a.fecha)-new Date(m.fecha))-Math.abs(new Date(b.fecha)-new Date(m.fecha)));
   if(fs.length){const f=fs[0],cc=getCuentaParaFactura(f);return {cta:ctNorm(cc.cuenta||f.cuenta||(imp>0?"43000000":"40000000")),txt:(imp>0?"Cobro":"Pago")+" fra. "+(f.numero||"")+" "+(f.nombre||""),por:"factura"};}
+  // 2) lo que ya elegiste antes para un concepto igual (se aprende al crear los asientos o al corregirlos en el Diario)
+  const k=ctClaveBanco(m.concepto),sg=imp<0?"-":"+";
+  const ap=k&&(window.WREG||[]).find(r=>r.cid===cid&&r.clave===k&&r.signo===sg);
+  if(ap)return {cta:ap.cuenta,txt:(ap.texto||m.concepto),por:"aprendida"};
   const R=[
     [/tgss|seguridad social|r ?e ?autonom|reta\b|cotizacion/,()=>/autonom|reta/.test(t)?"64200000":"47600000","Seguridad Social"],
     [/aeat|agencia tributaria|agencia estatal|hacienda|impuesto|modelo|mod\.? ?\d{3}/,()=>/130/.test(t)?"47300000":/111|115/.test(t)?"47510000":/200|202/.test(t)?"47300000":"47500000","Hacienda"],
@@ -1110,6 +1119,14 @@ function ctProponer(cid,m){
   ];
   for(const [re,fn,txt] of R)if(re.test(t))return {cta:fn(),txt:txt+": "+m.concepto,por:"regla"};
   return {cta:"55500000",txt:m.concepto,por:""};
+}
+// Clave de un concepto bancario para recordar la cuenta: sin números ni signos, 3 primeras palabras
+function ctClaveBanco(c){const w=_impNorm(c).replace(/[0-9]+/g," ").split(/\s+/).filter(x=>x.length>1).slice(0,3).join(" ");return w.length>=4?w:"";}
+async function ctAprender(cid,concepto,importe,cuenta,texto){
+  const k=ctClaveBanco(concepto);cuenta=ctNorm(cuenta);if(!k||!cuenta||cuenta.startsWith("555"))return;
+  const sg=importe<0?"-":"+";const id=(cid+"_"+sg+"_"+k).replace(/[^A-Za-z0-9_+-]/g,"_").slice(0,140);
+  const prev=(window.WREG||[]).find(r=>r.id===id);if(prev&&prev.cuenta===cuenta)return;
+  await ctSave("conta_reglas",id,{id,cid,clave:k,signo:sg,cuenta,texto:texto||"",act:new Date().toISOString()});
 }
 function ctPintaMovs(){
   const res=document.getElementById("ctBcoRes");if(!res||!window._ctMovs)return;
@@ -1133,7 +1150,8 @@ async function ctCrearBanco(){
   for(const [i,m] of sel.entries()){const a=_r2c(Math.abs(m.importe)),c=ctNorm(m.cta)||"55500000";
     const lineas=m.importe>0?[{c:bco,d:a,h:0},{c,d:0,h:a}]:[{c,d:a,h:0},{c:bco,d:0,h:a}];
     const id="B"+(base+i);
-    if(await ctSave("conta_asientos",id,{id,cid,fecha:m.fecha,concepto:m.txt,origen:"banco",ref:m.ref,lineas,creado:new Date().toISOString()}))n++;}
+    if(await ctSave("conta_asientos",id,{id,cid,fecha:m.fecha,concepto:m.txt,banco:m.concepto,importe:m.importe,origen:"banco",ref:m.ref,lineas,creado:new Date().toISOString()}))n++;
+    if(m.por!=="factura"&&(m.cta!==m.cta0||m.por===""))await ctAprender(cid,m.concepto,m.importe,c,m.txt);}
   alert("Creados "+n+" asientos de banco."+(sel.some(m=>ctNorm(m.cta)==="55500000")?"\n\nLos que han ido a la 555 (partidas pendientes) hay que reclasificarlos: edítalos en el Diario.":""));
   window._ctMovs=null;ctRender();
 }
