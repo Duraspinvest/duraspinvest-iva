@@ -1923,7 +1923,12 @@ function _fRegHint(){
   const hoy=new Date().toISOString().slice(0,10), tri=x=>x.slice(0,4)+"-"+q(x);
   let t="";
   if(fr&&fe&&fr!==fe)t="Cuenta en el "+q(fr)+"T "+fr.slice(0,4)+" (factura del "+q(fe)+"T "+fe.slice(0,4)+").";
-  else if(fe&&tri(fe)<tri(hoy))t="Factura de un trimestre anterior. Si no se declaró, pulsa «1er día del trimestre».";
+  else if(fe&&(document.getElementById("fTipo")||{}).value!=="IVR"){
+    // Trimestre que se está declarando: hasta el día 20 del primer mes de un trimestre, el anterior
+    const d=new Date(hoy),m=d.getMonth();let ref=hoy;
+    if(m%3===0&&d.getDate()<=20){const p=new Date(d.getFullYear(),m-1,15);ref=p.toISOString().slice(0,10);}
+    if(tri(fe)<tri(ref))t="Factura de un trimestre anterior. Si no se declaró, pulsa «1er día del trimestre».";
+  }
   h.textContent=t;h.style.display=t?"block":"none";
 }
 function _fRegSet(v,manual){const e=document.getElementById("fFReg");if(!e)return;e.value=v||"";e.dataset.manual=manual?"1":"";_fRegHint();}
