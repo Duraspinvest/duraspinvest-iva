@@ -292,6 +292,8 @@ body.visor-open .modal-overlay.open{display:flex;}
       <div class="fg" style="width:180px;"><label class="fl">IVA a compensar anos ant.</label><input type="number" step="0.01" class="fi2" id="lqComp" value="0"></div>
       <div class="fg" style="width:210px;"><label class="fl">Ing. a cuenta 1T-3T pagados (objetiva)</label><input type="number" step="0.01" class="fi2" id="lqIc" placeholder="vacio = usa el calculado"></div>
       <button class="btn btn-primary" onclick="calcLiq()">Calcular</button>
+      <div class="fg" style="width:90px;"><label class="fl">Trimestre</label><select class="fi2" id="lqTriPr"><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
+      <button class="btn btn-secondary" onclick="imprimirBorrador()" title="Casillas de los modelos del trimestre + libro de emitidas y recibidas, para imprimir o guardar en PDF">&#128424; Borrador PDF</button>
     </div>
     <div id="lqIngBox" style="background:var(--gray-50);border-radius:7px;padding:10px 12px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -1343,6 +1345,7 @@ const DOC_ITEMS=[["emitidas","Emitidas","facturas emitidas"],["recibidas","Recib
   const d=new Date(); let y=d.getFullYear(), t=Math.floor(d.getMonth()/3)+1;
   if(d.getMonth()%3===0&&d.getDate()<=20){t--; if(t===0){t=4;y--;}}
   window._dcDef={y:String(y),t:String(t)};
+  document.addEventListener("DOMContentLoaded",()=>{const e=document.getElementById("lqTriPr");if(e)e.value=String(t);});
 })();
 function renderDocs(){
   const tb=document.getElementById("dcBody");if(!tb)return;
@@ -1499,7 +1502,7 @@ function _n(v){return parseFloat(v)||0;}
 // ===== Tipos de operación, varias bases, exento, autoliquidación (intracomunitarias / ISP) y REBU =====
 const OPS={
   IVS:{int:"Interior (normal)",aib:"Adquisición intracomunitaria de bienes",ais:"Servicios recibidos de empresa de la UE",isp:"Inversión del sujeto pasivo (nacional)",imp:"Importación (IVA del DUA)",rebu:"Compra en REBU (bienes usados, sin IVA)"},
-  IVR:{int:"Interior (normal)",eib:"Entrega intracomunitaria de bienes (exenta)",eis:"Servicios a empresa de la UE",exp:"Exportación",isp:"Con inversión del sujeto pasivo (sin IVA)",rebu:"Venta en REBU (IVA sobre el margen)"}
+  IVR:{int:"Interior (normal)",eib:"Entrega intracomunitaria de bienes (exenta)",eis:"Servicios a empresa de la UE",exp:"Exportación",nsl:"No sujeta por localización (obras en inmueble de otro país…)",isp:"Con inversión del sujeto pasivo (sin IVA)",rebu:"Venta en REBU (IVA sobre el margen)"}
 };
 const OPS_AYUDA={
   aib:"La factura llega sin IVA. La app calcula el IVA (autoliquidación) y lo pone a la vez en devengado (303 c.10-11) y deducible (c.36-37). Va al 349 (clave A).",
@@ -1510,6 +1513,7 @@ const OPS_AYUDA={
   eib:"Exenta (art. 25). Sin IVA. 303 casilla 59 y modelo 349 (clave E).",
   eis:"No sujeta en España. Sin IVA. 303 casilla 59 y modelo 349 (clave S).",
   exp:"Exenta. Sin IVA. 303 casilla 60.",
+  nsl:"Sin IVA español: el servicio se entiende hecho en otro país por reglas especiales (obras y servicios sobre inmuebles situados allí, art. 70.Uno.1º LIVA; transporte de pasajeros, etc.). 303 casilla 120. NO va al 349.",
   ispE:"Sin IVA: lo autoliquida el cliente. 303 casilla 122.",
   rebuE:"Pon el total de venta y el precio de compra: la app calcula el margen, la base (margen/1,21) y el IVA."
 };
@@ -1552,7 +1556,7 @@ function fCuota(f){return fLineas(f).reduce((s,l)=>s+l.c,0);}                   
 function fExento(f){return _n(f.exento);}
 function fBaseTot(f){return fBase(f)+fExento(f);}                                  // bases + exento
 function fRep(f){                                                                    // IVA devengado (repercutido + autoliquidado)
-  if(f.tipo==="IVR")return ["eib","eis","exp","isp"].includes(fOpDe(f))?0:fCuota(f);
+  if(f.tipo==="IVR")return ["eib","eis","exp","isp","nsl"].includes(fOpDe(f))?0:fCuota(f);
   return esAuto(f)?fCuota(f):0;
 }
 function fSop(f){return (f.tipo==="IVS"&&fOpDe(f)!=="rebu")?fCuota(f):0;}           // IVA soportado
@@ -1560,7 +1564,7 @@ function fSopDed(f){return String(f.deducible)==="0"?0:fSop(f);}
 function fIngreso(f){return (f.tipo==="IVR"&&fOpDe(f)==="rebu")?_n(f.total)+_n(f.retImporte)-fCuota(f):fBaseTot(f);} // ingreso neto (IRPF)
 function fIvaCoste(f){return esAuto(f)?(String(f.deducible)==="0"?fCuota(f):0):fSop(f);} // IVA pagado que cuenta como coste si no se deduce
 function opBadge(f){const o=fOpDe(f);if(o==="int")return "";
-  const t={aib:"UE",ais:"UE serv.",isp:"ISP",rebu:"REBU",eib:"UE",eis:"UE serv.",exp:"Export."}[o]||o;
+  const t={aib:"UE",ais:"UE serv.",isp:"ISP",rebu:"REBU",eib:"UE",eis:"UE serv.",exp:"Export.",nsl:"No suj."}[o]||o;
   return " <span title='"+((OPS[f.tipo==="IVR"?"IVR":"IVS"]||{})[o]||"")+"' style='font-size:9px;background:#EEF2FF;color:#3730A3;border-radius:4px;padding:1px 4px;'>"+t+"</span>";}
 function _r2(n){return Math.round((n||0)*100)/100;}
 function resumenF(fs){
@@ -1738,7 +1742,8 @@ const _IMP_COLS={
 // Texto de la columna OPERACIÓN -> código de la app (int, aib, ais, isp, rebu, eib, eis, exp). Vacío o desconocido = interior.
 function _impOp(v,tipo){
   const t=_impNorm(v);if(!t)return"int";
-  if(["int","aib","ais","isp","imp","rebu","eib","eis","exp"].includes(t))return t;
+  if(["int","aib","ais","isp","imp","rebu","eib","eis","exp","nsl"].includes(t))return t;
+  if(/no sujet|localiz/.test(t))return tipo==="IVR"?"nsl":"int";
   for(const [k,txt] of Object.entries(OPS[tipo]||{}))if(_impNorm(txt)===t)return k;
   if(/rebu|usad/.test(t))return"rebu";
   if(/importac|\bdua\b/.test(t))return tipo==="IVS"?"imp":"int";
@@ -2054,7 +2059,7 @@ function onOpChange(){
   const key=(tipo==="IVR"&&op==="isp")?"ispE":(tipo==="IVR"&&op==="rebu")?"rebuE":op;
   if(ay)ay.textContent=OPS_AYUDA[key]||"";
   if(rg)rg.style.display=(tipo==="IVR"&&op==="rebu")?"":"none";
-  const sinIva=(tipo==="IVR"&&["eib","eis","exp","isp"].includes(op))||(tipo==="IVS"&&op==="rebu");
+  const sinIva=(tipo==="IVR"&&["eib","eis","exp","isp","nsl"].includes(op))||(tipo==="IVS"&&op==="rebu");
   if(sinIva){[1,2,3].forEach(l=>{const p=document.getElementById("fP"+l);if(document.getElementById("fB"+l).value||l===1){p.value="0";calcIVA(l);}});}
   else if(tipo==="IVS"&&["aib","ais","isp"].includes(op)){const p=document.getElementById("fP1");if(p.value===""||p.value==="0"){p.value="21";}calcIVA(1);}
   if(tipo==="IVR"&&op==="rebu")calcRebu();
@@ -3216,10 +3221,68 @@ function aeatPanel(){
   const hay115=Fr.some(f=>(parseFloat(f.retPct)||0)===19);
   if(mods.includes("111")||hay111)h+=fila("111","Modelo 111");
   if(mods.includes("115")||hay115)h+=fila("115","Modelo 115");
+  {const _c=(window.WC||[]).find(x=>x.id===L.cid)||{},_o=Array.isArray(_c.obligaciones)?_c.obligaciones.map(String):[];
+   if(mods.includes("349")||_o.includes("349")||Object.keys(window._op349||{}).length)h+="<div style='display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;'><span style='width:90px;font-weight:600;font-size:12px;'>Modelo 349</span>"+tri.map(t=>"<button class='btn btn-secondary' style='padding:6px 10px;font-size:12px;' onclick='aeat349Abrir("+t+")'>"+t+"T</button>").join("")+"</div>";}
   if(mods.includes("202"))h+="<div style='display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;'><span style='width:90px;font-weight:600;font-size:12px;'>Modelo 202</span>"+[1,2,3].map(t=>"<button class='btn btn-secondary' style='padding:6px 10px;font-size:12px;' onclick='aeatAbrir(\"202\","+t+")'>"+t+"P</button>").join("")+"<span style='font-size:11px;color:var(--gray-400);'>abril · octubre · diciembre</span></div>";
   if(!h)return "";
   return "<div style='margin-top:24px;border-top:2px solid var(--gold);padding-top:14px;'><div style='font-weight:700;color:var(--navy);font-size:14px;'>Ficheros para importar en la Sede (AEAT)</div>"+
     "<div style='font-size:11px;color:var(--gray-400);margin:2px 0 10px;'>Genera el fichero, revisa las casillas y, en el formulario de la Sede, pulsa «Importar». Comprueba siempre el borrador antes de presentar. Los modelos que salen son los marcados en la ficha fiscal del cliente.</div>"+h+"</div>";
+}
+// ===== Borrador imprimible: casillas de los modelos + libro registro del trimestre (para guardar en PDF / archivo en papel) =====
+function imprimirBorrador(){
+  const L=window._liq;if(!L){alert("Primero pulsa «Calcular».");return;}
+  const t=parseInt((document.getElementById("lqTriPr")||{}).value)||1;
+  const cl=(window.WC||[]).find(x=>x.id===L.cid)||{};
+  const E=x=>ctEsc(x), N=n=>(Math.round((n||0)*100)/100).toLocaleString("es-ES",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const dd=x=>x?String(x).split("-").reverse().join("/"):"";
+  const mods=(L.mods||[]).map(String),quiere=m=>!mods.length||mods.includes(m);
+  const Fr=(window.WF||[]).filter(f=>f.clienteDespachoId===L.cid&&f.tipo==="IVS"&&String(fR(f)).slice(0,4)===String(L.anio)&&(parseFloat(f.retImporte)||0)>0);
+  const lst=[];
+  if(L.tiene303&&quiere("303"))lst.push("303");
+  if(L.tiene130&&quiere("130"))lst.push("130");
+  if(mods.includes("111")||Fr.some(f=>(parseFloat(f.retPct)||0)!==19)||(window.WN||[]).some(n=>n.empresaId===L.cid&&String(n.anio)===String(L.anio)))lst.push("111");
+  if(mods.includes("115")||Fr.some(f=>(parseFloat(f.retPct)||0)===19))lst.push("115");
+  if(mods.includes("202")&&t<=3)lst.push("202");
+  let mh="";
+  lst.forEach(m=>{let D;try{D=aeatDatos(m,t);}catch(e){console.warn(e);return;}
+    const c=D.R.c||{},vis={};
+    const filas=(D.lista||[]).filter(([k])=>Math.abs(parseFloat(c[k])||0)>=0.005).map(([k,txt])=>{vis[k]=1;return "<tr><td class='k'>["+k+"]</td><td>"+E(txt)+"</td><td class='r'>"+N(c[k])+"</td></tr>";});
+    const EXL={"303":{"27":"Total cuota devengada","45":"Total a deducir","46":"Resultado régimen general (27-45)","64":"Suma de resultados","65":"% atribuible a la Administración del Estado","66":"Atribuible a la Administración del Estado","69":"Resultado","70":"A deducir (complementaria)","71":"Resultado de la liquidación","87":"Cuotas a compensar pendientes para periodos posteriores"},
+      "130":{"03":"Rendimiento neto (01-02)","04":"20 % del rendimiento","07":"Pago fraccionado previo","12":"Total liquidación","14":"Diferencia (12-13)","17":"Total (14-15-16)","19":"Resultado de la declaración"},
+      "111":{"28":"Total retenciones","30":"Resultado a ingresar"},"115":{"05":"Resultado a ingresar"},"202":{"03":"Resultado"}}[m]||{};
+    Object.keys(c).filter(k=>!vis[k]&&Math.abs(parseFloat(c[k])||0)>=0.005).sort((x,y)=>parseInt(x)-parseInt(y)).forEach(k=>filas.push("<tr"+(["71","19","30","05"].includes(k)?" class='tot'":"")+"><td class='k'>["+k+"]</td><td>"+(EXL[k]||"Casilla "+k)+"</td><td class='r'>"+N(c[k])+"</td></tr>"));
+    if(!filas.length&&m==="202")return;
+    mh+="<div class='mod'><h2>Modelo "+m+" · "+t+(m==="202"?"P":"T")+" "+L.anio+"</h2>"+(filas.length?"<table><tbody>"+filas.join("")+"</tbody></table>":"<p class='nota'>Sin importes.</p>")+(D.avisoRet?"<p class='nota'>"+E(D.avisoRet)+"</p>":"")+"</div>";});
+  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===L.cid&&String(fR(f)).slice(0,4)===String(L.anio)&&trimOf(fR(f))===t).sort((a,b)=>fR(a).localeCompare(fR(b))||String(a.numero||"").localeCompare(String(b.numero||""),"es",{numeric:true}));
+  const opTxt=f=>{const o=fOpDe(f);return o==="int"?"":((OPS[f.tipo==="IVR"?"IVR":"IVS"]||{})[o]||o);};
+  const libro=(tipo,tit)=>{
+    const F=fs.filter(f=>f.tipo===tipo);if(!F.length)return "<h2>"+tit+"</h2><p class='nota'>No hay facturas en el "+t+"T.</p>";
+    const res={};let tb=0,tc=0,tr=0,tt=0,tnd=0;
+    const rows=F.map((f,i)=>{const Ls=fLineas(f),ex=parseFloat(f.exento)||0;
+      Ls.forEach(l=>{const k=l.p+"%";res[k]=res[k]||{b:0,c:0};res[k].b+=l.b;res[k].c+=l.c;});if(ex){res["Exento"]=res["Exento"]||{b:0,c:0};res["Exento"].b+=ex;}
+      const b=fBaseTot(f),cu=fCuota(f),r=parseFloat(f.retImporte)||0,to=parseFloat(f.total)||0,nd=tipo==="IVS"&&String(f.deducible)==="0";
+      tb+=b;tc+=cu;tr+=r;tt+=to;if(nd)tnd+=cu;
+      const pct=Ls.length>1?Ls.map(l=>l.p+"%").join("+"):((Ls[0]||{}).p||"0")+"%";
+      const o=opTxt(f);
+      return "<tr"+(nd?" class='nd'":"")+"><td class='r'>"+(i+1)+"</td><td>"+dd(f.fecha)+(f.fechaReg&&f.fechaReg!==f.fecha?"<br><span class='nota'>Reg. "+dd(f.fechaReg)+"</span>":"")+"</td><td>"+E(f.numero)+"</td><td>"+E(f.nombre)+(o?"<br><span class='nota'>"+E(o)+"</span>":"")+"</td><td>"+E(f.nif)+"</td><td class='r'>"+N(b)+"</td><td class='c'>"+pct+"</td><td class='r'>"+N(cu)+"</td><td class='r'>"+(r?N(r):"")+"</td><td class='r'>"+N(to)+"</td>"+(tipo==="IVS"?"<td class='c'>"+(nd?"No":"Sí")+"</td>":"")+"</tr>";}).join("");
+    const resH=Object.keys(res).sort((a,b)=>(parseFloat(a)||-1)-(parseFloat(b)||-1)).map(k=>"<tr><td>"+k+"</td><td class='r'>"+N(res[k].b)+"</td><td class='r'>"+N(res[k].c)+"</td></tr>").join("");
+    return "<h2>"+tit+" · "+t+"T "+L.anio+" ("+F.length+")</h2><table class='lib'><thead><tr><th>#</th><th>Fecha</th><th>Nº factura</th><th>Nombre</th><th>NIF</th><th class='r'>Base</th><th class='c'>% IVA</th><th class='r'>Cuota</th><th class='r'>Ret.</th><th class='r'>Total</th>"+(tipo==="IVS"?"<th class='c'>Ded.</th>":"")+"</tr></thead><tbody>"+rows+
+      "</tbody><tfoot><tr><td colspan='5'>Totales</td><td class='r'>"+N(tb)+"</td><td></td><td class='r'>"+N(tc)+"</td><td class='r'>"+N(tr)+"</td><td class='r'>"+N(tt)+"</td>"+(tipo==="IVS"?"<td></td>":"")+"</tr></tfoot></table>"+
+      "<table class='res'><thead><tr><th>Tipo</th><th class='r'>Base</th><th class='r'>Cuota</th></tr></thead><tbody>"+resH+"</tbody></table>"+(tnd?"<p class='nota'>IVA no deducible (filas en gris): "+N(tnd)+" €</p>":"");};
+  const hoy=new Date().toLocaleDateString("es-ES");
+  const css="body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111;margin:18px;}h1{font-size:16px;margin:0 0 2px;}h2{font-size:13px;margin:16px 0 6px;border-bottom:1.5px solid #333;padding-bottom:2px;}"+
+    "table{border-collapse:collapse;width:100%;}td,th{border:1px solid #bbb;padding:3px 5px;vertical-align:top;}th{background:#eee;text-align:left;}.r{text-align:right;white-space:nowrap;}.c{text-align:center;}.k{width:46px;font-family:monospace;}"+
+    ".mods{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;}.mod table{width:100%;}.nota{color:#666;font-size:9.5px;margin:3px 0;}tr.nd td{background:#eee;color:#555;}tfoot td{font-weight:bold;background:#f4f4f4;}tr.tot td{font-weight:bold;background:#fff4d6;}"+
+    ".res{width:auto;min-width:260px;margin-top:6px;}.cab{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:6px;}"+
+    "thead{display:table-header-group;}tr{page-break-inside:avoid;}.salto{page-break-before:always;}@page{size:A4 landscape;margin:12mm;}.noprint{margin-bottom:10px;}@media print{.noprint{display:none;}}";
+  const html="<!doctype html><html lang='es'><head><meta charset='utf-8'><title>Borrador "+E(cl.nombre||"")+" "+t+"T "+L.anio+"</title><style>"+css+"</style></head><body>"+
+    "<div class='noprint'><button onclick='window.print()' style='padding:8px 16px;font-size:13px;'>Imprimir / Guardar PDF</button></div>"+
+    "<div class='cab'><div><h1>"+E(cl.nombre||"")+"</h1><div>NIF "+E(cl.nif||"")+" · Borrador de liquidación "+t+"T "+L.anio+"</div></div><div class='nota'>Durespin · generado el "+hoy+"<br>Borrador de trabajo: no es la declaración presentada</div></div>"+
+    "<div class='mods'>"+(mh||"<p class='nota'>Sin modelos.</p>")+"</div>"+
+    "<div class='salto'></div>"+libro("IVR","Libro de facturas emitidas")+"<div class='salto'></div>"+libro("IVS","Libro de facturas recibidas")+
+    "</body></html>";
+  const w=window.open("","_blank");if(!w){alert("El navegador ha bloqueado la ventana: permite ventanas emergentes para esta página.");return;}
+  w.document.open();w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){}},400);
 }
 function aeatCasillas303(t){
   const L=window._liq,C=(window._liqC||[])[t-1]||{},x=L.q2[t-1];
@@ -3235,8 +3298,8 @@ function aeatCasillas130(t){
   const c={"01":r2a(x.ingAcum),"02":r2a(x.gasAcum),"05":r2a(x.pagosAnt),"06":r2a(x.retSopAcum),"13":0,"15":0,"16":0,"18":0};
   return {c:aeat130Totales(c),check:r2a(x.pago130)};
 }
-function aeatAbrir(m,t){
-  const L=window._liq;const cl=(window.WC||[]).find(x=>x.id===L.cid)||{};
+function aeatDatos(m,t){
+  const L=window._liq;
   let R,avisoRet="";
   if(m==="303")R=aeatCasillas303(t);else if(m==="130")R=aeatCasillas130(t);
   else if(m==="202"){const f=(window.WFI||{})[L.cid]||{};R={c:aeat202Totales({"01":Number(f.is202Base)||0,"02":0}),check:null};
@@ -3245,7 +3308,6 @@ function aeatAbrir(m,t){
     if(m==="111"){const fal=[0,1,2].map(i=>(t-1)*3+1+i).filter(x=>!D.mesesN.includes(x));
       avisoRet=fal.length&&D.mesesN.length?"⚠ Faltan nóminas cerradas de: "+fal.map(x=>MESES[x-1]).join(", ")+" (Laboral → Nómina → Cerrar mes).":(!D.mesesN.length?"No hay nóminas cerradas de este trimestre en Laboral (si tiene trabajadores, ciérralas primero).":"Nóminas: "+D.mesesN.map(x=>MESES[x-1]).join(", ")+" · facturas de profesionales con retención: "+D.nPro);}
     else avisoRet="Facturas de alquiler con retención (19 %): "+D.nAlq;}
-  window._aeatM={m,t,c:R.c};
   const lista303=[["01","Base 4%"],["03","Cuota 4%"],["04","Base 10%"],["06","Cuota 10%"],["07","Base 21%"],["09","Cuota 21%"],["10","Adq. intracom. · base"],["11","Adq. intracom. · cuota"],["12","Otras ISP · base"],["13","Otras ISP · cuota"],["14","Modif. bases"],["15","Modif. cuotas"],
     ["28","Soportado corrientes · base"],["29","Soportado corrientes · cuota"],["30","Bienes inversión · base"],["31","Bienes inversión · cuota"],["36","Adq. intracom. corrientes · base"],["37","Adq. intracom. corrientes · cuota"],["40","Rectif. deducciones · base"],["41","Rectif. deducciones · cuota"],
     ["59","Entregas intracomunitarias"],["60","Exportaciones"],["120","No sujetas por localización"],["122","Con ISP (emitidas)"],["110","Pendiente compensar (periodos ant.)"],["78","Compensación aplicada"],["77","IVA importación pdte."]];
@@ -3255,6 +3317,12 @@ function aeatAbrir(m,t){
   const lista115=[["01","Nº perceptores (arrendadores)"],["02","Base de retenciones"],["03","Retenciones"],["04","Complementaria: resultado anterior"]];
   const lista202=[["01","Base del pago fraccionado (del último IS)"],["02","Complementaria: resultado anterior"]];
   const lista={"303":lista303,"130":lista130,"111":lista111,"115":lista115,"202":lista202}[m];
+  return {R,avisoRet,lista};
+}
+function aeatAbrir(m,t){
+  const L=window._liq;const cl=(window.WC||[]).find(x=>x.id===L.cid)||{};
+  let {R,avisoRet,lista}=aeatDatos(m,t);
+  window._aeatM={m,t,c:R.c};
   const nom=String(cl.nombre||"");
   const pj=/^[ABCDEFGHJNPQRSUVW]/i.test(String(cl.nif||"").trim());           // persona jurídica: razón social completa en «Apellidos»
   const partes=pj?[nom.trim()]:nom.trim().split(/\s+/);
@@ -3331,6 +3399,66 @@ function aeatGenerar(){
 }
 window.aeatAbrir=aeatAbrir;window.aeatRecalc=aeatRecalc;window.aeatGenerar=aeatGenerar;
 
+// ===== Modelo 349 (declaración recapitulativa de operaciones intracomunitarias) · fichero BOE de 500 posiciones =====
+function aeat349Ops(t){
+  return Object.values(window._op349||{}).map(g=>({clave:g.clave,nif:g.nif,nombre:g.nombre,b:r2a(g.t[t-1])})).filter(g=>Math.abs(g.b)>=0.005)
+    .sort((a,b)=>a.clave.localeCompare(b.clave)||a.nombre.localeCompare(b.nombre));
+}
+function _349nif(n){const x=String(n||"").toUpperCase().replace(/[^A-Z0-9]/g,"");const m=x.match(/^([A-Z]{2})(.+)$/);
+  if(m&&["AT","BE","BG","CY","CZ","DE","DK","EE","EL","FI","FR","HR","HU","IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","XI"].includes(m[1]))return {pais:m[1],num:m[2]};
+  return {pais:"",num:x};}
+function aeat349Abrir(t){
+  const L=window._liq;if(!L)return;const cl=(window.WC||[]).find(x=>x.id===L.cid)||{};
+  const ops=aeat349Ops(t);const fi=(window.WFI||{})[L.cid]||{};
+  const cl3={E:"E · Entregas de bienes",S:"S · Servicios prestados",A:"A · Adquisiciones de bienes",I:"I · Servicios adquiridos",T:"T · Triangulares"};
+  const filas=ops.map(o=>{const n=_349nif(o.nif);const mal=!n.pais;return "<tr><td>"+cl3[o.clave]+"</td><td"+(mal?" style='color:#DC2626;font-weight:600;' title='Falta el prefijo del país (NL, DE, FR…)'":"")+">"+ctEsc(o.nif||"falta NIF-IVA")+(mal?" ⚠":"")+"</td><td>"+ctEsc(o.nombre)+"</td><td class='td-r'>"+eur2(o.b)+"</td></tr>";}).join("");
+  const tot=ops.reduce((s,o)=>s+o.b,0);
+  const html="<div style='font-size:17px;font-weight:600;color:var(--navy);margin-bottom:4px;'>Modelo 349 · "+t+"T "+L.anio+"</div>"+
+    (ops.length?"<div class='tabla-wrapper' style='max-height:300px;overflow:auto;'><table><thead><tr><th>Clave</th><th>NIF-IVA</th><th>Operador</th><th class='td-r'>Base</th></tr></thead><tbody>"+filas+
+      "<tr style='font-weight:700;background:var(--gray-50);'><td colspan='3'>"+ops.length+" operador(es)</td><td class='td-r'>"+eur2(tot)+"</td></tr></tbody></table></div>"
+      :"<div style='font-size:13px;margin:10px 0;'>No hay operaciones intracomunitarias en el "+t+"T: no hay que presentar el 349 de este trimestre.</div>")+
+    "<div style='font-size:11px;color:var(--gray-400);margin:8px 0;'>Salen las facturas marcadas como entrega/adquisición intracomunitaria de bienes (E/A) y servicios prestados/recibidos de empresas de la UE (S/I). Las obras o servicios sobre inmuebles de otro país NO van al 349 (márcalas como «No sujeta por localización»: van a la casilla 120 del 303). Cada NIF-IVA debe llevar el prefijo del país y estar en el VIES.</div>"+
+    (ops.length?"<div style='display:grid;grid-template-columns:1fr 2fr;gap:8px;'>"+
+      "<label style='font-size:11px;'>NIF declarante<input id='a349Nif' class='fi' style='width:100%;' value='"+ctEsc(cl.nif||"")+"'></label>"+
+      "<label style='font-size:11px;'>Razón social / apellidos y nombre<input id='a349Nom' class='fi' style='width:100%;' value='"+ctEsc(cl.nombre||"")+"'></label>"+
+      "<label style='font-size:11px;'>Teléfono contacto<input id='a349Tel' class='fi' style='width:100%;' value='"+ctEsc(fi.tel349||"")+"'></label>"+
+      "<label style='font-size:11px;'>Persona de contacto<input id='a349Con' class='fi' style='width:100%;' value='"+ctEsc(fi.con349||"")+"'></label></div>":"")+
+    "<div style='display:flex;gap:8px;justify-content:flex-end;margin-top:12px;'><button class='btn btn-secondary' onclick=\"document.getElementById('aeModal').remove()\">Cerrar</button>"+
+    (ops.length?"<button class='btn btn-primary' onclick='aeat349Generar("+t+")'>&#8681; Descargar fichero</button>":"")+"</div>";
+  let mo=document.getElementById("aeModal");if(mo)mo.remove();
+  mo=document.createElement("div");mo.id="aeModal";mo.style.cssText="position:fixed;inset:0;background:rgba(10,37,64,.55);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;";
+  mo.innerHTML="<div style='background:#fff;border-radius:14px;max-width:760px;width:100%;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.3);'>"+html+"</div>";
+  mo.onclick=e=>{if(e.target===mo)mo.remove();};document.body.appendChild(mo);
+}
+function aeat349Fichero(o){ // o: {nif,nombre,tel,contacto,anio,per,ops}
+  const A=(v,n)=>{v=String(v||"").toUpperCase().split("").map(ch=>/[ÑÇ]/.test(ch)?ch:ch.normalize("NFD").replace(/[\u0300-\u036f]/g,"")).join("").replace(/[^A-Z0-9 ÑÇ&,.\-'/]/g," ");return (v+" ".repeat(n)).slice(0,n);};
+  const Nm=(v,n)=>String(Math.round(Math.abs(v))).padStart(n,"0").slice(-n);
+  const I=(v,n)=>Nm(Math.round(Math.abs(v)*100),n);
+  const tot=o.ops.reduce((s,x)=>s+x.b,0);
+  const id="349"+String(Date.now()).slice(-10);
+  let r1="1349"+o.anio+A(o.nif,9)+A(o.nombre,40)+"T"+(String(o.tel||"").replace(/\D/g,"").slice(-9)).padStart(9,"0")+A(o.contacto||o.nombre,40)+id+"  "+"0".repeat(13)+A(o.per,2)+Nm(o.ops.length,9)+I(tot,15)+Nm(0,9)+I(0,15)+" ";
+  r1=(r1+" ".repeat(500)).slice(0,500);
+  const r2=o.ops.map(x=>{const n=_349nif(x.nif);
+    let r="2349"+o.anio+A(o.nif,9)+" ".repeat(58)+A(n.pais,2)+A(n.num,15)+A(x.nombre,40)+x.clave+I(x.b,13);
+    return (r+" ".repeat(500)).slice(0,500);});
+  [r1,...r2].forEach((r,i)=>{if(r.length!==500)throw new Error("registro "+(i+1)+" con longitud "+r.length);});
+  return {txt:[r1,...r2].join("\r\n")+"\r\n"};
+}
+function aeat349Generar(t){
+  const L=window._liq,ops=aeat349Ops(t);
+  const nif=(document.getElementById("a349Nif").value||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if(nif.length!==9){alert("Revisa el NIF del declarante (9 caracteres).");return;}
+  const sin=ops.filter(o=>!_349nif(o.nif).pais);
+  if(sin.length&&!confirm("Hay "+sin.length+" operador(es) sin prefijo de país en el NIF-IVA ("+sin.map(o=>o.nombre).join(", ")+"). La AEAT lo rechazará. ¿Generar igualmente?"))return;
+  const tel=document.getElementById("a349Tel").value,con=document.getElementById("a349Con").value;
+  try{
+    const r=aeat349Fichero({nif,nombre:document.getElementById("a349Nom").value,tel,contacto:con,anio:L.anio,per:t+"T",ops});
+    aeatDescargar("349_"+nif+"_"+L.anio+"_"+t+"T.txt",r.txt);
+    try{const fi=(window.WFI||{})[L.cid]||{id:L.cid};if(fi.tel349!==tel||fi.con349!==con)window.fsSetDoc(window.fsDoc(window.db,"iva_fiscal",L.cid),{tel349:tel,con349:con},{merge:true});}catch(e){}
+  }catch(e){alert("No se pudo generar el fichero: "+e.message);}
+}
+window.aeat349Abrir=aeat349Abrir;window.aeat349Generar=aeat349Generar;
+
 
 // Desglose por casillas del 303 y resumen del 349, por trimestre
 function desglose303(emit,reci,sinIva){
@@ -3339,6 +3467,7 @@ function desglose303(emit,reci,sinIva){
   emit.forEach(f=>{const t=trimOf(fR(f)),o=fOpDe(f);
     if(o==="eib"||o==="eis"){add(t,"59",fBaseTot(f));const k="E|"+(o==="eib"?"E":"S")+"|"+(f.nif||f.nombre);(op349[k]=op349[k]||{clave:o==="eib"?"E":"S",nif:f.nif||"",nombre:f.nombre||"",t:[0,0,0,0]}).t[t-1]+=fBaseTot(f);}
     else if(o==="exp")add(t,"60",fBaseTot(f));
+    else if(o==="nsl")add(t,"120",fBaseTot(f));
     else if(o==="isp")add(t,"122",fBaseTot(f));
     else fLineas(f).forEach(l=>{const p=parseFloat(l.p)||0;const k=p>=21?"07":p>=10?"04":p>=4?"01":null;if(k){add(t,k,l.b);add(t,String(+k+2).padStart(2,"0"),l.c);}});
   });
@@ -3351,13 +3480,14 @@ function desglose303(emit,reci,sinIva){
   const filas=[["01","Régimen general 4% · base"],["03","Cuota 4%"],["04","Régimen general 10% · base"],["06","Cuota 10%"],["07","Régimen general 21% · base"],["09","Cuota 21%"],
     ["10","Adquisiciones intracomunitarias · base"],["11","Adquisiciones intracomunitarias · cuota"],["12","Otras con inversión del sujeto pasivo · base"],["13","Otras con ISP · cuota"],
     ["28","Soportado operaciones interiores corrientes · base"],["29","Soportado op. interiores corrientes · cuota"],["32","Importaciones bienes corrientes · base"],["33","Importaciones bienes corrientes · cuota"],["36","Adquisiciones intracom. bienes corrientes y servicios · base"],["37","Adquisiciones intracom. bienes corrientes y servicios · cuota"],
-    ["59","Entregas intracomunitarias de bienes y servicios"],["60","Exportaciones y asimiladas"],["122","Operaciones con inversión del sujeto pasivo (emitidas)"]];
+    ["59","Entregas intracomunitarias de bienes y servicios"],["60","Exportaciones y asimiladas"],["120","No sujetas por reglas de localización"],["122","Operaciones con inversión del sujeto pasivo (emitidas)"]];
   const usadas=filas.filter(([k])=>C.some(c=>c[k]));
   if(!usadas.length)return "";
   let h="<div style='margin-top:24px;border-top:2px solid var(--gold);padding-top:14px;'><div style='font-weight:700;color:var(--navy);font-size:14px;'>Desglose para el modelo 303</div>"+
     "<div style='font-size:11px;color:var(--gray-400);margin:2px 0 10px;'>Casillas con importe, por trimestre. Las intracomunitarias e inversiones del sujeto pasivo se autoliquidan: suman en devengado y en deducible.</div>"+
     "<div class='tabla-wrapper'><table><thead><tr><th>Casilla</th><th>Concepto</th><th class='td-r'>1T</th><th class='td-r'>2T</th><th class='td-r'>3T</th><th class='td-r'>4T</th></tr></thead><tbody>"+
     usadas.map(([k,n])=>"<tr><td style='font-family:monospace;'>"+k+"</td><td>"+n+"</td>"+C.map(c=>"<td class='td-r'>"+(c[k]?eur2(c[k]):"&mdash;")+"</td>").join("")+"</tr>").join("")+"</tbody></table></div></div>";
+  window._op349=op349;
   const o3=Object.values(op349);
   if(o3.length){
     const cl={E:"E · Entregas de bienes",S:"S · Servicios prestados",A:"A · Adquisiciones de bienes",I:"I · Servicios adquiridos"};
