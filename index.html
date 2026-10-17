@@ -1376,7 +1376,7 @@ function renderDocs(){
     "<td class='td-c' style='font-size:11px;color:var(--gray-400);'>"+(nE||nR?nE+" emit. · "+nR+" rec.":"—")+"</td>"+
     "<td class='td-c' style='font-size:11px;color:var(--gray-400);'>"+(nP||"—")+"</td>"+
     DOC_ITEMS.map(([k])=>"<td class='td-c'><input type='checkbox' style='width:auto;cursor:pointer;' "+(r[k]?"checked ":"")+"onchange=\"marcarDoc('"+c.id+"','"+k+"',this.checked)\"></td>").join("")+
-    "<td><input type='text' class='fi2' style='padding:4px 6px;font-size:12px;min-width:140px;' value='"+String(r.nota||"").replace(/'/g,"&#39;")+"' placeholder='p. ej. falta factura alquiler' onchange=\"marcarDoc('"+c.id+"','nota',this.value)\"></td>"+
+    "<td><textarea class='fi2' rows='"+Math.min(6,Math.max(1,String(r.nota||"").split("\n").length))+"' style='padding:4px 6px;font-size:12px;min-width:240px;resize:vertical;line-height:1.35;' placeholder='p. ej. falta factura alquiler (Intro = nueva línea)' onfocus=\"this.rows=Math.max(4,this.value.split('\\n').length+1)\" onblur=\"this.rows=Math.min(6,Math.max(1,this.value.split('\\n').length))\" onchange=\"marcarDoc('"+c.id+"','nota',this.value)\">"+ctEsc(r.nota||"")+"</textarea></td>"+
     "<td class='td-c'>"+(comp?"":"<button class='icon-btn' title='Copiar mensaje de recordatorio para WhatsApp' style='color:var(--navy);' onclick=\"copiarRecordatorio('"+c.id+"')\">&#128172;</button>")+"</td>"+
     "</tr>").join("");
 }
@@ -3270,7 +3270,8 @@ function imprimirBorrador(){
       "</tbody><tfoot><tr><td colspan='5'>Totales</td><td class='r'>"+N(tb)+"</td><td></td><td class='r'>"+N(tc)+"</td><td class='r'>"+N(tr)+"</td><td class='r'>"+N(tt)+"</td>"+(tipo==="IVS"?"<td></td>":"")+"</tr></tfoot></table>"+
       "<table class='res'><thead><tr><th>Tipo</th><th class='r'>Base</th><th class='r'>Cuota</th></tr></thead><tbody>"+resH+"</tbody></table>"+(tnd?"<p class='nota'>IVA no deducible (filas en gris): "+N(tnd)+" €</p>":"");};
   const hoy=new Date().toLocaleDateString("es-ES");
-  const css="body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111;margin:18px;}h1{font-size:16px;margin:0 0 2px;}h2{font-size:13px;margin:16px 0 6px;border-bottom:1.5px solid #333;padding-bottom:2px;}"+
+  const nota=String(((window.WDOC||{})[L.cid+"_"+L.anio+"_"+t]||{}).nota||"").trim();
+  const css=".notas{border:2px solid #C00000;color:#C00000;background:#FFF5F5;padding:8px 10px;margin:8px 0 4px;font-size:11.5px;line-height:1.45;border-radius:4px;}"+"body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#111;margin:18px;}h1{font-size:16px;margin:0 0 2px;}h2{font-size:13px;margin:16px 0 6px;border-bottom:1.5px solid #333;padding-bottom:2px;}"+
     "table{border-collapse:collapse;width:100%;}td,th{border:1px solid #bbb;padding:3px 5px;vertical-align:top;}th{background:#eee;text-align:left;}.r{text-align:right;white-space:nowrap;}.c{text-align:center;}.k{width:46px;font-family:monospace;}"+
     ".mods{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;}.mod table{width:100%;}.nota{color:#666;font-size:9.5px;margin:3px 0;}tr.nd td{background:#eee;color:#555;}tfoot td{font-weight:bold;background:#f4f4f4;}tr.tot td{font-weight:bold;background:#fff4d6;}"+
     ".res{width:auto;min-width:260px;margin-top:6px;}.cab{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111;padding-bottom:6px;margin-bottom:6px;}"+
@@ -3278,6 +3279,7 @@ function imprimirBorrador(){
   const html="<!doctype html><html lang='es'><head><meta charset='utf-8'><title>Borrador "+E(cl.nombre||"")+" "+t+"T "+L.anio+"</title><style>"+css+"</style></head><body>"+
     "<div class='noprint'><button onclick='window.print()' style='padding:8px 16px;font-size:13px;'>Imprimir / Guardar PDF</button></div>"+
     "<div class='cab'><div><h1>"+E(cl.nombre||"")+"</h1><div>NIF "+E(cl.nif||"")+" · Borrador de liquidación "+t+"T "+L.anio+"</div></div><div class='nota'>Durespin · generado el "+hoy+"<br>Borrador de trabajo: no es la declaración presentada</div></div>"+
+    (nota?"<div class='notas'><b>Notas para el cliente</b><br>"+E(nota).replace(/\n/g,"<br>")+"</div>":"")+
     "<div class='mods'>"+(mh||"<p class='nota'>Sin modelos.</p>")+"</div>"+
     "<div class='salto'></div>"+libro("IVR","Libro de facturas emitidas")+"<div class='salto'></div>"+libro("IVS","Libro de facturas recibidas")+
     "</body></html>";
