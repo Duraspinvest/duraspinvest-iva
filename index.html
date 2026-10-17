@@ -32,6 +32,7 @@ main{padding:20px;max-width:1400px;margin:0 auto;}
 .section.active{display:block;}
 .card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:14px;}
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px;}
+.th-ord{cursor:pointer;user-select:none;white-space:nowrap;}.th-ord:hover{text-decoration:underline;}
 .stat-card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;border-left:3px solid var(--accent);}
 .stat-num{font-size:22px;font-weight:700;color:var(--navy);}
 .stat-label{font-size:11px;color:var(--gray-400);margin-top:2px;}
@@ -89,6 +90,15 @@ tr:last-child td{border-bottom:none;}
 .ac-sub{font-size:11px;color:var(--gray-400);margin-top:2px;}
 .iva-box{background:var(--gray-50);border-radius:7px;padding:12px;margin-top:10px;}
 .iva-box-title{font-size:11px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;}
+.fm-wide{max-width:1180px;padding:18px 22px;max-height:96vh;}
+.fm-wide .modal-title{margin-bottom:12px;}
+.fm-wide .fi2{padding:7px 10px;}
+.fm-wide .mg2{gap:9px 12px;}
+.fm-cols{display:grid;grid-template-columns:1.15fr 1fr;gap:20px;align-items:start;}
+.ivl-grid{display:grid;grid-template-columns:28px 2fr 1fr 1fr;gap:7px 8px;align-items:center;}
+.ivl-n{font-size:11px;font-weight:600;color:var(--gray-400);text-align:center;}
+.fm-wide .ma{margin-top:12px;padding-top:10px;}
+@media(max-width:900px){.fm-cols{grid-template-columns:1fr;}}
 .iva-row{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;}
 .icon-btn{background:none;border:none;cursor:pointer;padding:4px;color:var(--gray-400);font-size:14px;border-radius:4px;}
 .icon-btn:hover{color:var(--gray-800);background:var(--gray-100);}
@@ -163,12 +173,6 @@ body.visor-open .modal-overlay.open{display:flex;}
 
 <!-- FACTURAS -->
 <div id="facturas" class="section active">
-  <div class="stats-row">
-    <div class="stat-card" style="border-left-color:#1B4F8A;"><div class="stat-num" id="stE">0</div><div class="stat-label">Facturas emitidas</div></div>
-    <div class="stat-card" style="border-left-color:#C2410C;"><div class="stat-num" id="stR">0</div><div class="stat-label">Facturas recibidas</div></div>
-    <div class="stat-card" style="border-left-color:var(--success);"><div class="stat-num" id="stBE">0 EUR</div><div class="stat-label">Base total emitidas</div></div>
-    <div class="stat-card" style="border-left-color:var(--warning);"><div class="stat-num" id="stBR">0 EUR</div><div class="stat-label">Base total recibidas</div></div>
-  </div>
   <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div class="filtros" style="margin-bottom:0;">
       <div class="filtro-group"><span class="filtro-label">Cliente</span>
@@ -177,6 +181,8 @@ body.visor-open .modal-overlay.open{display:flex;}
         <select class="fi" id="fFT" onchange="renderF()"><option value="">Todos</option><option value="IVR">Emitidas</option><option value="IVS">Recibidas</option></select></div>
       <div class="filtro-group"><span class="filtro-label">Ano</span>
         <select class="fi" id="fFA" onchange="renderF()"><option value="">Todos</option><option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option></select></div>
+      <div class="filtro-group"><span class="filtro-label">Buscar</span>
+        <input class="fi" id="fFB" type="search" placeholder="Nombre, NIF, nº o importe" oninput="clearTimeout(window._fBt);window._fBt=setTimeout(renderF,200)" style="min-width:200px;"></div>
       <div class="filtro-group"><span class="filtro-label">Trimestre</span>
         <select class="fi" id="fFQ" onchange="renderF()"><option value="">Todos</option><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
     </div>
@@ -192,8 +198,8 @@ body.visor-open .modal-overlay.open{display:flex;}
   <div id="fResumen"></div>
   <div class="tabla-wrapper">
     <table><thead><tr>
-      <th>Tipo</th><th>Cliente despacho</th><th>Fecha</th><th>N Factura</th><th>Nombre</th><th>NIF/CIF</th><th>Cuenta</th>
-      <th class="td-r">Base 1</th><th class="td-c">%IVA</th><th class="td-r">Cuota</th><th class="td-r">Total</th><th class="td-c">Ret.</th><th class="td-c">347</th><th></th>
+      <th>Tipo</th><th>Cliente despacho</th><th class="th-ord" data-k="fecha" onclick="fOrd(this)">Fecha</th><th class="th-ord" data-k="numero" onclick="fOrd(this)">N Factura</th><th class="th-ord" data-k="nombre" onclick="fOrd(this)">Nombre</th><th class="th-ord" data-k="nif" onclick="fOrd(this)">NIF/CIF</th><th class="th-ord" data-k="cuenta" onclick="fOrd(this)">Cuenta</th>
+      <th class="td-r th-ord" data-k="base" onclick="fOrd(this)">Base 1</th><th class="td-c">%IVA</th><th class="td-r th-ord" data-k="cuota" onclick="fOrd(this)">Cuota</th><th class="td-r th-ord" data-k="total" onclick="fOrd(this)">Total</th><th class="td-c">Ret.</th><th class="td-c">347</th><th></th>
     </tr></thead>
     <tbody id="fTbody"><tr><td colspan="14"><div class="empty"><div class="empty-icon">&#128203;</div><div>No hay facturas.</div></div></td></tr></tbody><tfoot id="fTfoot"></tfoot></table>
   </div>
@@ -437,15 +443,17 @@ body.visor-open .modal-overlay.open{display:flex;}
 
 <!-- MODAL FACTURA -->
 <div class="modal-overlay" id="fModal" onclick="closeMO(event,'fModal')">
-  <div class="modal">
+  <div class="modal fm-wide">
     <div class="modal-title" id="fMTitle">Nueva factura emitida</div>
     <input type="hidden" id="fId"><input type="hidden" id="fTipo">
-    <div class="mg2">
+    <div class="fm-cols">
+     <div class="mg2">
       <div class="fg full"><label class="fl">Cliente del despacho <span class="ob">*</span></label>
         <select class="fi2" id="fCD" onchange="onFCDChange()"><option value="">Seleccionar...</option></select></div>
       <div class="fg"><label class="fl">Fecha factura <span class="ob">*</span></label><input type="date" class="fi2" id="fFecha" onchange="_fRegSync()" oninput="_fRegSync()"></div>
       <div class="fg"><label class="fl" style="display:flex;justify-content:space-between;gap:6px;"><span>Fecha de registro</span><a href="#" onclick="_fRegTrim();return false;" style="font-size:11px;color:var(--navy);font-weight:500;" title="Pone el 1er día del trimestre elegido en los filtros de arriba (o del actual si no hay filtro)">1er día del trimestre</a></label><input type="date" class="fi2" id="fFReg" onchange="_fRegManual()" oninput="_fRegManual()"><div id="fFRegHint" style="font-size:11px;color:#B45309;margin-top:3px;display:none;"></div></div>
       <div class="fg"><label class="fl">N Factura <span class="ob">*</span></label><input type="text" class="fi2" id="fNum" placeholder="2026/001"></div>
+      <div class="fg"><label class="fl">NIF/CIF</label><input type="text" class="fi2" id="fNif" placeholder="B12345678" oninput="nifHint(this,'fNifHint')"><div id="fNifHint" style="font-size:11px;color:#DC2626;margin-top:3px;display:none;"></div></div>
       <div class="fg full"><label class="fl" id="fNLbl">Nombre cliente <span class="ob">*</span></label>
         <div class="ac-wrap">
           <input type="text" class="fi2" id="fNom" placeholder="Escribe para buscar..." oninput="acNombre(this.value)" autocomplete="off">
@@ -453,54 +461,35 @@ body.visor-open .modal-overlay.open{display:flex;}
         </div>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-600);margin-top:5px;cursor:pointer;"><input type="checkbox" id="fOcas" style="width:auto;margin:0;"> Ocasional: no guardar en Cuentas (cliente o proveedor de una sola vez)</label>
       </div>
-      <div class="fg"><label class="fl">NIF/CIF</label><input type="text" class="fi2" id="fNif" placeholder="B12345678" oninput="nifHint(this,'fNifHint')"><div id="fNifHint" style="font-size:11px;color:#DC2626;margin-top:3px;display:none;"></div></div>
       <div class="fg"><label class="fl">Cuenta contable</label><input type="text" class="fi2" id="fCta" placeholder="43000001"></div>
-      <div class="fg"><label class="fl" id="fCPLbl">Cuenta de gasto</label><input type="text" class="fi2" id="fCP" placeholder="62900000" title="Para el desglose por cuenta (renta). Opcional"></div>
-      <div class="fg"><label class="fl">Concepto</label><input type="text" class="fi2" id="fConc" placeholder="Otros servicios" title="Opcional"></div>
+      <div class="fg"><label class="fl" id="fCPLbl">Cuenta de gasto</label><input type="text" class="fi2" id="fCP" placeholder="60000000" title="Si la dejas vacía: 60000000 en recibidas y 70000000 en emitidas. Se recuerda para el proveedor/cliente"></div>
+      <div class="fg full"><label class="fl">Concepto</label><input type="text" class="fi2" id="fConc" placeholder="Otros servicios" title="Opcional"></div>
       <div class="fg full"><label class="fl">Tipo de operación</label>
         <select class="fi2" id="fOp" onchange="onOpChange()"></select>
         <div id="fOpAyuda" style="font-size:11px;color:var(--gray-400);margin-top:4px;"></div></div>
       <div class="fg" id="fRebuG" style="display:none;"><label class="fl">Precio de compra del bien (REBU)</label><input type="number" step="0.01" class="fi2" id="fRebuC" placeholder="0.00" oninput="calcRebu()" title="Lo que costó el vehículo/bien vendido. Margen = venta - compra"></div>
-    </div>
-    <div class="iva-box">
-      <div class="iva-box-title">Linea 1 de IVA</div>
-      <div class="iva-row">
-        <div class="fg"><label class="fl">Base imponible <span class="ob">*</span></label><input type="number" step="0.01" class="fi2" id="fB1" placeholder="0.00" oninput="calcIVA(1)"></div>
-        <div class="fg"><label class="fl">% IVA <span class="ob">*</span></label><select class="fi2" id="fP1" onchange="calcIVA(1)"><option value="21">21%</option><option value="10">10%</option><option value="4">4%</option><option value="0">0% Exento</option></select></div>
-        <div class="fg"><label class="fl">Cuota IVA</label><input type="number" step="0.01" class="fi2" id="fI1" placeholder="0.00" oninput="calcTot()"></div>
+     </div>
+     <div>
+      <div class="iva-box" style="margin-top:0;">
+       <div class="ivl-grid">
+        <div></div><div class="fl">Base imponible <span class="ob">*</span></div><div class="fl">% IVA</div><div class="fl">Cuota IVA</div>
+        <div class="ivl-n">1</div><input type="number" step="0.01" class="fi2" id="fB1" placeholder="0.00" oninput="calcIVA(1)"><select class="fi2" id="fP1" onchange="calcIVA(1)"><option value="21">21%</option><option value="10">10%</option><option value="4">4%</option><option value="0">0% Exento</option></select><input type="number" step="0.01" class="fi2" id="fI1" placeholder="0.00" oninput="calcTot()">
+        <div class="ivl-n">2</div><input type="number" step="0.01" class="fi2" id="fB2" placeholder="0.00" oninput="calcIVA(2)"><select class="fi2" id="fP2" onchange="calcIVA(2)"><option value="">-</option><option value="21">21%</option><option value="10">10%</option><option value="4">4%</option><option value="0">0%</option></select><input type="number" step="0.01" class="fi2" id="fI2" placeholder="0.00" oninput="calcTot()">
+        <div class="ivl-n">3</div><input type="number" step="0.01" class="fi2" id="fB3" placeholder="0.00" oninput="calcIVA(3)"><select class="fi2" id="fP3" onchange="calcIVA(3)"><option value="">-</option><option value="21">21%</option><option value="10">10%</option><option value="4">4%</option><option value="0">0%</option></select><input type="number" step="0.01" class="fi2" id="fI3" placeholder="0.00" oninput="calcTot()">
+        <div class="ivl-n" title="Exento / no sujeto">Ex.</div><input type="number" step="0.01" class="fi2" id="fEx" placeholder="0.00" oninput="calcTot()" title="Parte de la factura sin IVA (exenta, suplidos, tasas...)"><div style="grid-column:span 2;font-size:11px;color:var(--gray-400);">Exento / no sujeto: suplidos, tasas…</div>
+       </div>
       </div>
-    </div>
-    <div class="iva-box" style="margin-top:8px;">
-      <div class="iva-box-title">Linea 2 de IVA (opcional)</div>
-      <div class="iva-row">
-        <div class="fg"><label class="fl">Base 2</label><input type="number" step="0.01" class="fi2" id="fB2" placeholder="0.00" oninput="calcIVA(2)"></div>
-        <div class="fg"><label class="fl">% IVA</label><select class="fi2" id="fP2" onchange="calcIVA(2)"><option value="">-</option><option value="21">21%</option><option value="10">10%</option><option value="4">4%</option><option value="0">0%</option></select></div>
-        <div class="fg"><label class="fl">Cuota IVA 2</label><input type="number" step="0.01" class="fi2" id="fI2" placeholder="0.00" oninput="calcTot()"></div>
-      </div>
-    </div>
-    <div class="iva-box" style="margin-top:8px;">
-      <div class="iva-box-title">Linea 3 de IVA (opcional)</div>
-      <div class="iva-row">
-        <div class="fg"><label class="fl">Base 3</label><input type="number" step="0.01" class="fi2" id="fB3" placeholder="0.00" oninput="calcIVA(3)"></div>
-        <div class="fg"><label class="fl">% IVA</label><select class="fi2" id="fP3" onchange="calcIVA(3)"><option value="">-</option><option value="21">21%</option><option value="10">10%</option><option value="4">4%</option><option value="0">0%</option></select></div>
-        <div class="fg"><label class="fl">Cuota IVA 3</label><input type="number" step="0.01" class="fi2" id="fI3" placeholder="0.00" oninput="calcTot()"></div>
-      </div>
-    </div>
-    <div class="iva-box" style="margin-top:8px;">
-      <div class="iva-row">
-        <div class="fg"><label class="fl">Importe exento / no sujeto</label><input type="number" step="0.01" class="fi2" id="fEx" placeholder="0.00" oninput="calcTot()" title="Parte de la factura sin IVA (exenta, suplidos, tasas...)"></div>
-        <div class="fg" style="grid-column:span 2;font-size:11px;color:var(--gray-400);align-self:end;padding-bottom:8px;">Parte de la factura sin IVA: exenta, suplidos, tasas…</div>
-      </div>
-    </div>
-    <div class="mg2" style="margin-top:12px;">
+      <div class="mg2" style="margin-top:12px;">
       <div class="fg"><label class="fl">Total factura <span class="ob">*</span></label><input type="number" step="0.01" class="fi2" id="fTot" placeholder="0.00" oninput="if(document.getElementById('fTipo').value==='IVR'&&document.getElementById('fOp').value==='rebu')calcRebu()"></div>
       <div class="fg"><label class="fl">% Retencion</label>
         <select class="fi2" id="fRP" onchange="calcRet()"><option value="">Sin retencion</option><option value="1">1% (módulos)</option><option value="2">2% (agrarias)</option><option value="7">7%</option><option value="15">15%</option><option value="19">19%</option><option value="21">21%</option></select></div>
       <div class="fg"><label class="fl">Importe retencion</label><input type="number" step="0.01" class="fi2" id="fRI" placeholder="0.00"></div>
       <div class="fg"><label class="fl">Modelo 347</label>
         <select class="fi2" id="f347"><option value="0">Automático (si supera 3.005,06 €)</option><option value="1">Incluir siempre</option></select></div>
-      <div class="fg full" id="fDedG" style="display:none;"><label class="fl">IVA deducible</label>
+      <div class="fg" id="fDedG" style="display:none;"><label class="fl">IVA deducible</label>
         <select class="fi2" id="fDed"><option value="1">Si</option><option value="0">No</option></select></div>
+      </div>
+     </div>
     </div>
     <div class="ma">
       <button class="btn btn-secondary" onclick="closeM('fModal')">Cancelar</button>
@@ -1435,6 +1424,7 @@ function poblarSel(){
 }
 
 function renderSt(){
+  if(!document.getElementById("stE"))return;
   const fs=window.WF||[];
   const ivr=fs.filter(f=>f.tipo==="IVR"),ivs=fs.filter(f=>f.tipo==="IVS");
   document.getElementById("stE").textContent=ivr.length;
@@ -1445,17 +1435,39 @@ function renderSt(){
   document.getElementById("stBR").textContent=br.toLocaleString("es-ES",{minimumFractionDigits:2})+" EUR";
 }
 
+// Buscador y orden de la tabla de facturas
+function _fNorm(x){return String(x||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");}
+function _fMatch(f,b){
+  const n=b.replace(/\./g,"").replace(",",".");
+  if(/^-?\d+(\.\d+)?$/.test(n)&&n.includes(".")){const v=parseFloat(n);return [f.total,fBaseTot(f),fCuota(f)].some(x=>Math.abs((parseFloat(x)||0)-v)<0.005);}
+  const t=_fNorm([f.nombre,f.nif,f.numero,f.cuenta,f.concepto].join(" | "));
+  return b.split(/\s+/).every(w=>t.includes(w)||t.replace(/[\s.\-\/]/g,"").includes(w.replace(/[\s.\-\/]/g,"")));
+}
+window._fOrdK=window._fOrdK||"fecha";window._fOrdD=window._fOrdD||1;
+function _fCmp(a,b){
+  const k=window._fOrdK,d=window._fOrdD;
+  const val=f=>k==="fecha"?fR(f):k==="base"?fBaseTot(f):k==="cuota"?fCuota(f):k==="total"?(parseFloat(f.total)||0):_fNorm(f[k]);
+  const x=val(a),y=val(b);let r=typeof x==="number"?x-y:String(x).localeCompare(String(y),"es",{numeric:true});
+  if(!r)r=fR(a).localeCompare(fR(b));
+  return r*d;
+}
+function fOrd(th){const k=th.dataset.k;if(window._fOrdK===k)window._fOrdD=-window._fOrdD;else{window._fOrdK=k;window._fOrdD=1;}renderF();}
+function _fOrdMarcas(){document.querySelectorAll("#facturas .th-ord").forEach(th=>{const t=th.textContent.replace(/ [▲▼]$/,"");th.textContent=t+(th.dataset.k===window._fOrdK?(window._fOrdD>0?" ▲":" ▼"):"");th.title="Clic para ordenar";});}
+
 function renderF(){
   const tb=document.getElementById("fTbody");if(!tb)return;
   const fc=document.getElementById("fFC").value,ft=document.getElementById("fFT").value;
   const fa=document.getElementById("fFA").value,fq=document.getElementById("fFQ").value;
+  const fb=_fNorm((document.getElementById("fFB")||{}).value||"").trim();
   let fs=(window.WF||[]).filter(f=>{
     if(fc&&f.clienteDespachoId!==fc)return false;
     if(ft&&f.tipo!==ft)return false;
     if(fa&&fR(f)&&new Date(fR(f)+"T12:00:00").getFullYear()!==parseInt(fa))return false;
     if(fq&&fR(f)&&q(fR(f))!==fq)return false;
+    if(fb&&!_fMatch(f,fb))return false;
     return true;
-  }).sort((a,b)=>fR(a).localeCompare(fR(b)));
+  }).sort(_fCmp);
+  _fOrdMarcas();
   window.fVista=fs;
   renderResumenF(fs);
   if(!fs.length){tb.innerHTML="<tr><td colspan='14'><div class='empty'><div class='empty-icon'>&#128203;</div><div>No hay facturas con esos filtros.</div></div></td></tr>";return;}
@@ -1923,7 +1935,7 @@ function _fRegHint(){
   const hoy=new Date().toISOString().slice(0,10), tri=x=>x.slice(0,4)+"-"+q(x);
   let t="";
   if(fr&&fe&&fr!==fe)t="Cuenta en el "+q(fr)+"T "+fr.slice(0,4)+" (factura del "+q(fe)+"T "+fe.slice(0,4)+").";
-  else if(fe&&(document.getElementById("fTipo")||{}).value!=="IVR"){
+  else if(false){ // aviso de trimestre anterior desactivado a petición
     // Trimestre que se está declarando: hasta el día 20 del primer mes de un trimestre, el anterior
     const d=new Date(hoy),m=d.getMonth();let ref=hoy;
     if(m%3===0&&d.getDate()<=20){const p=new Date(d.getFullYear(),m-1,15);ref=p.toISOString().slice(0,10);}
@@ -1953,7 +1965,7 @@ function openFM(tipo){
   const _op=document.getElementById("fOp");
   if(_op){_op.innerHTML=Object.entries(OPS[tipo]||OPS.IVS).map(([k,v])=>"<option value='"+k+"'>"+v+"</option>").join("");_op.value="int";}
   if(document.getElementById("fP3"))document.getElementById("fP3").value="";
-  document.getElementById("fCPLbl").textContent=tipo==="IVR"?"Cuenta de ingreso":"Cuenta de gasto";
+  document.getElementById("fCPLbl").textContent=tipo==="IVR"?"Cuenta de ingreso":"Cuenta de gasto";document.getElementById("fCP").placeholder=tipo==="IVR"?"70000000":"60000000";
   document.getElementById("fDed").value="1";
   document.getElementById("fFecha").value=new Date().toISOString().slice(0,10);
   _fRegSet(document.getElementById("fFecha").value,false);
@@ -2125,7 +2137,7 @@ async function saveF(mantenerAbierto){
     if(!ex){
       const nid="cc"+Date.now();
       await fbS("iva_cuentas",nid,{id:nid,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",nombre:nom,nif:_nif,cuenta:_cta,tipo:_tipoC,
-        contrapartida:_cp,retPct:document.getElementById("fRP").value||"",m347:document.getElementById("f347").value||"0",creado:new Date().toISOString(),auto:true});
+        contrapartida:_cp||(tipo==="IVR"?"70000000":"60000000"),retPct:document.getElementById("fRP").value||"",m347:document.getElementById("f347").value||"0",creado:new Date().toISOString(),auto:true});
     } else if(_cp && ex.contrapartida!==_cp){
       await window.fsSetDoc(window.fsDoc(window.db,"iva_cuentas",String(ex.id)),{contrapartida:_cp},{merge:true});
     }
@@ -2735,6 +2747,8 @@ async function prepararDocPortal(d) {
         if(!document.getElementById('fCta').value && ult.cuenta) document.getElementById('fCta').value = ult.cuenta;
       }
     }
+    // Proveedor nuevo: compras (60000000) por defecto; si la cambias, se recuerda para la próxima factura de ese proveedor
+    if(!document.getElementById('fCP').value) document.getElementById('fCP').value = '60000000';
     showToast('Datos leídos. Revísalos y pulsa Guardar.', 5000);
   } catch(err) {
     console.error('Lectura IA:', err);
