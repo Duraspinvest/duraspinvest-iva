@@ -764,6 +764,10 @@ function ctLineasFactura(f){
     const prov=cc.cuenta||f.cuenta||"40000000",contra=cc.contrapartida||"60000000";
     const auto=esAuto(f),cuota=fCuota(f),noDed=String(f.deducible)==="0";
     const base=fBaseTot(f);
+    if(fOpDe(f)==="imp"){ // DUA: solo el IVA pagado en aduana
+      if(noDed)add(contra,cuota,0); else add(CT_IVA_S,cuota,0);
+      add(prov,0,cuota); return L;
+    }
     add(contra,base+(noDed?cuota:0),0);
     if(cuota>0&&!noDed&&fOpDe(f)!=="rebu")add(CT_IVA_S,cuota,0);
     if(auto&&cuota>0)add(CT_IVA_R,0,cuota);
@@ -1482,12 +1486,13 @@ function renderF(){
 function _n(v){return parseFloat(v)||0;}
 // ===== Tipos de operación, varias bases, exento, autoliquidación (intracomunitarias / ISP) y REBU =====
 const OPS={
-  IVS:{int:"Interior (normal)",aib:"Adquisición intracomunitaria de bienes",ais:"Servicios recibidos de empresa de la UE",isp:"Inversión del sujeto pasivo (nacional)",rebu:"Compra en REBU (bienes usados, sin IVA)"},
+  IVS:{int:"Interior (normal)",aib:"Adquisición intracomunitaria de bienes",ais:"Servicios recibidos de empresa de la UE",isp:"Inversión del sujeto pasivo (nacional)",imp:"Importación (IVA del DUA)",rebu:"Compra en REBU (bienes usados, sin IVA)"},
   IVR:{int:"Interior (normal)",eib:"Entrega intracomunitaria de bienes (exenta)",eis:"Servicios a empresa de la UE",exp:"Exportación",isp:"Con inversión del sujeto pasivo (sin IVA)",rebu:"Venta en REBU (IVA sobre el margen)"}
 };
 const OPS_AYUDA={
   aib:"La factura llega sin IVA. La app calcula el IVA (autoliquidación) y lo pone a la vez en devengado (303 c.10-11) y deducible (c.36-37). Va al 349 (clave A).",
-  ais:"La factura llega sin IVA. La app calcula el IVA y lo pone en devengado (303 c.10-11) y deducible (c.28-29). Va al 349 (clave I).",
+  ais:"La factura llega sin IVA. La app calcula el IVA y lo pone en devengado (303 c.10-11) y deducible (c.36-37). Va al 349 (clave I).",
+  imp:"IVA pagado en la aduana (DUA). Base = valor en aduana; la cuota va a deducible de importaciones (303 c.32-33). En contabilidad solo se registra la cuota (472 contra el proveedor/aduana): la mercancía va con la factura del proveedor extranjero.",
   isp:"Inversión del sujeto pasivo: la app calcula el IVA y lo pone en devengado (303 c.12-13) y deducible (c.28-29).",
   rebu:"Bien usado comprado sin IVA (particular o vendedor en REBU): no hay IVA deducible. Base = importe pagado.",
   eib:"Exenta (art. 25). Sin IVA. 303 casilla 59 y modelo 349 (clave E).",
@@ -1721,15 +1726,16 @@ const _IMP_COLS={
 // Texto de la columna OPERACIÓN -> código de la app (int, aib, ais, isp, rebu, eib, eis, exp). Vacío o desconocido = interior.
 function _impOp(v,tipo){
   const t=_impNorm(v);if(!t)return"int";
-  if(["int","aib","ais","isp","rebu","eib","eis","exp"].includes(t))return t;
+  if(["int","aib","ais","isp","imp","rebu","eib","eis","exp"].includes(t))return t;
   for(const [k,txt] of Object.entries(OPS[tipo]||{}))if(_impNorm(txt)===t)return k;
   if(/rebu|usad/.test(t))return"rebu";
+  if(/importac|\bdua\b/.test(t))return tipo==="IVS"?"imp":"int";
   if(/export/.test(t))return tipo==="IVR"?"exp":"int";
-  if(/sujeto pasivo|\bisp\b|inversion/.test(t))return"isp";
-  if(/intracom|\bue\b|comunitari/.test(t)){
+  if(/intracom|\bue\b|comunitari/.test(t)){   // antes que ISP: "Intracom. servicios (ISP)" es intracomunitaria
     const serv=/serv/.test(t);
     return tipo==="IVR"?(serv?"eis":"eib"):(serv?"ais":"aib");
   }
+  if(/sujeto pasivo|\bisp\b|inversion/.test(t))return"isp";
   return"int";   // interior, importación (DUA), normal...
 }
 function _impMapa(cab){
@@ -3321,11 +3327,11 @@ function desglose303(emit,reci,sinIva){
     if(o==="aib"||o==="ais"){add(t,"10",bb);add(t,"11",cu);
       const k="R|"+(o==="aib"?"A":"I")+"|"+(f.nif||f.nombre);(op349[k]=op349[k]||{clave:o==="aib"?"A":"I",nif:f.nif||"",nombre:f.nombre||"",t:[0,0,0,0]}).t[t-1]+=bb;}
     else if(o==="isp"){add(t,"12",bb);add(t,"13",cu);}
-    if(ded){ if(o==="aib"){add(t,"36",bb);add(t,"37",ded);} else {add(t,"28",bb);add(t,"29",ded);} }
+    if(ded){ if(o==="aib"||o==="ais"){add(t,"36",bb);add(t,"37",ded);} else if(o==="imp"){add(t,"32",bb);add(t,"33",ded);} else {add(t,"28",bb);add(t,"29",ded);} }
   });
   const filas=[["01","Régimen general 4% · base"],["03","Cuota 4%"],["04","Régimen general 10% · base"],["06","Cuota 10%"],["07","Régimen general 21% · base"],["09","Cuota 21%"],
     ["10","Adquisiciones intracomunitarias · base"],["11","Adquisiciones intracomunitarias · cuota"],["12","Otras con inversión del sujeto pasivo · base"],["13","Otras con ISP · cuota"],
-    ["28","Soportado operaciones interiores corrientes · base"],["29","Soportado op. interiores corrientes · cuota"],["36","Adquisiciones intracom. bienes corrientes · base"],["37","Adquisiciones intracom. bienes corrientes · cuota"],
+    ["28","Soportado operaciones interiores corrientes · base"],["29","Soportado op. interiores corrientes · cuota"],["32","Importaciones bienes corrientes · base"],["33","Importaciones bienes corrientes · cuota"],["36","Adquisiciones intracom. bienes corrientes y servicios · base"],["37","Adquisiciones intracom. bienes corrientes y servicios · cuota"],
     ["59","Entregas intracomunitarias de bienes y servicios"],["60","Exportaciones y asimiladas"],["122","Operaciones con inversión del sujeto pasivo (emitidas)"]];
   const usadas=filas.filter(([k])=>C.some(c=>c[k]));
   if(!usadas.length)return "";
