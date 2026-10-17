@@ -204,7 +204,7 @@ body.visor-open .modal-overlay.open{display:flex;}
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
     <div><div style="font-size:16px;font-weight:600;color:var(--navy);">Cuentas contables</div>
     <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Por cliente del despacho. El mismo proveedor puede tener cuentas distintas para cada cliente.</div></div>
-    <button class="btn btn-primary" onclick="openCM()">+ Anadir cuenta</button>
+    <div style="display:flex;gap:6px;"><button class="btn" onclick="crearCuentasBoton()" title="Crea las subcuentas 400/430 que falten para las facturas del cliente elegido">Crear cuentas que faltan</button><button class="btn btn-primary" onclick="openCM()">+ Anadir cuenta</button></div>
   </div>
   <div class="filtros">
     <div class="filtro-group"><span class="filtro-label">Cliente</span>
@@ -1868,9 +1868,9 @@ function importarFacturasExcel(input){
       const base=Date.now();
       for(let i=0;i<nuevas.length;i+=20){
         await Promise.all(nuevas.slice(i,i+20).map((f,j)=>{
-          const id=String(base+i+j);
+          const id=String(base+i+j);f._id=id;
           const cc=(window.WCC||[]).find(c=>c.clienteDespachoId===cid&&((f.nif&&c.nif&&c.nif.toUpperCase()===f.nif)||(c.nombre||"").toLowerCase()===f.nombre.toLowerCase()));
-          const d={...f};delete d._fila;
+          const d={...f};delete d._fila;delete d._id;
           if(cc){if(!d.cuenta)d.cuenta=cc.cuenta||"";if(!d.nombre)d.nombre=cc.nombre;if(!d.nif)d.nif=cc.nif||"";}
           return fbS("iva_facturas",id,{id,...d,clienteDespachoId:cid,clienteDespachoNombre:cl.nombre,importado:file.name,creado:new Date().toISOString()});
         }));
@@ -1880,7 +1880,9 @@ function importarFacturasExcel(input){
         await fbS("iva_facturas",e.id,{...e,...d,cuenta:d.cuenta||e.cuenta||"",nif:d.nif||e.nif||"",id:e.id,clienteDespachoId:cid,clienteDespachoNombre:cl.nombre,importado:file.name,modificado:new Date().toISOString()});
       }
       const sinCta=nuevas.filter(f=>!f.cuenta&&!(window.WCC||[]).some(c=>c.clienteDespachoId===cid&&((f.nif&&c.nif&&c.nif.toUpperCase()===f.nif)||(c.nombre||"").toLowerCase()===f.nombre.toLowerCase()))).length;
-      alert("Importadas "+nuevas.length+" nuevas"+(cambiadas.length?" y actualizadas "+cambiadas.length:"")+" en "+cl.nombre+"."+(sinCta?"\n\nOjo: "+sinCta+" no tienen cuenta contable (proveedor/cliente nuevo). Revísalas en Cuentas antes de exportar a Delsol.":""));
+      let rc={creadas:0,facturas:0};
+      if(sinCta){try{rc=await crearCuentasFaltantes(cid,nuevas.map(f=>({...f,id:f._id,clienteDespachoId:cid})));}catch(e){console.warn(e);}}
+      alert("Importadas "+nuevas.length+" nuevas"+(cambiadas.length?" y actualizadas "+cambiadas.length:"")+" en "+cl.nombre+"."+(rc.creadas?"\n\nSe han creado "+rc.creadas+" cuentas nuevas de proveedor/cliente (400/430) para "+rc.facturas+" facturas. Revisa en Cuentas la cuenta de gasto de cada proveedor (si no, va a la 600).":""));
     }catch(err){console.error(err);alert("Error al leer el Excel: "+(err.message||err));}
   };
   reader.readAsArrayBuffer(file);
@@ -2171,6 +2173,45 @@ async function saveF(mantenerAbierto){
 
 async function delF(id){if(!confirm("Eliminar esta factura?"))return;await fbD("iva_facturas",id);}
 
+// ---------- Crear subcuentas de proveedor (400) / cliente (430) que faltan ----------
+// Para cada proveedor/cliente sin cuenta (por NIF o nombre) crea la siguiente subcuenta libre
+// del cliente del despacho y se la pone a sus facturas. Las facturas "ocasionales" se dejan en la genérica.
+async function crearCuentasFaltantes(cid,facts){
+  const norm=x=>String(x||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  const low=x=>String(x||"").trim().toLowerCase();
+  const cl=(window.WC||[]).find(c=>c.id===cid);
+  const ccs=(window.WCC||[]).filter(c=>c.clienteDespachoId===cid).slice();
+  const usadas=new Set([...ccs.map(c=>String(c.cuenta||"")),...(window.WF||[]).filter(f=>f.clienteDespachoId===cid).map(f=>String(f.cuenta||""))]);
+  const sig=pref=>{let n=parseInt(pref+"00001",10);while(usadas.has(String(n)))n++;usadas.add(String(n));return String(n);};
+  const busca=(f,esCli)=>ccs.find(c=>((c.tipo==="cliente")===esCli)&&((f.nif&&c.nif&&norm(c.nif)===norm(f.nif))||(low(c.nombre)&&low(c.nombre)===low(f.nombre))));
+  let creadas=0,nf=0;const t0=Date.now();
+  for(const f of facts){
+    if(!f||!f.id||f.cuenta||f.ocasional||!low(f.nombre))continue;
+    const esCli=f.tipo==="IVR";
+    if(esCli&&!norm(f.nif))continue; // ventas sin NIF (caja, tickets): se quedan en la 430 genérica
+    let cc=busca(f,esCli);
+    if(!cc){
+      const nid="cc"+(t0+creadas);
+      cc={id:nid,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",nombre:String(f.nombre).trim(),nif:f.nif||"",
+          cuenta:sig(esCli?"430":"400"),tipo:esCli?"cliente":"proveedor",contrapartida:"",retPct:f.retPct||"",m347:"0",
+          creado:new Date().toISOString(),auto:true};
+      await fbS("iva_cuentas",nid,cc);ccs.push(cc);creadas++;
+    }
+    if(cc.cuenta){await window.fsSetDoc(window.fsDoc(window.db,"iva_facturas",String(f.id)),{cuenta:cc.cuenta},{merge:true});nf++;}
+  }
+  return {creadas,facturas:nf};
+}
+async function crearCuentasBoton(){
+  const cid=document.getElementById("fCC").value;
+  if(!cid){alert("Elige primero un cliente en el filtro «Cliente».");return;}
+  const cl=(window.WC||[]).find(c=>c.id===cid);
+  const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===cid&&!f.cuenta&&!f.ocasional);
+  if(!fs.length){alert("Todas las facturas de "+(cl?cl.nombre:"este cliente")+" ya tienen cuenta.");return;}
+  if(!confirm(fs.length+" facturas de "+(cl?cl.nombre:"")+" sin cuenta de proveedor/cliente.\n\nSe crearán las subcuentas que falten (400xxxxx proveedores; 430xxxxx solo clientes con NIF, las ventas sin NIF se quedan en la 430 genérica) y se asignarán a sus facturas. ¿Seguir?"))return;
+  const r=await crearCuentasFaltantes(cid,fs);
+  alert("Creadas "+r.creadas+" cuentas nuevas y asignadas a "+r.facturas+" facturas.\n\nRevisa la cuenta de gasto de cada proveedor (✏): si se deja vacía va a la 600.");
+  renderC();
+}
 function renderC(){
   const tb=document.getElementById("cTbody");if(!tb)return;
   const fc=document.getElementById("fCC").value,ft=document.getElementById("fCT").value;
