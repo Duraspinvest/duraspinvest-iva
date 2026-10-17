@@ -489,7 +489,7 @@ body.visor-open .modal-overlay.open{display:flex;}
       <div class="fg"><label class="fl">Modelo 347</label>
         <select class="fi2" id="f347"><option value="0">Automático (si supera 3.005,06 €)</option><option value="1">Incluir siempre</option></select></div>
       <div class="fg" id="fDedG" style="display:none;"><label class="fl">IVA deducible</label>
-        <select class="fi2" id="fDed"><option value="1">Si</option><option value="0">No</option></select></div>
+        <select class="fi2" id="fDed"><option value="1">Sí (100 %)</option><option value="50">50 % (vehículo / uso mixto)</option><option value="0">No</option></select></div>
       </div>
      </div>
     </div>
@@ -753,14 +753,14 @@ function ctLineasFactura(f){
     add(contra,0,fIngreso(f)); const cu=fRep(f); if(cu>0)add(CT_IVA_R,0,cu);
   }else{
     const prov=cc.cuenta||f.cuenta||"40000000",contra=cc.contrapartida||"60000000";
-    const auto=esAuto(f),cuota=fCuota(f),noDed=String(f.deducible)==="0";
+    const auto=esAuto(f),cuota=fCuota(f),pD=(fOpDe(f)==="rebu")?100:fDedPct(f),cDed=_r2c(cuota*pD/100),cNo=_r2c(cuota-cDed);
     const base=fBaseTot(f);
     if(fOpDe(f)==="imp"){ // DUA: solo el IVA pagado en aduana
-      if(noDed)add(contra,cuota,0); else add(CT_IVA_S,cuota,0);
+      add(contra,cNo,0); add(CT_IVA_S,cDed,0);
       add(prov,0,cuota); return L;
     }
-    add(contra,base+(noDed?cuota:0),0);
-    if(cuota>0&&!noDed&&fOpDe(f)!=="rebu")add(CT_IVA_S,cuota,0);
+    add(contra,base+cNo,0);
+    if(cDed>0&&fOpDe(f)!=="rebu")add(CT_IVA_S,cDed,0);
     if(auto&&cuota>0)add(CT_IVA_R,0,cuota);
     add(prov,0,total); if(ret>0)add(CT_RET_R,0,ret);
   }
@@ -1560,9 +1560,12 @@ function fRep(f){                                                               
   return esAuto(f)?fCuota(f):0;
 }
 function fSop(f){return (f.tipo==="IVS"&&fOpDe(f)!=="rebu")?fCuota(f):0;}           // IVA soportado
-function fSopDed(f){return String(f.deducible)==="0"?0:fSop(f);}
+// % de IVA deducible: "0" = no, "1"/vacío = 100 %, otro número = porcentaje (p. ej. "50" vehículos y suministros mixtos)
+function fDedPct(f){const d=String(f&&f.deducible!=null?f.deducible:"").trim();if(d==="0")return 0;if(d===""||d==="1")return 100;const n=parseFloat(d.replace(",","."));return isFinite(n)?Math.max(0,Math.min(100,n)):100;}
+function fDedTxt(f){const p=fDedPct(f);return p===100?"Si":p===0?"No":String(p).replace(".",",")+" %";}
+function fSopDed(f){return fSop(f)*fDedPct(f)/100;}
 function fIngreso(f){return (f.tipo==="IVR"&&fOpDe(f)==="rebu")?_n(f.total)+_n(f.retImporte)-fCuota(f):fBaseTot(f);} // ingreso neto (IRPF)
-function fIvaCoste(f){return esAuto(f)?(String(f.deducible)==="0"?fCuota(f):0):fSop(f);} // IVA pagado que cuenta como coste si no se deduce
+function fIvaCoste(f){return esAuto(f)?fCuota(f)*(1-fDedPct(f)/100):fSop(f);} // IVA pagado que cuenta como coste si no se deduce
 function opBadge(f){const o=fOpDe(f);if(o==="int")return "";
   const t={aib:"UE",ais:"UE serv.",isp:"ISP",rebu:"REBU",eib:"UE",eis:"UE serv.",exp:"Export.",nsl:"No suj."}[o]||o;
   return " <span title='"+((OPS[f.tipo==="IVR"?"IVR":"IVS"]||{})[o]||"")+"' style='font-size:9px;background:#EEF2FF;color:#3730A3;border-radius:4px;padding:1px 4px;'>"+t+"</span>";}
@@ -1579,7 +1582,7 @@ function resumenF(fs){
       r.base+=l.b;
     });
     if(t==="IVR"){ r.cuota+=fRep(f); r.ret+=_n(f.retImporte); }
-    else { r.cuota+=fSop(f); r.auto+=fRep(f); if(f.deducible==="0") r.noDed+=fSop(f); else r.ded+=fSop(f); }
+    else { r.cuota+=fSop(f); r.auto+=fRep(f); r.ded+=fSopDed(f); r.noDed+=fSop(f)-fSopDed(f); }
   });
   R.resultado=R.IVR.cuota+R.IVS.auto-R.IVS.ded;
   return R;
@@ -1673,7 +1676,7 @@ function exportVistaF(){
       f.fecha?f.fecha.split("-").reverse().join("/"):"",f.numero||"",f.nombre||"",f.nif||"",f.cuenta||"",
       _n(f.base1),_n(f.pct1||21),_n(f.iva1),_n(f.base2)||"",f.pct2?_n(f.pct2):"",_n(f.iva2)||"",
       f.retPct?_n(f.retPct):"",_n(f.retImporte)||"",_n(f.total),en347(f)?"Si":"",
-      f.tipo==="IVS"?(f.deducible==="0"?"No":"Si"):"",
+      f.tipo==="IVS"?fDedTxt(f):"",
       _n(f.base3)||"",f.pct3?_n(f.pct3):"",_n(f.iva3)||"",_n(f.exento)||"",fOpDe(f)==="int"?"":((OPS[f.tipo==="IVR"?"IVR":"IVS"]||{})[fOpDe(f)]||f.op),fR(f).split("-").reverse().join("/")];
   });
   const ws2=XLSX.utils.aoa_to_sheet([head,...filas]);
@@ -1771,6 +1774,9 @@ function _impTipo(v,hoja){
   if(/recib|compra|gasto|ivs/.test(h))return"IVS";
   return"";
 }
+function _impDed(v){const t=_impNorm(v).replace(/\s/g,"");const m=t.match(/^(\d+(?:[.,]\d+)?)%?$/);
+  if(m){const n=parseFloat(m[1].replace(",","."));if(n>1&&n<100)return String(n);if(n>=100)return "1";if(n===0)return "0";}
+  return _impSiNo(v,"1");}
 function _impSiNo(v,def){const t=_impNorm(v);if(t==="")return def;return /^(s|si|1|x|true|yes)/.test(t)?"1":"0";}
 function _impLeer(wb){
   const filas=[],avisos=[];
@@ -1816,7 +1822,7 @@ function _impLeer(wb){
         base1:b1,pct1:p1===""?(c1>0?"21":"0"):p1,iva1:c1,base2:b2,pct2:b2||c2?p2:"",iva2:c2,
         base3:b3,pct3:b3||c3?p3:"",iva3:c3,exento:ex,
         retPct:rp==="0"?"":rp,retImporte:Math.abs(_impNum(g(r,"retImporte"))),
-        total:tot,m347:_impSiNo(g(r,"m347"),"0"),deducible:tipo==="IVS"?_impSiNo(g(r,"deducible"),"1"):"",
+        total:tot,m347:_impSiNo(g(r,"m347"),"0"),deducible:tipo==="IVS"?_impDed(g(r,"deducible")):"",
         ...(M.op===undefined?{}:{op:_impOp(g(r,"op"),tipo)}),
         _fila:hoja+" fila "+(i+1)});
     }
@@ -1931,7 +1937,8 @@ function editF(id){
   {const ay=document.getElementById("fOpAyuda"),rg=document.getElementById("fRebuG"),op=f.op||"int",tipo=f.tipo==="IVR"?"IVR":"IVS";
    if(ay)ay.textContent=OPS_AYUDA[(tipo==="IVR"&&op==="isp")?"ispE":(tipo==="IVR"&&op==="rebu")?"rebuE":op]||"";
    if(rg)rg.style.display=(tipo==="IVR"&&op==="rebu")?"":"none";}
-  if(f.tipo!=="IVR")set("fDed",String(f.deducible)==="0"?"0":"1");
+  if(f.tipo!=="IVR"){const pD=fDedPct(f),v=pD===100?"1":pD===0?"0":String(pD),sd=document.getElementById("fDed");
+    if(sd&&![...sd.options].some(o=>o.value===v)){const o=document.createElement("option");o.value=v;o.textContent=String(pD).replace(".",",")+" %";sd.appendChild(o);}set("fDed",v);}
 }
 // ===== Fecha de registro (manda para trimestre/año en impuestos y filtros) =====
 function _fRegHint(){
@@ -2369,7 +2376,7 @@ function rowFRE(f, i){
   row[61]=parseFloat(f.total)||0;  // Total
   row[62]="";                        // Forma pago
   row[65]=0;                         // Traspasada contabilidad -> 0
-  row[72]=parseFloat(f.deducible)||0; // Factura deducible
+  row[72]=fDedPct(f)>0?1:0; // Factura deducible
   row[73]=1;                         // Usuario creo
   row[74]=1;                         // Ultimo usuario
   row[75]="GEN";                     // Almacen
@@ -2887,7 +2894,7 @@ function calcLiq(){
   // gasto IRPF. Recargo equiv.: base+IVA siempre (todo es coste, incl. alquiler). Exenta (art.20): base+IVA salvo facturas CON retencion -> solo base. General: base + IVA no deducible
   const gasto=f=> sinIva
         ? (regGasto==="recargo" ? base(f)+iva(f) : (ri(f)>0 ? base(f) : base(f)+iva(f)))
-        : base(f)+(String(f.deducible)==="0"?iva(f):0);
+        : base(f)+(esAuto(f)?iva(f):iva(f)*(1-fDedPct(f)/100));
 
   // obligaciones del cliente (marcadas en la app Despacho) — sirven tambien para decidir que retenciones mostrar
   const _cl=(window.WC||[]).find(c=>c.id===cid); const obl=Array.isArray(_cl&&_cl.obligaciones)?_cl.obligaciones:[];
@@ -3264,11 +3271,11 @@ function imprimirBorrador(){
     const res={};let tb=0,tc=0,tr=0,tt=0,tnd=0;
     const rows=F.map((f,i)=>{const Ls=fLineas(f),ex=parseFloat(f.exento)||0;
       Ls.forEach(l=>{const k=l.p+"%";res[k]=res[k]||{b:0,c:0};res[k].b+=l.b;res[k].c+=l.c;});if(ex){res["Exento"]=res["Exento"]||{b:0,c:0};res["Exento"].b+=ex;}
-      const b=fBaseTot(f),cu=fCuota(f),r=parseFloat(f.retImporte)||0,to=parseFloat(f.total)||0,nd=tipo==="IVS"&&String(f.deducible)==="0";
-      tb+=b;tc+=cu;tr+=r;tt+=to;if(nd)tnd+=cu;
+      const b=fBaseTot(f),cu=fCuota(f),r=parseFloat(f.retImporte)||0,to=parseFloat(f.total)||0,pDd=fDedPct(f),nd=tipo==="IVS"&&pDd<100;
+      tb+=b;tc+=cu;tr+=r;tt+=to;if(nd)tnd+=cu*(1-pDd/100);
       const pct=Ls.length>1?Ls.map(l=>l.p+"%").join("+"):((Ls[0]||{}).p||"0")+"%";
       const o=opTxt(f);
-      return "<tr"+(nd?" class='nd'":"")+"><td class='r'>"+(i+1)+"</td><td>"+dd(f.fecha)+(f.fechaReg&&f.fechaReg!==f.fecha?"<br><span class='nota'>Reg. "+dd(f.fechaReg)+"</span>":"")+"</td><td>"+E(f.numero)+"</td><td>"+E(f.nombre)+(o?"<br><span class='nota'>"+E(o)+"</span>":"")+"</td><td>"+E(f.nif)+"</td><td class='r'>"+N(b)+"</td><td class='c'>"+pct+"</td><td class='r'>"+N(cu)+"</td><td class='r'>"+(r?N(r):"")+"</td><td class='r'>"+N(to)+"</td>"+(tipo==="IVS"?"<td class='c'>"+(nd?"No":"Sí")+"</td>":"")+"</tr>";}).join("");
+      return "<tr"+(nd?" class='nd'":"")+"><td class='r'>"+(i+1)+"</td><td>"+dd(f.fecha)+(f.fechaReg&&f.fechaReg!==f.fecha?"<br><span class='nota'>Reg. "+dd(f.fechaReg)+"</span>":"")+"</td><td>"+E(f.numero)+"</td><td>"+E(f.nombre)+(o?"<br><span class='nota'>"+E(o)+"</span>":"")+"</td><td>"+E(f.nif)+"</td><td class='r'>"+N(b)+"</td><td class='c'>"+pct+"</td><td class='r'>"+N(cu)+"</td><td class='r'>"+(r?N(r):"")+"</td><td class='r'>"+N(to)+"</td>"+(tipo==="IVS"?"<td class='c'>"+(pDd===100?"Sí":pDd===0?"No":String(pDd).replace(".",",")+" %")+"</td>":"")+"</tr>";}).join("");
     const resH=Object.keys(res).sort((a,b)=>(parseFloat(a)||-1)-(parseFloat(b)||-1)).map(k=>"<tr><td>"+k+"</td><td class='r'>"+N(res[k].b)+"</td><td class='r'>"+N(res[k].c)+"</td></tr>").join("");
     return "<h2>"+tit+" · "+t+"T "+L.anio+" ("+F.length+")</h2><table class='lib'><thead><tr><th>#</th><th>Fecha</th><th>Nº factura</th><th>Nombre</th><th>NIF</th><th class='r'>Base</th><th class='c'>% IVA</th><th class='r'>Cuota</th><th class='r'>Ret.</th><th class='r'>Total</th>"+(tipo==="IVS"?"<th class='c'>Ded.</th>":"")+"</tr></thead><tbody>"+rows+
       "</tbody><tfoot><tr><td colspan='5'>Totales</td><td class='r'>"+N(tb)+"</td><td></td><td class='r'>"+N(tc)+"</td><td class='r'>"+N(tr)+"</td><td class='r'>"+N(tt)+"</td>"+(tipo==="IVS"?"<td></td>":"")+"</tr></tfoot></table>"+
@@ -3481,7 +3488,8 @@ function desglose303(emit,reci,sinIva){
     if(o==="aib"||o==="ais"){add(t,"10",bb);add(t,"11",cu);
       const k="R|"+(o==="aib"?"A":"I")+"|"+(f.nif||f.nombre);(op349[k]=op349[k]||{clave:o==="aib"?"A":"I",nif:f.nif||"",nombre:f.nombre||"",t:[0,0,0,0]}).t[t-1]+=bb;}
     else if(o==="isp"){add(t,"12",bb);add(t,"13",cu);}
-    if(ded){ if(o==="aib"||o==="ais"){add(t,"36",bb);add(t,"37",ded);} else if(o==="imp"){add(t,"32",bb);add(t,"33",ded);} else {add(t,"28",bb);add(t,"29",ded);} }
+    const bd=(cu&&ded<cu)?bb*ded/cu:bb;   // deducción parcial (p. ej. 50 %): la base va en proporción
+    if(ded){ if(o==="aib"||o==="ais"){add(t,"36",bd);add(t,"37",ded);} else if(o==="imp"){add(t,"32",bd);add(t,"33",ded);} else {add(t,"28",bd);add(t,"29",ded);} }
   });
   const filas=[["01","Régimen general 4% · base"],["03","Cuota 4%"],["04","Régimen general 10% · base"],["06","Cuota 10%"],["07","Régimen general 21% · base"],["09","Cuota 21%"],
     ["10","Adquisiciones intracomunitarias · base"],["11","Adquisiciones intracomunitarias · cuota"],["12","Otras con inversión del sujeto pasivo · base"],["13","Otras con ISP · cuota"],
@@ -3532,7 +3540,7 @@ function exportRegistro(){
         if(recibida)base.push(tg);
         const auto=esAuto(f);
         base.push(f.nombre||"",f.nif||"",f.numero||"",(p===""?"":(isNaN(Number(p))?p:Number(p))),round2(b),round2(c),round2(b+(auto?0:c)));
-        if(recibida)base.push(String(f.deducible)==="0"?"No":"Si");
+        if(recibida)base.push(fDedTxt(f));
         else base.push(f.retPct||"",round2(parseFloat(f.retImporte)||0));
         base.push(fOpDe(f)==="int"?"":((OPS[recibida?"IVS":"IVR"]||{})[fOpDe(f)]||f.op));
         base.push(f.fechaReg&&f.fechaReg!==f.fecha?f.fechaReg:"");
@@ -3651,10 +3659,10 @@ function genDG(){
     const tg=(window.WTG||[]).find(t=>t.cuenta===cc.contrapartida);
     const base=fBaseTot(f);
     const iva=esAuto(f)?fCuota(f):fSop(f);
-    const ded=String(f.deducible)!=="0"; // en la app "1"/vacio = IVA deducible, "0" = no deducible
+    const pd=fDedPct(f)/100; // "1"/vacío = 100 %, "0" = 0, otro = porcentaje
     if(!grp[cuenta])grp[cuenta]={cuenta,nombre:tg?tg.nombre:(f.concepto||""),base:0,ivaDed:0,ivaNoDed:0,n:0};
     grp[cuenta].base+=base;
-    if(ded)grp[cuenta].ivaDed+=iva; else grp[cuenta].ivaNoDed+=iva;
+    grp[cuenta].ivaDed+=iva*pd; grp[cuenta].ivaNoDed+=iva*(1-pd);
     grp[cuenta].n++;
   });
   const rows=Object.values(grp).sort((a,b)=>(a.cuenta||"").localeCompare(b.cuenta||""));
@@ -3920,7 +3928,7 @@ function rowFRE(f, i, docNum){
   row[61]=parseFloat(f.total)||0;  // Total
   row[62]="";                        // Forma pago
   row[65]=0;                         // Traspasada contabilidad -> 0
-  row[72]=parseFloat(f.deducible)||0; // Factura deducible
+  row[72]=fDedPct(f)>0?1:0; // Factura deducible
   row[73]=1;                         // Usuario creo
   row[74]=1;                         // Ultimo usuario
   row[75]="GEN";                     // Almacen
@@ -4029,12 +4037,12 @@ function asientoRecibida(f,cfg,asNum){
   const fe=fR(f)?fR(f).split("-").reverse().join("/"):"", feF=f.fecha?f.fecha.split("-").reverse().join("/"):"";
   const num=String(f.numero||""),doc=num.substring(0,5),con="S/Fra "+num;
   const prov=cc.cuenta||f.cuenta||"",contra=cc.contrapartida||"60000000";
-  const auto=esAuto(f),cuota=fCuota(f),noDed=String(f.deducible)==="0";
-  const base=fBaseTot(f)+(auto&&noDed?cuota:0)+(fOpDe(f)==="rebu"?0:0);
+  const auto=esAuto(f),cuota=fCuota(f),pD=fOpDe(f)==="rebu"?100:fDedPct(f),cDed=Math.round(cuota*pD)/100,cNo=Math.round((cuota-cDed)*100)/100;
+  const base=fBaseTot(f);
   const total=parseFloat(f.total)||0,ret=parseFloat(f.retImporte)||0;
   const L=[];let o=1;
-  L.push(apuLine(cfg,asNum,fe,o++,contra,con,doc,base+(!auto&&noDed?cuota:0),0,""));  // Debe gasto (base + IVA no deducible)
-  if(cuota>0&&!noDed&&fOpDe(f)!=="rebu")L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaS,con,doc,cuota,0,"S")); // Debe IVA soportado
+  L.push(apuLine(cfg,asNum,fe,o++,contra,con,doc,base+cNo,0,""));  // Debe gasto (base + IVA no deducible)
+  if(cDed>0&&fOpDe(f)!=="rebu")L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaS,con,doc,cDed,0,"S")); // Debe IVA soportado
   if(auto&&cuota>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.ivaR,con,doc,0,cuota,"R"));  // Haber IVA repercutido (autoliquidación)
   L.push(apuLine(cfg,asNum,fe,o++,prov,con,doc,0,total,""));            // Haber proveedor (total)
   if(ret>0)L.push(apuLine(cfg,asNum,fe,o++,cfg.retR,con,doc,0,ret,""));  // Haber retencion (4751)
@@ -4085,8 +4093,8 @@ function rowIVS(f, i){
   row[5]=f.nombre||"";               // F  Nombre
   row[6]=f.nif||cc.nif||"";          // G  C.I.F.
   row[7]=0;                          // H  Tipo de operacion
-  row[8]=(f.deducible==="0")?1:0;    // I  Deducible en ContaSOL: 0=deducible, 1=no deducible, 2=prorrata (f.deducible "1"=Si -> 0)
-  row[51]=(f.deducible==="0")?0:100; // AZ Porcentaje deducible (100% si es deducible)
+  row[8]=fDedPct(f)===0?1:fDedPct(f)<100?2:0;    // I  Deducible en ContaSOL: 0=deducible, 1=no deducible, 2=prorrata (f.deducible "1"=Si -> 0)
+  row[51]=fDedPct(f); // AZ Porcentaje deducible (100% si es deducible)
   row[9]=parseFloat(f.base1)||0;     // J  Base 1
   row[10]=b2||"";                    // K  Base 2
   row[11]=parseFloat(f.base3)||"";   // L  Base 3
