@@ -2931,15 +2931,16 @@ function calcLiq(){
       const nq=WNc.filter(n=>Math.ceil(Number(n.mes)/3)===t), rApp=r2a(nq.reduce((s,n)=>s+(Number(n.irpf)||0),0));
       const man=nom[t]!=null&&nom[t]!=="";
       const rProf=fq.reduce((s,f)=>s+ri(f),0), rNom=man?(parseFloat(nom[t])||0):rApp;
-      return {t,rProf,rNom,rApp,nMes:new Set(nq.map(n=>Number(n.mes))).size,man,total:rProf+rNom};});
+      const bruto=r2a(nq.reduce((s,n)=>s+(Number(n.devengo)||0),0)),nPerc=new Set(nq.map(n=>String(n.dni||n.nombre).toUpperCase())).size;
+      return {t,rProf,rNom,rApp,bruto,nPerc,nMes:new Set(nq.map(n=>Number(n.mes))).size,man,total:rProf+rNom};});
     const tProf=tr1.reduce((s,x)=>s+x.rProf,0),tNom=tr1.reduce((s,x)=>s+x.rNom,0),tTot=tProf+tNom;
     const inp=x=>"<input type='number' step='0.01' id='ret111_"+x.t+"' value=\""+((nom[x.t]!=null&&nom[x.t]!=="")?nom[x.t]:"")+"\" placeholder='"+(x.rApp?x.rApp.toFixed(2):"0.00")+"' title='Vacío = lo de las nóminas cerradas en Laboral ("+x.nMes+" mes/es). Escribe un importe solo para corregirlo a mano' style='width:92px;font-size:12px;padding:3px 6px;border:1px solid var(--gray-200);border-radius:5px;text-align:right;'>"+(x.nMes?"<div style='font-size:9px;color:var(--gray-400);'>"+(x.man?"a mano · app: "+eur2(x.rApp):"de Laboral: "+x.nMes+"/3 meses")+"</div>":"");
     b111="<div style='margin-top:24px;border-top:2px solid var(--gold);padding-top:14px;'>"+
       "<div style='font-weight:700;color:var(--navy);font-size:14px;'>Retenciones de trabajo y profesionales &mdash; modelo 111 (trimestral) y 190 (anual)</div>"+
       "<div style='font-size:11px;color:var(--gray-400);margin:2px 0 10px;'>Retenciones practicadas a profesionales/actividades (salen de las facturas recibidas con retencion) y a trabajadores (n&oacute;minas). Las de n&oacute;minas se llevan en la app Laboral; introd&uacute;celas aqu&iacute; por trimestre para completar el 111.</div>"+
-      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre (111)</th><th class='td-r'>Ret. profesionales</th><th class='td-r'>Ret. n&oacute;minas</th><th class='td-r'>Total a ingresar</th></tr></thead><tbody>"+
-      tr1.map(x=>"<tr><td>"+x.t+"T</td><td class='td-r'>"+eur2(x.rProf)+"</td><td class='td-r'>"+inp(x)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.total)+"</td></tr>").join("")+
-      "<tr style='background:var(--gray-50);font-weight:700;'><td>Total a&ntilde;o</td><td class='td-r'>"+eur2(tProf)+"</td><td class='td-r'>"+eur2(tNom)+"</td><td class='td-r'>"+eur2(tTot)+"</td></tr>"+
+      "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre (111)</th><th class='td-r'>Salarios brutos (n&oacute;minas)</th><th class='td-r'>Ret. profesionales</th><th class='td-r'>Ret. n&oacute;minas</th><th class='td-r'>Total a ingresar</th></tr></thead><tbody>"+
+      tr1.map(x=>"<tr><td>"+x.t+"T"+(x.bruto&&!x.total?" <span style='font-size:10px;color:#B45309;font-weight:600;' title='Hay nóminas pero sin retención: el 111 se presenta igual, con resultado cero'>&#9888; presentar (resultado 0)</span>":"")+"</td><td class='td-r'>"+(x.bruto?eur2(x.bruto)+"<div style='font-size:9px;color:var(--gray-400);'>"+x.nPerc+" perceptor"+(x.nPerc===1?"":"es")+"</div>":"&mdash;")+"</td><td class='td-r'>"+eur2(x.rProf)+"</td><td class='td-r'>"+inp(x)+"</td><td class='td-r' style='font-weight:600;'>"+eur2(x.total)+"</td></tr>").join("")+
+      "<tr style='background:var(--gray-50);font-weight:700;'><td>Total a&ntilde;o</td><td class='td-r'>"+eur2(tr1.reduce((s,x)=>s+x.bruto,0))+"</td><td class='td-r'>"+eur2(tProf)+"</td><td class='td-r'>"+eur2(tNom)+"</td><td class='td-r'>"+eur2(tTot)+"</td></tr>"+
       "</tbody></table></div>"+
       "<div style='margin-top:8px;'><button class='btn btn-secondary' onclick=\"save111('"+cid+"')\">Guardar retenciones de n&oacute;minas</button> <span style='font-size:11px;color:var(--gray-400);'>El 190 es el resumen anual del 111.</span></div>"+
       "</div>";
@@ -3368,7 +3369,7 @@ function aeatRecalc(primera){
       (window._aeatCheck!=null&&Math.abs(r2a(c["46"])-window._aeatCheck)>0.01?"<div style='color:#B45309;font-size:12px;'>⚠ El resultado de las casillas ("+eur2(c["46"])+") no coincide con el cálculo de la liquidación ("+eur2(window._aeatCheck)+"). Revísalo antes de presentar.</div>":"");}
   else if(M.m==="202"){aeat202Totales(c);res=c["03"];txt="18 % de "+eur2(c["01"])+" &nbsp;→&nbsp; <b>A ingresar [03]: "+eur2(res)+"</b>";}
   else if(M.m==="111"||M.m==="115"){(M.m==="111"?aeat111Totales:aeat115Totales)(c);res=M.m==="111"?c["30"]:c["05"];
-    txt="<b>Resultado a ingresar: "+eur2(res)+"</b>";}
+    txt="<b>Resultado a ingresar: "+eur2(res)+"</b>"+(M.m==="111"&&!res&&(c["02"]||0)>0?"<div style='color:#B45309;font-size:12px;'>Hay salarios ("+eur2(c["02"])+") sin retención: el 111 se presenta igual, con resultado cero (tipo N).</div>":"");}
   else{aeat130Totales(c);res=c["19"];txt="[03] Rendimiento "+eur2(c["03"])+" · [04] 20 % "+eur2(c["04"])+" · [07] "+eur2(c["07"])+"<br><b>[19] Resultado: "+eur2(res)+"</b>"+
       (window._aeatCheck!=null&&res>0&&Math.abs(res-window._aeatCheck)>0.01?"<div style='color:#B45309;font-size:12px;'>⚠ No coincide con el cálculo de la liquidación ("+eur2(window._aeatCheck)+").</div>":"");}
   document.getElementById("aeRes").innerHTML=txt;
