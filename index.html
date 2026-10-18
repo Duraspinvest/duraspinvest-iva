@@ -53,6 +53,9 @@ main{padding:20px;max-width:1400px;margin:0 auto;}
 .tabla-wrapper{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--gray-200);}
 table{border-collapse:collapse;width:100%;font-size:12px;}
 thead{position:sticky;top:0;z-index:5;}
+.tw-sticky{max-height:calc(100vh - 230px);overflow:auto;}.tw-sticky thead th{position:sticky;top:0;z-index:3;}
+.dcBtn{width:34px;height:26px;border:1.5px solid var(--gray-200);border-radius:6px;background:#fff;cursor:pointer;font-size:12px;font-weight:700;color:var(--gray-400);padding:0;}
+.dcBtn.ok{background:#ECFDF5;border-color:#10B981;color:#059669;}.dcBtn.na{background:var(--gray-100);border-color:var(--gray-200);color:var(--gray-400);font-size:10px;}.dcBtn.her{border-style:dashed;}
 th{background:var(--navy);color:white;padding:10px 8px;text-align:left;white-space:nowrap;font-size:11px;font-weight:600;}
 th:first-child{padding-left:14px;}
 td{padding:9px 8px;border-bottom:1px solid var(--gray-100);vertical-align:middle;}
@@ -390,7 +393,7 @@ body.visor-open .modal-overlay.open{display:flex;}
     </div>
   </div>
   <div id="dcResumen" style="margin-bottom:10px;"></div>
-  <div class="tabla-wrapper"><table>
+  <div class="tabla-wrapper tw-sticky"><table>
     <thead><tr><th>Cliente</th><th class="td-c">Registradas</th><th class="td-c">Portal</th><th class="td-c">Emitidas</th><th class="td-c">Recibidas</th><th class="td-c">Banco</th><th class="td-c">Nóminas / otros</th><th>Nota</th><th class="td-c">Recordar</th></tr></thead>
     <tbody id="dcBody"></tbody>
   </table></div>
@@ -1358,11 +1361,11 @@ function renderDocs(){
   const cls=(window.WC||[]).slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"));
   let nOk=0;
   const filas=cls.map(c=>{
-    const r=D[c.id+"_"+anio+"_"+t]||{};
+    const r=dcEstado(c.id,anio,t);
     const fs=(window.WF||[]).filter(f=>f.clienteDespachoId===c.id&&String(fR(f)).slice(0,4)===anio&&q(fR(f))===String(t));
     const nE=fs.filter(f=>f.tipo==="IVR").length,nR=fs.length-nE;
     const nP=(window.portalDocs||[]).filter(d=>{const cc=typeof clienteDePortal==="function"?clienteDePortal(d.userEmail):null;const cr=String(d.creado||"").slice(0,10);return cc&&cc.id===c.id&&cr>=ini&&cr<fin;}).length;
-    const ok=DOC_ITEMS.filter(([k])=>r[k]).length;
+    const ok=DOC_ITEMS.filter(([k])=>r[k]===true||r[k]==="na").length;
     const comp=!!r.completo||ok===DOC_ITEMS.length;
     if(comp)nOk++;
     return {c,r,nE,nR,nP,comp};
@@ -1375,11 +1378,26 @@ function renderDocs(){
     "<td style='font-weight:500;'>"+(comp?"✓ ":"")+(c.nombre||"")+"</td>"+
     "<td class='td-c' style='font-size:11px;color:var(--gray-400);'>"+(nE||nR?nE+" emit. · "+nR+" rec.":"—")+"</td>"+
     "<td class='td-c' style='font-size:11px;color:var(--gray-400);'>"+(nP||"—")+"</td>"+
-    DOC_ITEMS.map(([k])=>"<td class='td-c'><input type='checkbox' style='width:auto;cursor:pointer;' "+(r[k]?"checked ":"")+"onchange=\"marcarDoc('"+c.id+"','"+k+"',this.checked)\"></td>").join("")+
+    DOC_ITEMS.map(([k,l])=>{const v=r[k],her=r._her&&r._her[k];return "<td class='td-c'><button class='dcBtn"+(v===true?" ok":v==="na"?" na":"")+(her?" her":"")+"' title='"+l+": clic para cambiar (vacío → recibido ✓ → no aplica → vacío)"+(her?". «No aplica» viene del trimestre anterior":"")+"' onclick=\"dcCiclo('"+c.id+"','"+k+"')\">"+(v===true?"✓":v==="na"?"N/A":"")+"</button></td>";}).join("")+
     "<td><textarea class='fi2' rows='"+Math.min(6,Math.max(1,String(r.nota||"").split("\n").length))+"' style='padding:4px 6px;font-size:12px;min-width:240px;resize:vertical;line-height:1.35;' placeholder='p. ej. falta factura alquiler (Intro = nueva línea)' onfocus=\"this.rows=Math.max(4,this.value.split('\\n').length+1)\" onblur=\"this.rows=Math.min(6,Math.max(1,this.value.split('\\n').length))\" onchange=\"marcarDoc('"+c.id+"','nota',this.value)\">"+ctEsc(r.nota||"")+"</textarea></td>"+
     "<td class='td-c'>"+(comp?"":"<button class='icon-btn' title='Copiar mensaje de recordatorio para WhatsApp' style='color:var(--navy);' onclick=\"copiarRecordatorio('"+c.id+"')\">&#128172;</button>")+"</td>"+
     "</tr>").join("");
 }
+// Estado de un cliente/trimestre: true = recibido, "na" = no aplica (se hereda del trimestre anterior si no hay nada marcado), false/vacío = pendiente
+function dcEstado(cid,anio,t){
+  const D=window.WDOC||{},r={...(D[cid+"_"+anio+"_"+t]||{})};
+  let pa=parseInt(anio,10),pt=parseInt(t,10)-1;if(pt<1){pt=4;pa--;}
+  const prev=D[cid+"_"+pa+"_"+pt]?dcEstado(cid,String(pa),String(pt)):{};
+  r._her={};
+  DOC_ITEMS.forEach(([k])=>{if((r[k]===undefined||r[k]===null)&&prev[k]==="na"){r[k]="na";r._her[k]=1;}});
+  return r;
+}
+function dcCiclo(cid,k){
+  const anio=document.getElementById("dcA").value,t=document.getElementById("dcT").value;
+  const v=dcEstado(cid,anio,t)[k];
+  marcarDoc(cid,k,v===true?"na":v==="na"?false:true);
+}
+window.dcCiclo=dcCiclo;
 async function marcarDoc(cid,k,v){
   const anio=document.getElementById("dcA").value,t=document.getElementById("dcT").value,id=cid+"_"+anio+"_"+t;
   const prev=(window.WDOC||{})[id]||{id,cid,anio,t:parseInt(t,10)};
@@ -1390,8 +1408,8 @@ async function marcarDoc(cid,k,v){
 }
 function copiarRecordatorio(cid){
   const anio=document.getElementById("dcA").value,t=document.getElementById("dcT").value;
-  const c=(window.WC||[]).find(x=>x.id===cid)||{};const r=(window.WDOC||{})[cid+"_"+anio+"_"+t]||{};
-  const falta=DOC_ITEMS.filter(([k])=>!r[k]).map(x=>x[2]);
+  const c=(window.WC||[]).find(x=>x.id===cid)||{};const r=dcEstado(cid,anio,t);
+  const falta=DOC_ITEMS.filter(([k])=>r[k]!==true&&r[k]!=="na").map(x=>x[2]);
   const txt="Hola, para preparar los impuestos del "+t+"º trimestre me falta: "+
     (falta.length>1?falta.slice(0,-1).join(", ")+" y "+falta[falta.length-1]:falta[0]||"la documentación")+
     ". Si no has tenido alguna, dímelo y lo marco. Puedes enviármelo por aquí, por email o subirlo al portal. Gracias.";
