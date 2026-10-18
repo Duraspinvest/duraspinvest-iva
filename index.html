@@ -2186,6 +2186,13 @@ async function saveF(mantenerAbierto){
     // Buscar siguiente documento pendiente
     const _act = (window.portalDocs||[]).find(d => d.id === idActual) || {};
     const pendientes = (window.portalDocs||[]).filter(d => d.estado === 'pendiente' && d.id !== idActual && !d.archivada && d.userEmail === _act.userEmail);
+    if(!mantenerAbierto) {
+      // "Guardar y cerrar": registrar esta y salir, aunque queden más pendientes
+      cerrarVisor();
+      closeM('fModal');
+      if(pendientes.length) showToast('Guardada. Quedan ' + pendientes.length + ' factura(s) pendientes de este cliente en el portal.');
+      return;
+    }
     if(pendientes.length > 0) {
       // Hay más pendientes - cargar el siguiente en el visor y limpiar el formulario
       const siguiente = pendientes[0];
@@ -4268,6 +4275,42 @@ function doLogout(){window.fsSignOut(window.auth);}
 document.getElementById("loginEmail").addEventListener("keydown",e=>{if(e.key==="Enter")document.getElementById("loginPassword").focus();});
 document.getElementById("loginPassword").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
 document.addEventListener("click",e=>{if(!e.target.closest(".ac-wrap"))document.getElementById("acList").style.display="none";});
+</script>
+<script>
+/* Fechas siempre en dd/mm/aaaa, sea cual sea el idioma del navegador.
+   El campo sigue devolviendo/aceptando AAAA-MM-DD en .value, así el resto de la app no cambia. */
+(function(){
+  const D=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+  const p2=n=>String(n).padStart(2,"0");
+  const toES=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(v||"");return m?m[3]+"/"+m[2]+"/"+m[1]:(v||"");};
+  const toISO=t=>{t=String(t||"").trim();if(!t)return"";
+    if(/^\d{4}-\d{2}-\d{2}$/.test(t))return t;
+    let m=/^(\d{2})(\d{2})(\d{4})$/.exec(t);if(m)t=m[1]+"/"+m[2]+"/"+m[3];
+    m=/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/.exec(t);if(!m)return"";
+    const y=m[3].length===2?2000+(+m[3]):+m[3],mo=+m[2],d=+m[1];
+    const dt=new Date(y,mo-1,d);if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d)return"";
+    return y+"-"+p2(mo)+"-"+p2(d);};
+  function fix(el){
+    if(el._esDate)return;el._esDate=1;
+    const iso=D.get.call(el);
+    el.type="text";el.placeholder="dd/mm/aaaa";el.setAttribute("inputmode","numeric");el.maxLength=10;el.autocomplete="off";
+    D.set.call(el,toES(iso));
+    Object.defineProperty(el,"value",{configurable:true,get(){return toISO(D.get.call(el));},set(v){D.set.call(el,toES(v));}});
+    el.addEventListener("blur",()=>{const raw=D.get.call(el),i=toISO(raw);if(i)D.set.call(el,toES(i));el.style.borderColor=(raw&&!i)?"#DC2626":"";el.title=(raw&&!i)?"Fecha no válida (dd/mm/aaaa)":"";});
+    const w=document.createElement("span");w.style.cssText="position:relative;display:block;";
+    el.parentNode.insertBefore(w,el);w.appendChild(el);el.style.paddingRight="30px";
+    const pk=document.createElement("input");pk.type="date";pk._esDate=1;pk.tabIndex=-1;pk.setAttribute("aria-hidden","true");
+    pk.style.cssText="position:absolute;right:4px;bottom:0;width:24px;height:1px;opacity:0;border:0;padding:0;pointer-events:none;";
+    const bt=document.createElement("button");bt.type="button";bt.tabIndex=-1;bt.title="Calendario";bt.textContent="📅";
+    bt.style.cssText="position:absolute;right:4px;top:50%;transform:translateY(-50%);border:0;background:none;cursor:pointer;font-size:14px;padding:2px;line-height:1;";
+    bt.onclick=()=>{D.set.call(pk,el.value||"");try{pk.showPicker();}catch(e){pk.focus();pk.click();}};
+    pk.addEventListener("change",()=>{el.value=D.get.call(pk);el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}));});
+    w.appendChild(pk);w.appendChild(bt);
+  }
+  const scan=r=>{(r.querySelectorAll?r:document).querySelectorAll('input[type="date"]').forEach(fix);};
+  const go=()=>{scan(document);new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType!==1)return;if(n.matches&&n.matches('input[type="date"]'))fix(n);else scan(n);}))).observe(document.body,{childList:true,subtree:true});};
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",go);else go();
+})();
 </script>
 </body>
 </html>
