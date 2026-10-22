@@ -188,11 +188,14 @@ body.visor-open .modal-overlay.open{display:flex;}
         <input class="fi" id="fFB" type="search" placeholder="Nombre, NIF, nº o importe" oninput="clearTimeout(window._fBt);window._fBt=setTimeout(renderF,200)" style="min-width:200px;"></div>
       <div class="filtro-group"><span class="filtro-label">Trimestre</span>
         <select class="fi" id="fFQ" onchange="renderF()"><option value="">Todos</option><option value="1">1T</option><option value="2">2T</option><option value="3">3T</option><option value="4">4T</option></select></div>
+      <div class="filtro-group"><span class="filtro-label">Operación</span>
+        <select class="fi" id="fFO" onchange="renderF()"><option value="">Todas</option><option value="int">Interiores</option><option value="ue">Intracomunitarias (UE)</option><option value="isp">Inversión del sujeto pasivo</option><option value="imp">Importaciones (DUA)</option><option value="exp">Exportaciones</option><option value="nsl">No sujetas</option><option value="rebu">REBU</option></select></div>
     </div>
     <div style="display:flex;gap:8px;">
       <input type="file" id="impFInput" accept=".xlsx,.xls" style="display:none;" onchange="importarFacturasExcel(this)">
       <button class="btn" onclick="if(!document.getElementById('fFC').value){alert('Primero selecciona el cliente en el filtro Cliente.');return;}document.getElementById('impFInput').click()" style="background:#1B4F8A;color:white;" title="Importa facturas desde Excel al cliente seleccionado en el filtro">&#8679; Importar Excel</button>
       <button class="btn" onclick="exportRegistro()" style="background:#7C5E10;color:white;" title="Libro registro de facturas emitidas y recibidas del cliente y año filtrados">&#128210; Registro</button>
+      <button class="btn" onclick="opCambiarVista()" style="background:#3730A3;color:white;" title="Cambia el tipo de operación de todas las facturas de la vista actual (p. ej. un proveedor de la UE)">&#8644; Operación</button>
       <button class="btn" onclick="exportVistaF()" style="background:#065F46;color:white;" title="Exporta a Excel las facturas de la vista actual con su resumen">&#8681; Excel vista</button>
       <button class="btn btn-primary" onclick="openFM('IVR')">+ Emitida</button>
       <button class="btn btn-ivs" onclick="openFM('IVS')">+ Recibida</button>
@@ -562,7 +565,7 @@ body.visor-open .modal-overlay.open{display:flex;}
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  const app = initializeApp({apiKey:"AIzaSyCVK3yF15Udps1l046kv6M1TASIwVEPcVs",authDomain:"duraspinvest.firebaseapp.com",projectId:"duraspinvest",storageBucket:"duraspinvest.firebasestorage.app",messagingSenderId:"280764832749",appId:"1:280764832749:web:a1fa6c44cf59518541a5e4"});
+  const app = initializeApp({apiKey:"AIzaSyCVK3yF15Udps1l046kv6M1TASIwVEPcVs",authDomain:"duraspinvest.firebaseapp.com",projectId:"duraspinvest",storageBucket:"duraspinvest-docs-eu",messagingSenderId:"280764832749",appId:"1:280764832749:web:a1fa6c44cf59518541a5e4"});
   const db=getFirestore(app),auth=getAuth(app);
   window.db=db;window.auth=auth;window.fsSignIn=signInWithEmailAndPassword;window.fsSignOut=signOut;
   window.fsDoc=doc;window.fsSetDoc=setDoc;window.fsDeleteDoc=deleteDoc;window.fsCollection=collection;
@@ -1230,16 +1233,29 @@ async function ctGenAmort(){
 }
 
 // ---------- Impuestos: regularización del IVA por trimestre ----------
+// 303 presentado (apuntado en Fiscal / Liquidación): devengado (27), deducible (45) y resultado (46)
+// IVA del trimestre en los libros (sin contar el propio asiento de liquidación)
+function ctIvaTrim(cid,anio,t){const d=anio+"-"+String((t-1)*3+1).padStart(2,"0")+"-01",h=anio+"-"+["03-31","06-30","09-30","12-31"][t-1],ref="303-"+anio+"-"+t,m={};
+  ctAsientos(cid,anio).filter(a=>a.fecha>=d&&a.fecha<=h&&a.ref!==ref).forEach(a=>(a.lineas||[]).forEach(l=>{m[l.c]=m[l.c]||{d:0,h:0};m[l.c].d+=l.d||0;m[l.c].h+=l.h||0;}));
+  return {rep:_r2c(m[CT_IVA_R]?m[CT_IVA_R].h-m[CT_IVA_R].d:0),sop:_r2c(m[CT_IVA_S]?m[CT_IVA_S].d-m[CT_IVA_S].h:0)};}
+function ct303Pres(cid,anio,t){const p=((((window.WIN||{})[cid+"_"+anio]||{}).p303||{})[t]||{}).c;
+  if(!p||(p["27"]==null&&p["45"]==null&&p["46"]==null))return null;
+  const rep=_r2c(p["27"]||0),sop=_r2c(p["45"]||0);return {rep,sop,res:_r2c(p["46"]!=null?p["46"]:rep-sop)};}
 function ctImpuestos(box,cid){
   const anio=document.getElementById("ctAnio").value;
   const rows=[1,2,3,4].map(t=>{
     const d=anio+"-"+String((t-1)*3+1).padStart(2,"0")+"-01",h=anio+"-"+["03-31","06-30","09-30","12-31"][t-1];
     const m=ctSaldos(cid,anio,h,d),rep=(m[CT_IVA_R]?m[CT_IVA_R].h-m[CT_IVA_R].d:0),sop=(m[CT_IVA_S]?m[CT_IVA_S].d-m[CT_IVA_S].h:0);
     const hecho=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="impuesto"&&a.ref==="303-"+anio+"-"+t);
-    return "<tr><td>"+t+"T</td><td class='td-r'>"+ctE(rep)+"</td><td class='td-r'>"+ctE(sop)+"</td><td class='td-r' style='font-weight:600;'>"+ctE(rep-sop)+"</td><td>"+(rep-sop>=0?"a ingresar (4750)":"a compensar (4700)")+"</td>"+
+    const pr=ct303Pres(cid,anio,t);
+    let prTxt="";
+    if(pr){const lb=ctIvaTrim(cid,anio,t),dR=_r2c(lb.rep-pr.rep),dS=_r2c(lb.sop-pr.sop);
+      prTxt="<div style='font-size:11px;color:#3730A3;'>Presentado: "+ctE(pr.res)+(dR||dS?" · <span style='color:#B91C1C;'>dif. 477 "+ctE(dR)+" · 472 "+ctE(dS)+"</span>":" · cuadra")+"</div>";}
+    return "<tr><td>"+t+"T</td><td class='td-r'>"+ctE(rep)+"</td><td class='td-r'>"+ctE(sop)+"</td><td class='td-r' style='font-weight:600;'>"+ctE(rep-sop)+prTxt+"</td><td>"+(pr?(pr.res>=0?"a ingresar (4750)":"a compensar (4700)")+"<div style='font-size:11px;color:var(--gray-400);'>según lo presentado</div>":(rep-sop>=0?"a ingresar (4750)":"a compensar (4700)"))+"</td>"+
       "<td>"+(hecho?"<span style='color:var(--success);'>✓ contabilizado</span> ":"")+"<button class='btn btn-secondary' style='padding:3px 10px;font-size:12px;' onclick='ctGen303("+t+")'>"+(hecho?"Rehacer":"Contabilizar")+"</button></td></tr>";}).join("");
   box.innerHTML="<div style='font-size:12px;color:var(--gray-400);margin-bottom:8px;'>Asiento de liquidación del IVA de cada trimestre (cierra la 477 y la 472 contra la 4750 o la 4700), con los importes de la contabilidad. Los pagos a Hacienda (303, 111, 115, 130) entran con el extracto del banco.</div>"+
     "<div class='tabla-wrapper'><table><thead><tr><th>Trimestre</th><th class='td-r'>IVA repercutido (477)</th><th class='td-r'>IVA soportado (472)</th><th class='td-r'>Resultado</th><th></th><th></th></tr></thead><tbody>"+rows+"</tbody></table></div>"+
+    "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Si en Fiscal &rsaquo; Liquidación has apuntado el 303 presentado de un trimestre, el asiento se hace con lo presentado y las diferencias quedan como saldo en la 477/472 para regularizarlas en el 4T.</div>"+
     "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Si un trimestre sale a compensar, el siguiente con resultado a ingresar puede descontarlo: hazlo con un asiento manual (4750 a 4700) por el importe compensado en el 303.</div>";
 }
 async function ctGen303(t){
@@ -1248,12 +1264,16 @@ async function ctGen303(t){
   const prev=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="impuesto"&&a.ref===ref);
   // saldo de 477/472 del trimestre sin contar la propia regularización
   const m={};ctAsientos(cid,anio).filter(a=>a.fecha>=d&&a.fecha<=h&&a.ref!==ref).forEach(a=>(a.lineas||[]).forEach(l=>{m[l.c]=m[l.c]||{d:0,h:0};m[l.c].d+=l.d||0;m[l.c].h+=l.h||0;}));
-  const rep=_r2c(m[CT_IVA_R]?m[CT_IVA_R].h-m[CT_IVA_R].d:0),sop=_r2c(m[CT_IVA_S]?m[CT_IVA_S].d-m[CT_IVA_S].h:0),res=_r2c(rep-sop);
+  let rep=_r2c(m[CT_IVA_R]?m[CT_IVA_R].h-m[CT_IVA_R].d:0),sop=_r2c(m[CT_IVA_S]?m[CT_IVA_S].d-m[CT_IVA_S].h:0),res=_r2c(rep-sop),segun="";
+  // Si está apuntado el 303 presentado, el asiento se hace con lo presentado: lo que no se incluyó queda como saldo en 477/472
+  const pr=ct303Pres(cid,anio,t);
+  if(pr){const dR=_r2c(rep-pr.rep),dS=_r2c(sop-pr.sop);rep=pr.rep;sop=pr.sop;res=pr.res;segun=" · según lo presentado";
+    if(dR||dS)alert("Se contabiliza lo PRESENTADO en el "+t+"T.\n\nQueda pendiente en la 477 (repercutido): "+(dR?ctE(dR):"0,00")+"\nQueda pendiente en la 472 (soportado): "+(dS?ctE(dS):"0,00")+"\n\nEsas diferencias se ven en el saldo de 477/472 y se regularizan en el 4T.");}
   if(!rep&&!sop){alert("No hay IVA en el "+t+"T.");return;}
   const L=[];if(rep)L.push({c:CT_IVA_R,d:rep,h:0});if(sop)L.push({c:CT_IVA_S,d:0,h:sop});
   if(res>0)L.push({c:"47500000",d:0,h:res});else if(res<0)L.push({c:"47000000",d:-res,h:0});
   const id=prev?prev.id:("T"+Date.now());
-  if(await ctSave("conta_asientos",id,{id,cid,fecha:h,concepto:"Liquidación IVA "+t+"T "+anio+" (modelo 303)",origen:"impuesto",ref,lineas:L,creado:prev?prev.creado:new Date().toISOString()}))ctRender();
+  if(await ctSave("conta_asientos",id,{id,cid,fecha:h,concepto:"Liquidación IVA "+t+"T "+anio+" (modelo 303"+segun+")",origen:"impuesto",ref,lineas:L,creado:prev?prev.creado:new Date().toISOString()}))ctRender();
 }
 
 // ---------- Cierre del ejercicio y apertura ----------
@@ -1480,12 +1500,14 @@ function renderF(){
   const fc=document.getElementById("fFC").value,ft=document.getElementById("fFT").value;
   const fa=document.getElementById("fFA").value,fq=document.getElementById("fFQ").value;
   const fb=_fNorm((document.getElementById("fFB")||{}).value||"").trim();
+  const fo=(document.getElementById("fFO")||{}).value||"";
   let fs=(window.WF||[]).filter(f=>{
     if(fc&&f.clienteDespachoId!==fc)return false;
     if(ft&&f.tipo!==ft)return false;
     if(fa&&fR(f)&&new Date(fR(f)+"T12:00:00").getFullYear()!==parseInt(fa))return false;
     if(fq&&fR(f)&&q(fR(f))!==fq)return false;
     if(fb&&!_fMatch(f,fb))return false;
+    if(fo&&!_opGrupo(f,fo))return false;
     return true;
   }).sort(_fCmp);
   _fOrdMarcas();
@@ -1585,9 +1607,64 @@ function fSopDed(f){return fSop(f)*fDedPct(f)/100;}
 function fIngreso(f){return (f.tipo==="IVR"&&fOpDe(f)==="rebu")?_n(f.total)+_n(f.retImporte)-fCuota(f):fBaseTot(f);} // ingreso neto (IRPF)
 function fIvaCoste(f){return esAuto(f)?fCuota(f)*(1-fDedPct(f)/100):fSop(f);} // IVA pagado que cuenta como coste si no se deduce
 function opBadge(f){const o=fOpDe(f);if(o==="int")return "";
-  const t={aib:"UE",ais:"UE serv.",isp:"ISP",rebu:"REBU",eib:"UE",eis:"UE serv.",exp:"Export.",nsl:"No suj."}[o]||o;
+  const t={aib:"UE",ais:"UE serv.",isp:"ISP",imp:"DUA",rebu:"REBU",eib:"UE",eis:"UE serv.",exp:"Export.",nsl:"No suj."}[o]||o;
   return " <span title='"+((OPS[f.tipo==="IVR"?"IVR":"IVS"]||{})[o]||"")+"' style='font-size:9px;background:#EEF2FF;color:#3730A3;border-radius:4px;padding:1px 4px;'>"+t+"</span>";}
 function _r2(n){return Math.round((n||0)*100)/100;}
+// Grupos del filtro «Operación»
+function _opGrupo(f,g){const o=fOpDe(f);return g==="ue"?["aib","ais","eib","eis"].includes(o):o===g;}
+function opVerGrupo(t,o){document.getElementById("fFT").value=t;document.getElementById("fFO").value=["aib","ais","eib","eis"].includes(o)?"ue":o;renderF();}
+// Casillas del 303 / clave del 349 de cada tipo de operación (resumen por operación)
+const OP_CAS={IVS:{int:"303 c.28-29",aib:"303 c.10-11 y 36-37 · 349 A",ais:"303 c.10-11 y 36-37 · 349 I",isp:"303 c.12-13 y 28-29",imp:"303 c.32-33",rebu:"Sin IVA deducible"},
+  IVR:{int:"303 c.01-09",eib:"303 c.59 · 349 E",eis:"303 c.59 · 349 S",exp:"303 c.60",nsl:"303 c.120",isp:"303 c.122",rebu:"IVA sobre el margen"}};
+function resumenOps(fs){
+  const G={};
+  fs.forEach(f=>{const t=f.tipo==="IVR"?"IVR":"IVS",o=fOpDe(f),k=t+"|"+o;const g=(G[k]=G[k]||{t,o,n:0,base:0,cuota:0,total:0});
+    g.n++;g.base+=fBaseTot(f);g.cuota+=fCuota(f);g.total+=_n(f.total);});
+  return Object.values(G).sort((a,b)=>a.t.localeCompare(b.t)||(a.o==="int"?-1:b.o==="int"?1:a.o.localeCompare(b.o)));
+}
+// Cambiar el tipo de operación de todas las facturas de la vista (p. ej. todas las de un proveedor de la UE)
+function opCambiarVista(){
+  const fs=window.fVista||[];
+  if(!fs.length){alert("No hay facturas en la vista. Filtra primero (por ejemplo, cliente + buscar el proveedor).");return;}
+  const tipos=[...new Set(fs.map(f=>f.tipo==="IVR"?"IVR":"IVS"))];
+  if(tipos.length>1){alert("En la vista hay emitidas y recibidas. Elige en «Tipo» solo emitidas o solo recibidas.");return;}
+  const t=tipos[0],nombres=[...new Set(fs.map(f=>f.nombre||"(sin nombre)"))];
+  let m=document.getElementById("opCamModal");if(m)m.remove();
+  m=document.createElement("div");m.id="opCamModal";
+  m.style.cssText="position:fixed;inset:0;background:rgba(10,37,64,.55);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;";
+  const esc=x=>String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+  m.innerHTML="<div style='background:white;border-radius:14px;max-width:460px;width:100%;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.3);'>"+
+    "<div style='font-size:16px;font-weight:600;color:var(--navy);margin-bottom:6px;'>Cambiar el tipo de operación</div>"+
+    "<div style='font-size:13px;color:var(--gray-600);margin-bottom:10px;'>"+fs.length+" "+(t==="IVR"?"emitidas":"recibidas")+" de la vista: <b>"+nombres.slice(0,4).map(esc).join(", ")+(nombres.length>4?" y "+(nombres.length-4)+" más":"")+"</b></div>"+
+    "<select class='fi' id='opCamSel' style='width:100%;margin-bottom:10px;' onchange='opCamAyuda()'>"+Object.entries(OPS[t]).map(([k,v])=>"<option value='"+k+"'>"+esc(v)+"</option>").join("")+"</select>"+
+    "<label id='opCamIvaL' style='display:none;font-size:12px;color:var(--gray-600);margin-bottom:8px;'><input type='checkbox' id='opCamIva' checked> Si la factura no lleva IVA, calcularlo al 21 % (autoliquidación)</label>"+
+    "<div id='opCamAyuda' style='font-size:11px;color:var(--gray-400);margin-bottom:14px;'></div>"+
+    "<div style='display:flex;gap:8px;justify-content:flex-end;'><button class='btn' onclick=\"document.getElementById('opCamModal').remove()\">Cancelar</button>"+
+    "<button class='btn btn-primary' onclick='opCamAplicar()'>Cambiar "+fs.length+" facturas</button></div></div>";
+  m.onclick=e=>{if(e.target===m)m.remove();};
+  document.body.appendChild(m);window._opCamT=t;opCamAyuda();
+}
+function opCamAyuda(){const o=document.getElementById("opCamSel").value,t=window._opCamT;
+  document.getElementById("opCamIvaL").style.display=(t==="IVS"&&["aib","ais","isp"].includes(o))?"block":"none";
+  document.getElementById("opCamAyuda").textContent=((typeof OPS_AYUDA!=="undefined"&&OPS_AYUDA[o])||"")+((OP_CAS[t]||{})[o]?" → "+OP_CAS[t][o]:"");}
+async function opCamAplicar(){
+  const o=document.getElementById("opCamSel").value,calc=document.getElementById("opCamIva").checked;
+  const fs=(window.fVista||[]).slice();document.getElementById("opCamModal").remove();
+  let ok=0,err=0;
+  for(const f of fs){
+    const upd={op:o};
+    const autoN=f.tipo==="IVS"&&["aib","ais","isp"].includes(o);
+    if(autoN&&calc&&!fCuota(f)){
+      if(!fBase(f)&&fExento(f)){upd.base1=fExento(f);upd.exento=0;}   // el importe estaba como exento: pasa a base
+      const b=_n(upd.base1!=null?upd.base1:f.base1);
+      if(b){upd.pct1="21";upd.iva1=Math.round(b*21)/100;}
+    }
+    const g={...f,...upd};
+    if(esAuto(g)!==esAuto(f)||upd.iva1!=null){const ret=_n(f.retImporte);upd.total=Math.round((esAuto(g)?fBaseTot(g)-ret:fBaseTot(g)+fCuota(g)-ret)*100)/100;}
+    try{await window.fsSetDoc(window.fsDoc(window.db,"iva_facturas",String(f.id)),upd,{merge:true});ok++;}catch(e){console.error(e);err++;}
+  }
+  alert(ok+" facturas cambiadas a «"+((OPS[window._opCamT]||{})[o]||o)+"»."+(err?" "+err+" no se han podido guardar.":""));
+}
 function resumenF(fs){
   const R={IVR:{n:0,base:0,cuota:0,ret:0,total:0,exento:0,tipos:{}},IVS:{n:0,base:0,cuota:0,ded:0,noDed:0,auto:0,total:0,exento:0,tipos:{}}};
   fs.forEach(f=>{
@@ -1654,6 +1731,12 @@ function renderResumenF(fs){
       "<div class='res-big' style='color:"+col+";'>"+eur(res)+"</div>"+
       "<div style='color:var(--gray-400);font-size:11px;'>"+(res>=0?"A ingresar":"A compensar / devolver")+"</div></div>";
   }
+  const ops=resumenOps(fs);
+  if(ops.some(g=>g.o!=="int")){
+    h+="<div class='res-card' style='border-top-color:#3730A3;'><h4>Por tipo de operación</h4><table class='res-tipos' style='width:100%;'>"+
+      ops.map(g=>"<tr title='Pulsa para ver solo estas facturas' style='cursor:pointer;' onclick=\"opVerGrupo('"+g.t+"','"+g.o+"')\"><td>"+(g.t==="IVR"?"Emit. ":"Rec. ")+(((OPS[g.t]||{})[g.o])||g.o).replace(/ \(.*\)$/,"")+" ("+g.n+")<div style='font-size:9px;color:var(--gray-400);'>"+((OP_CAS[g.t]||{})[g.o]||"")+"</div></td><td class='td-r'>"+eur(g.base)+"</td><td class='td-r'>"+eur(g.cuota)+"</td></tr>").join("")+
+      "</table><div style='font-size:10px;color:var(--gray-400);margin-top:4px;'>Base · cuota. Pulsa una fila para ver solo esas facturas.</div></div>";
+  }
   box.innerHTML=h+"</div>";
   if(tf){
     const b=fs.reduce((s,f)=>s+fBaseTot(f),0),c=fs.reduce((s,f)=>s+fCuota(f),0),t=fs.reduce((s,f)=>s+_n(f.total),0);
@@ -1683,6 +1766,8 @@ function exportVistaF(){
   ];
   ["IVR","IVS"].forEach(t=>Object.keys(R[t].tipos).sort((a,b)=>parseFloat(b)-parseFloat(a)).forEach(k=>
     res.push([t==="IVR"?"Emitidas":"Recibidas",parseFloat(k),_r2(R[t].tipos[k].base),_r2(R[t].tipos[k].cuota)])));
+  res.push([],["DESGLOSE POR TIPO DE OPERACIÓN","Casillas","Base","Cuota","Nº"]);
+  resumenOps(fs).forEach(g=>res.push([(g.t==="IVR"?"Emitidas · ":"Recibidas · ")+(((OPS[g.t]||{})[g.o])||g.o),(OP_CAS[g.t]||{})[g.o]||"",_r2(g.base),_r2(g.cuota),g.n]));
   const ws1=XLSX.utils.aoa_to_sheet(res);
   ws1["!cols"]=[{wch:40},{wch:22},{wch:16},{wch:14}];
   XLSX.utils.book_append_sheet(wb,ws1,"Resumen");
@@ -2870,7 +2955,8 @@ async function guardarIngresos(){
   if(!cid){alert("Selecciona un cliente.");return;}
   const meses=MESES.map((m,i)=>{const v=document.getElementById("lqM"+i);return v&&v.value!==""?(parseFloat(v.value)||0):"";});
   const pagado130=[1,2,3,4].map(t=>{const v=document.getElementById("lqP"+t);return v&&v.value!==""?(parseFloat(v.value)||0):"";});
-  await fbS("iva_ingresos",cid+"_"+anio,{id:cid+"_"+anio,cid,anio,meses,pagado130});
+  const _prevIng=(window.WIN||{})[cid+"_"+anio]||{};   // conserva el 303 presentado (p303) y demás datos
+  await fbS("iva_ingresos",cid+"_"+anio,{..._prevIng,id:cid+"_"+anio,cid,anio,meses,pagado130});
   const st=document.getElementById("lqRes");if(st)st.innerHTML="<div style='color:var(--success);font-size:12px;'>Ingresos guardados. Pulsa Calcular.</div>";
 }
 // Minoracion por incentivos al empleo: coeficiente por tramos sobre las unidades del modulo "personal asalariado" (marginal, como tramos de IRPF)
@@ -3089,6 +3175,7 @@ function calcLiq(){
     "<div style='font-size:11px;color:var(--gray-400);margin-top:8px;'>Resultado = repercutido &minus; soportado (solo IVA deducible). Si es negativo queda pendiente de compensar y se arrastra (hasta 4 anos). El 130 = 20% de (ingresos &minus; gastos) acumulados &minus; retenciones soportadas, menos lo pagado antes."+(usarMeses?" Los ingresos por mes se toman CON IVA incluido ("+ivaVen+"%): la base va al 130 y el IVA repercutido al 303.":"")+"</div>"+b115;
   window._liq={cid,anio,q,q2,compAnt,tiene303:true,tiene130:!esSoc,mods:modList};
   cont.innerHTML+=desglose303(emit,reci,sinIva);
+  if(!sinIva){cont.innerHTML+=comparacion303(cid,anio,emit,reci);setTimeout(cmpPinta,0);}
   cont.innerHTML+=aeatPanel();
 }
 
@@ -3497,6 +3584,105 @@ function aeat349Generar(t){
 }
 window.aeat349Abrir=aeat349Abrir;window.aeat349Generar=aeat349Generar;
 
+
+// ===== 303 presentado: lo que se presentó de verdad, comparado con los libros (facturas de la app) =====
+// Se guarda en iva_ingresos/{cliente_año}.p303 = { "1": { fecha, c: { "27": 123.45, ... } }, ... }
+const P303_CAS=[["01","Base 4 %"],["03","Cuota 4 %"],["04","Base 10 %"],["06","Cuota 10 %"],["07","Base 21 %"],["09","Cuota 21 %"],
+  ["10","Adq. intracomunitarias · base"],["11","Adq. intracomunitarias · cuota"],["12","Otras ISP · base"],["13","Otras ISP · cuota"],
+  ["27","TOTAL CUOTA DEVENGADA"],
+  ["28","Interiores corrientes · base"],["29","Interiores corrientes · cuota"],["32","Importaciones · base"],["33","Importaciones · cuota"],
+  ["36","Intracom. corrientes · base"],["37","Intracom. corrientes · cuota"],["45","TOTAL A DEDUCIR"],["46","RESULTADO RÉGIMEN GENERAL (27 − 45)"],
+  ["59","Entregas intracomunitarias"],["60","Exportaciones"],["120","No sujetas por localización"],["122","ISP emitidas"],
+  ["71","RESULTADO DE LA LIQUIDACIÓN"]];
+const P303_TOT=["27","45","46","71"];
+// Casillas calculadas desde las facturas (libros), con los totales
+function p303Libros(t){
+  const C=((window._liqC||[])[t-1])||{},o={};
+  P303_CAS.forEach(([k])=>{if(C[k])o[k]=_r2(C[k]);});
+  o["27"]=_r2(["03","06","09","11","13"].reduce((s,k)=>s+(C[k]||0),0));
+  o["45"]=_r2(["29","33","37"].reduce((s,k)=>s+(C[k]||0),0));
+  o["46"]=_r2(o["27"]-o["45"]);
+  return o;
+}
+function p303Rec(){const c=window._cmp||{};return ((window.WIN||{})[c.cid+"_"+c.anio]||{});}
+function p303Pres(t){return ((p303Rec().p303||{})[t]||{});}
+function p303Dif(t){
+  const L=p303Libros(t),P=(p303Pres(t).c)||{};if(!Object.keys(P).length)return null;
+  const d={};P303_CAS.forEach(([k])=>{if(k==="71")return;const x=_r2((L[k]||0)-(P[k]||0));if(Math.abs(x)>=0.01)d[k]=x;});return d;
+}
+function comparacion303(cid,anio,emit,reci){
+  window._cmp={cid,anio,emit,reci,t:window._cmp&&window._cmp.cid===cid?window._cmp.t:1};
+  return "<div style='margin-top:24px;border-top:2px solid var(--gold);padding-top:14px;'><div style='font-weight:700;color:var(--navy);font-size:14px;'>303 presentado y diferencias con los libros</div>"+
+    "<div style='font-size:11px;color:var(--gray-400);margin:2px 0 10px;'>Apunta lo que se presentó en cada trimestre. La app lo compara con las facturas registradas y te señala de dónde puede venir cada diferencia. El asiento de liquidación de Contabilidad usará lo presentado.</div>"+
+    "<div id='cmp303'></div></div>";
+}
+function cmpPinta(){
+  const box=document.getElementById("cmp303");if(!box||!window._cmp)return;
+  const c=window._cmp,t=c.t;
+  const resumen=[1,2,3,4].map(q=>{const d=p303Dif(q),pr=p303Pres(q);
+    const est=!pr.c||!Object.keys(pr.c).length?"<span style='color:var(--gray-400);'>sin apuntar</span>":(Object.keys(d).length?"<span style='color:#B91C1C;font-weight:600;'>"+Object.keys(d).length+" diferencia(s)</span>":"<span style='color:#065F46;font-weight:600;'>✓ cuadra</span>");
+    return "<button class='btn "+(q===t?"btn-primary":"btn-secondary")+"' style='padding:6px 12px;font-size:12px;' onclick='window._cmp.t="+q+";cmpPinta()'>"+q+"T · "+est+"</button>";}).join(" ");
+  const L=p303Libros(t),pr=p303Pres(t),P=pr.c||{};
+  const filas=P303_CAS.filter(([k])=>L[k]||P[k]!=null&&P[k]!==""||P303_TOT.includes(k)||window._cmpTodas).map(([k,n])=>{
+    const tot=P303_TOT.includes(k),dif=k==="71"?0:_r2((L[k]||0)-(_n(P[k])));
+    return "<tr"+(tot?" style='background:var(--gray-50);font-weight:600;'":"")+"><td style='font-family:monospace;'>"+k+"</td><td>"+n+"</td>"+
+      "<td class='td-r'>"+(k==="71"?"&mdash;":eur2(L[k]||0))+"</td>"+
+      "<td class='td-r'><input type='number' step='0.01' class='cmpIn' data-k='"+k+"' value='"+(P[k]!=null&&P[k]!==""?P[k]:"")+"' style='width:120px;padding:4px 6px;border:1px solid var(--gray-200);border-radius:5px;text-align:right;font-size:12px;'></td>"+
+      "<td class='td-r' style='"+(Math.abs(dif)>=0.01&&P[k]!=null&&P[k]!==""?"color:#B91C1C;font-weight:600;":"color:var(--gray-400);")+"'>"+(P[k]!=null&&P[k]!==""&&k!=="71"?eur2(dif):"")+"</td></tr>";}).join("");
+  box.innerHTML="<div style='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;'>"+resumen+"</div>"+
+    "<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;font-size:12px;'>Presentado el <input type='date' id='cmpFecha' value='"+(pr.fecha||"")+"' style='padding:4px 6px;border:1px solid var(--gray-200);border-radius:5px;'>"+
+    "<button class='btn btn-secondary' style='padding:4px 10px;font-size:12px;' onclick='cmpCopiar()'>Copiar lo calculado</button>"+
+    "<label style='display:flex;gap:4px;align-items:center;'><input type='checkbox' "+(window._cmpTodas?"checked":"")+" onchange='window._cmpTodas=this.checked;cmpPinta()'> todas las casillas</label>"+
+    "<button class='btn btn-primary' style='padding:4px 12px;font-size:12px;' onclick='cmpGuardar()'>Guardar "+t+"T</button></div>"+
+    "<div class='tabla-wrapper'><table><thead><tr><th>Casilla</th><th>Concepto</th><th class='td-r'>Libros (app)</th><th class='td-r'>Presentado</th><th class='td-r'>Diferencia</th></tr></thead><tbody>"+filas+"</tbody></table></div>"+
+    cmpCausas(t);
+}
+function cmpCopiar(){const L=p303Libros(window._cmp.t);document.querySelectorAll(".cmpIn").forEach(i=>{const k=i.dataset.k;if(k!=="71")i.value=L[k]!=null?L[k]:"";else if(i.value==="")i.value=L["46"];});}
+async function cmpGuardar(){
+  const c=window._cmp,t=c.t,id=c.cid+"_"+c.anio,rec=(window.WIN||{})[id]||{};
+  const vals={};document.querySelectorAll(".cmpIn").forEach(i=>{if(i.value!=="")vals[i.dataset.k]=parseFloat(i.value)||0;});
+  const prev=((rec.p303||{})[t]||{}).c||{};
+  if(!window._cmpTodas)Object.keys(prev).forEach(k=>{if(!(k in vals)&&!document.querySelector(".cmpIn[data-k='"+k+"']"))vals[k]=prev[k];});   // casillas ocultas: se conservan
+  const p303={...(rec.p303||{})};p303[t]={fecha:(document.getElementById("cmpFecha")||{}).value||"",c:vals};
+  try{await window.fsSetDoc(window.fsDoc(window.db,"iva_ingresos",id),{id,cid:c.cid,anio:c.anio,p303},{merge:true});
+    window.WIN=window.WIN||{};window.WIN[id]={...rec,id,cid:c.cid,anio:c.anio,p303};cmpPinta();}
+  catch(e){alert("No se ha podido guardar: "+e.message);}
+}
+// Posibles causas: facturas repetidas y facturas cuyo importe coincide con la diferencia
+function _numNorm(n){return String(n||"").toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/^0+(?=\d)/,"").replace(/([A-Z])0+(?=\d)/g,"$1");}
+function _terNorm(f){return String(f.nif||"").toUpperCase().replace(/[^A-Z0-9]/g,"")||_fNorm(f.nombre||"");}
+function cmpDuplicados(){
+  const c=window._cmp,todas=[...(c.emit||[]),...(c.reci||[])],G={},G2={};
+  todas.forEach(f=>{const k=f.tipo+"|"+_terNorm(f)+"|"+_numNorm(f.numero);if(_numNorm(f.numero))(G[k]=G[k]||[]).push(f);
+    const k2=f.tipo+"|"+_terNorm(f)+"|"+(f.fecha||"")+"|"+_r2(_n(f.total));(G2[k2]=G2[k2]||[]).push(f);});
+  const vistos=new Set(),out=[];
+  Object.values(G).filter(g=>g.length>1).forEach(g=>{g.forEach(f=>vistos.add(f.id));out.push({g,motivo:"mismo número"});});
+  Object.values(G2).filter(g=>g.length>1&&g.some(f=>!vistos.has(f.id))).forEach(g=>out.push({g,motivo:"mismo proveedor/cliente, fecha e importe"}));
+  return out;
+}
+function cmpCausas(t){
+  const c=window._cmp,d=p303Dif(t)||{};
+  const fsT=[...(c.emit||[]),...(c.reci||[])].filter(f=>trimOf(fR(f))===t);
+  const fmtF=f=>"<tr style='cursor:pointer;' ondblclick=\"editF('"+String(f.id).replace(/[^A-Za-z0-9_-]/g,"")+"')\" title='Doble clic para abrir la factura'><td>"+(f.tipo==="IVR"?"Emitida":"Recibida")+"</td><td>"+(f.fecha?f.fecha.split("-").reverse().join("/"):"")+(f.fechaReg&&f.fechaReg!==f.fecha?" <span style='font-size:10px;color:#B45309;'>reg. "+f.fechaReg.split("-").reverse().join("/")+"</span>":"")+"</td><td>"+ctEscS(f.numero)+"</td><td>"+ctEscS(f.nombre)+"</td><td class='td-r'>"+eur2(fBaseTot(f))+"</td><td class='td-r'>"+eur2(fCuota(f))+"</td><td>"+trimOf(fR(f))+"T</td></tr>";
+  let h="";
+  const difs=Object.entries(d).filter(([k])=>!P303_TOT.includes(k));
+  if(difs.length){
+    const cand=[];
+    difs.forEach(([k,v])=>{const esCuota=["03","06","09","11","13","29","33","37"].includes(k),a=Math.abs(v);
+      fsT.forEach(f=>{const x=esCuota?fCuota(f):fBaseTot(f);if(Math.abs(x-a)<0.011&&!cand.includes(f))cand.push(f);});});
+    h+="<div style='margin-top:14px;font-weight:600;color:var(--navy);font-size:13px;'>Facturas del "+t+"T cuyo importe coincide con una diferencia</div>"+
+      (cand.length?"<div class='tabla-wrapper'><table><thead><tr><th>Tipo</th><th>Fecha</th><th>Nº</th><th>Nombre</th><th class='td-r'>Base</th><th class='td-r'>Cuota</th><th>Cuenta en</th></tr></thead><tbody>"+cand.map(fmtF).join("")+"</tbody></table></div>"+
+        "<div style='font-size:11px;color:var(--gray-400);'>Si una llegó después de presentar, ábrela y pon en «Fecha de registro» un día del trimestre en que la incluyes (p. ej. el 4T): saldrá en esa liquidación.</div>":
+        "<div style='font-size:12px;color:var(--gray-400);'>Ninguna factura sola coincide: puede ser la suma de varias o un error de importe.</div>");
+  }
+  const dup=cmpDuplicados();
+  if(dup.length)h+="<div style='margin-top:14px;font-weight:600;color:#B91C1C;font-size:13px;'>⚠ Posibles facturas repetidas en el año ("+dup.length+")</div>"+
+    "<div class='tabla-wrapper'><table><thead><tr><th>Tipo</th><th>Fecha</th><th>Nº</th><th>Nombre</th><th class='td-r'>Base</th><th class='td-r'>Cuota</th><th>Cuenta en</th></tr></thead><tbody>"+
+    dup.map(x=>"<tr><td colspan='7' style='background:#FEF2F2;font-size:11px;color:#991B1B;'>"+x.motivo+"</td></tr>"+x.g.map(fmtF).join("")).join("")+"</tbody></table></div>"+
+    "<div style='font-size:11px;color:var(--gray-400);'>Revisa sobre todo números con símbolos (/, -, espacios) escritos de dos formas. Doble clic para abrir la factura.</div>";
+  return h;
+}
+function ctEscS(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 
 // Desglose por casillas del 303 y resumen del 349, por trimestre
 function desglose303(emit,reci,sinIva){
