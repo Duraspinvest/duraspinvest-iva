@@ -902,6 +902,11 @@ async function ctGuardaAs(){
 async function ctBorrarAs(id){if(!confirm("¿Borrar este asiento?"))return;await ctDel("conta_asientos",id);}
 
 // ---------- Mayor ----------
+// Lápiz para editar el asiento desde el mayor: si viene de una factura abre la factura; si no, el asiento
+function ctBtnEditAs(a){
+  return a.origen==="factura"&&a.fid?"<button class='icon-btn' title='Abrir la factura' onclick=\"event.stopPropagation();editF('"+a.fid+"')\">&#9998;</button>"
+    :"<button class='icon-btn' title='Editar el asiento "+a.num+"' onclick=\"event.stopPropagation();ctEditAs('"+a.id+"')\">&#9998;</button>";
+}
 function ctMayor(box,cid){
   const P=ctPeriodo();const as=ctAsientos(cid,P.anio);
   const ctas=new Set();as.forEach(a=>(a.lineas||[]).forEach(l=>ctas.add(l.c)));
@@ -923,12 +928,13 @@ function ctMayor(box,cid){
   as.forEach(a=>(a.lineas||[]).forEach(l=>{if(l.c!==sel)return;
     if(a.fecha<P.desde){saldo+=(l.d||0)-(l.h||0);return;}
     if(a.fecha>P.hasta)return;
-    if(!rows&&saldo)rows+="<tr style='color:var(--gray-400);'><td></td><td></td><td>Saldo anterior</td><td></td><td></td><td class='td-r'>"+ctE(saldo)+"</td></tr>";
+    if(!rows&&saldo)rows+="<tr style='color:var(--gray-400);'><td></td><td></td><td>Saldo anterior</td><td></td><td></td><td class='td-r'>"+ctE(saldo)+"</td><td></td></tr>";
     saldo+=(l.d||0)-(l.h||0);td+=l.d||0;th+=l.h||0;
-    rows+="<tr><td>"+a.num+"</td><td>"+ctFD(a.fecha)+"</td><td>"+ctEsc(a.concepto||"")+"</td><td class='td-r'>"+ctE(l.d)+"</td><td class='td-r'>"+ctE(l.h)+"</td><td class='td-r' style='font-weight:500;'>"+ctE(saldo)+"</td></tr>";}));
-  box.innerHTML=html+"<div class='tabla-wrapper'><table><thead><tr><th>Asiento</th><th>Fecha</th><th>Concepto</th><th class='td-r'>Debe</th><th class='td-r'>Haber</th><th class='td-r'>Saldo</th></tr></thead><tbody>"+
-    (rows||"<tr><td colspan='6'><div class='empty'><div>Sin movimientos en "+P.txt+".</div></div></td></tr>")+
-    "<tr style='font-weight:600;background:var(--gray-50);'><td></td><td></td><td>Totales del periodo</td><td class='td-r'>"+ctE(td)+"</td><td class='td-r'>"+ctE(th)+"</td><td class='td-r'>"+ctE(saldo)+"</td></tr></tbody></table></div>";
+    const contra=(a.lineas||[]).filter(x=>x.c!==sel).map(x=>x.c).filter((v,i,A)=>A.indexOf(v)===i);
+    rows+="<tr><td>"+a.num+"</td><td>"+ctFD(a.fecha)+"</td><td>"+ctEsc(a.concepto||"")+(contra.length?" <span style='font-size:10px;color:var(--gray-400);font-family:monospace;' title='Contrapartida'>↔ "+contra.slice(0,3).join(", ")+(contra.length>3?"…":"")+"</span>":"")+"</td><td class='td-r'>"+ctE(l.d)+"</td><td class='td-r'>"+ctE(l.h)+"</td><td class='td-r' style='font-weight:500;'>"+ctE(saldo)+"</td><td style='white-space:nowrap;'>"+ctBtnEditAs(a)+"</td></tr>";}));
+  box.innerHTML=html+"<div class='tabla-wrapper'><table><thead><tr><th>Asiento</th><th>Fecha</th><th>Concepto</th><th class='td-r'>Debe</th><th class='td-r'>Haber</th><th class='td-r'>Saldo</th><th></th></tr></thead><tbody>"+
+    (rows||"<tr><td colspan='7'><div class='empty'><div>Sin movimientos en "+P.txt+".</div></div></td></tr>")+
+    "<tr style='font-weight:600;background:var(--gray-50);'><td></td><td></td><td>Totales del periodo</td><td class='td-r'>"+ctE(td)+"</td><td class='td-r'>"+ctE(th)+"</td><td class='td-r'>"+ctE(saldo)+"</td><td></td></tr></tbody></table></div>";
 }
 function ctMayNorm(t){return String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();}
 function ctMayFiltra(q){
