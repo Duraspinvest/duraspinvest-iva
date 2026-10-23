@@ -179,7 +179,7 @@ body.visor-open .modal-overlay.open{display:flex;}
   <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
     <div class="filtros" style="margin-bottom:0;">
       <div class="filtro-group"><span class="filtro-label">Cliente</span>
-        <select class="fi" id="fFC" onchange="renderF()" style="min-width:180px;"><option value="">Todos</option></select></div>
+        <select class="fi" id="fFC" onchange="renderF()" style="min-width:180px;"><option value="">Elige cliente…</option></select></div>
       <div class="filtro-group"><span class="filtro-label">Tipo</span>
         <select class="fi" id="fFT" onchange="renderF()"><option value="">Todos</option><option value="IVR">Emitidas</option><option value="IVS">Recibidas</option></select></div>
       <div class="filtro-group"><span class="filtro-label">Ano</span>
@@ -1538,6 +1538,9 @@ function renderF(){
   const fa=document.getElementById("fFA").value,fq=document.getElementById("fFQ").value;
   const fb=_fNorm((document.getElementById("fFB")||{}).value||"").trim();
   const fo=(document.getElementById("fFO")||{}).value||"";
+  // Privacidad: no se enseña ninguna factura hasta elegir un cliente (por si hay alguien delante)
+  if(!fc){_fOrdMarcas();window.fVista=[];renderResumenF([]);
+    tb.innerHTML="<tr><td colspan='14'><div class='empty'><div class='empty-icon'>&#128274;</div><div>Elige un cliente en el filtro de arriba para ver sus facturas.</div></div></td></tr>";return;}
   let fs=(window.WF||[]).filter(f=>{
     if(fc&&f.clienteDespachoId!==fc)return false;
     if(ft&&f.tipo!==ft)return false;
