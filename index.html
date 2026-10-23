@@ -165,6 +165,7 @@ body.visor-open .modal-overlay.open{display:flex;}
 </header>
 <nav>
   <button class="nav-btn active" onclick="showSection('facturas',this)">Facturas</button>
+  <button class="nav-btn" onclick="showSection('facturacion',this);fxInit()">&#129534; Facturación</button>
   <button class="nav-btn" onclick="showSection('cuentas',this)">Cuentas contables</button>
   <button class="nav-btn" onclick="showSection('exportar',this)">Exportar a Delsol</button>
   <button class="nav-btn" onclick="showSection('fiscal',this)">&#128203; Fiscal / Liquidacion</button>
@@ -212,6 +213,19 @@ body.visor-open .modal-overlay.open{display:flex;}
 </div>
 
 <!-- CUENTAS -->
+<div id="facturacion" class="section">
+  <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+    <div style="font-weight:600;color:var(--navy);">Facturas que haces en nombre de tus clientes</div>
+    <select class="fi2" id="fxEmi" style="max-width:340px;" onchange="fxCambiaEmi(this.value)"><option value="">Elige el cliente que factura…</option></select>
+  </div>
+  <div id="fxCuerpo"></div>
+</div>
+<div class="modal-overlay" id="fxModal" onclick="closeMO(event,'fxModal')">
+  <div class="modal" id="fxModalIn" style="max-width:900px;"><div class="modal-title" id="fxModalT"></div><div id="fxModalC"></div><div class="ma" id="fxModalB"></div></div>
+</div>
+<div class="modal-overlay" id="fxModal2" onclick="closeMO(event,'fxModal2')">
+  <div class="modal" style="max-width:560px;"><div class="modal-title" id="fxModal2T"></div><div id="fxModal2C"></div><div class="ma" id="fxModal2B"></div></div>
+</div>
 <div id="cuentas" class="section">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
     <div><div style="font-size:16px;font-weight:600;color:var(--navy);">Cuentas contables</div>
@@ -581,6 +595,12 @@ body.visor-open .modal-overlay.open{display:flex;}
     u3=onSnapshot(collection(db,"iva_cuentas"),s=>{
       window.WCC=s.docs.map(d=>({...d.data(),id:d.id}));renderC();
     });
+    // Facturación en nombre de los clientes
+    const _fxAct=()=>{const sec=document.getElementById("facturacion");if(!(sec&&sec.classList.contains("active")))return;
+      if(document.getElementById("fxModal").classList.contains("open")||document.getElementById("fxModal2").classList.contains("open"))return;   // no redibujar con el editor abierto
+      clearTimeout(window._fxT);window._fxT=setTimeout(()=>{if(typeof fxInit==="function")fxInit();},120);};
+    onSnapshot(collection(db,"fact_emisores"),s=>{const m={};s.docs.forEach(d=>{m[d.id]={...d.data(),id:d.id};});window.WFE=m;_fxAct();});
+    onSnapshot(collection(db,"fact_emitidas"),s=>{window.WFX=s.docs.map(d=>({...d.data(),id:d.id}));_fxAct();});
     onSnapshot(collection(db,"epigrafes"),s=>{
       window.WEP=s.docs.map(d=>({...d.data(),id:d.id}));
       if(typeof renderEpis==="function") renderEpis();
@@ -693,10 +713,12 @@ function emSync(){
   window.WFI=map("iva_fiscal");window.WIN=map("iva_ingresos");window.WDOC=map("iva_docs");
   window.WAS=arr("conta_asientos");window.WREG=arr("conta_reglas");window.WINM=arr("conta_inmov");window.WCP=map("conta_plan");
   window.portalDocs=arr("portal_documentos");
+  window.WFE=map("fact_emisores");window.WFX=arr("fact_emitidas");
   const call=f=>{try{if(typeof window[f]==="function")window[f]();}catch(e){console.warn(f,e);}};
   ["poblarSel","renderF","renderSt","renderC","renderEpis"].forEach(call);
   if(window.ctRefresh)try{window.ctRefresh();}catch(e){}
   const dsec=document.getElementById("docs");if(dsec&&dsec.classList.contains("active"))call("renderDocs");
+  const xsec=document.getElementById("facturacion");if(xsec&&xsec.classList.contains("active"))call("fxInit");
   const csec=document.getElementById("contab");if(csec&&csec.classList.contains("active")&&typeof ctRender==="function")try{ctInit();ctRender();}catch(e){}
   emBanner();
 }
@@ -4682,6 +4704,432 @@ document.addEventListener("click",e=>{if(!e.target.closest(".ac-wrap"))document.
   const go=()=>{scan(document);new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{if(n.nodeType!==1)return;if(n.matches&&n.matches('input[type="date"]'))fix(n);else scan(n);}))).observe(document.body,{childList:true,subtree:true});};
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",go);else go();
 })();
+</script>
+<script>
+// =====================================================================================
+// ===== FACTURACIÓN · facturas que el despacho emite en nombre de sus clientes
+// ===== fact_emisores/{cid}: datos del cliente que factura (NIF, domicilio, IBAN, logo, series)
+// ===== fact_emitidas/{id}: cada factura (borrador o emitida). Al emitir se apunta sola en
+// ===== iva_facturas (libro de emitidas) con id "fx_<id>". Una emitida no se toca: se rectifica.
+// ===== Los destinatarios son las fichas de clientes (iva_cuentas, tipo cliente) de ese emisor.
+// =====================================================================================
+window.WFE = window.WFE || {}; window.WFX = window.WFX || [];
+const FX = { emi: "", anio: String(new Date().getFullYear()), ed: null, vista: "facturas" };
+const fxR2 = (n) => { n = +n || 0; return Math.sign(n) * Math.round(Math.abs(n) * 100 + 1e-9) / 100; };   // redondeo simétrico (las rectificativas cuadran con la original)
+const fxH = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fxHoy = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+const fxF = (s) => (s ? String(s).split("-").reverse().join("/") : "");
+const fxMil = (n, d) => { n = +n || 0; const neg = n < 0; let [e, dec] = Math.abs(n).toFixed(d == null ? 2 : d).split("."); e = e.replace(/\B(?=(\d{3})+(?!\d))/g, "."); return (neg ? "-" : "") + e + (dec ? "," + dec : ""); };
+const fxE = (n) => fxMil(n) + " €";
+const fxNum = (v) => { const s = String(v == null ? "" : v).trim().replace(/\s/g, ""); if (!s) return 0; return parseFloat(/,/.test(s) ? s.replace(/\./g, "").replace(",", ".") : s) || 0; };
+const FX_IVAS = [["21", "21 %"], ["10", "10 %"], ["4", "4 %"], ["0", "0 %"], ["E", "Exento / no sujeto"]];
+const FX_PAGO = ["Transferencia bancaria", "Domiciliación bancaria", "Contado", "Tarjeta", "Bizum"];
+
+function fxCalc(f) {
+  const L = (f.lineas || []).filter((l) => String(l.d || "").trim() || fxNum(l.p)).map((l) => {
+    const c = l.c === "" || l.c == null ? 1 : fxNum(l.c);
+    return { ...l, cN: c, pN: fxNum(l.p), dN: fxNum(l.dto), imp: fxR2(c * fxNum(l.p) * (1 - fxNum(l.dto) / 100)) };
+  });
+  const T = {}; L.forEach((l) => { const k = String(l.iva == null ? "21" : l.iva); T[k] = fxR2((T[k] || 0) + l.imp); });
+  const tipos = Object.keys(T).map((k) => ({ pct: k, base: T[k], cuota: k === "E" ? 0 : fxR2(T[k] * (+k) / 100) }))
+    .sort((a, b) => (b.pct === "E" ? -1 : +b.pct) - (a.pct === "E" ? -1 : +a.pct));
+  const base = fxR2(L.reduce((s, l) => s + l.imp, 0)), cuota = fxR2(tipos.reduce((s, t) => s + t.cuota, 0));
+  const ret = fxR2(base * fxNum(f.retPct) / 100);
+  return { L, tipos, base, cuota, ret, total: fxR2(base + cuota - ret) };
+}
+const fxEmisor = (cid) => window.WFE[cid] || null;
+const fxCliNom = (cid) => ((window.WC || []).find((c) => c.id === cid) || {}).nombre || "";
+const fxFichas = (cid) => (window.WCC || []).filter((c) => c.clienteDespachoId === cid && ccEsCli(c.tipo) && ccNif(c.nif))
+  .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
+const fxDeEmisor = (cid) => (window.WFX || []).filter((f) => f.emisor === cid);
+function fxSerie(e, tipo) { const s = (e && e.series) || {}; return String((tipo === "R" ? s.R : s.F) || (tipo === "R" ? "R" : "F")).trim(); }
+function fxSiguiente(cid, tipo, anio) {
+  const e = fxEmisor(cid) || {}, ser = fxSerie(e, tipo);
+  const usados = fxDeEmisor(cid).filter((f) => f.estado === "emitida" && f.serie === ser && String(f.fecha).slice(0, 4) === String(anio)).map((f) => +f.correlativo || 0);
+  const ini = +(((e.inicio || {})[ser + anio]) || 1);
+  return Math.max(ini, (usados.length ? Math.max(...usados) : 0) + 1);
+}
+const fxNumero = (ser, anio, n) => ser + anio + "-" + String(n).padStart(4, "0");
+
+// ---------- Pantalla principal ----------
+window.fxInit = function () {
+  const s = document.getElementById("fxEmi"); if (!s) return;
+  const v = FX.emi || s.value;
+  s.innerHTML = "<option value=''>Elige el cliente que factura…</option>" + (window.WC || []).slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"))
+    .map((c) => "<option value='" + fxH(c.id) + "'>" + (window.WFE[c.id] ? "🧾 " : "") + fxH(c.nombre) + "</option>").join("");
+  s.value = v; FX.emi = s.value;
+  fxRender();
+};
+window.fxCambiaEmi = function (v) { FX.emi = v; fxRender(); };
+window.fxVista = function (v) { FX.vista = v; fxRender(); };
+function fxRender() {
+  const box = document.getElementById("fxCuerpo"); if (!box) return;
+  const cid = FX.emi;
+  if (!cid) { box.innerHTML = "<div class='empty'>🔒 Elige arriba el cliente para el que vas a hacer facturas.</div>"; return; }
+  const e = fxEmisor(cid);
+  if (!e) { box.innerHTML = "<div class='card'><div style='font-size:14px;margin-bottom:10px;'><b>" + fxH(fxCliNom(cid)) + "</b> todavía no tiene configurada la facturación.</div><button class='btn btn-primary' onclick='fxConfig()'>Configurar sus datos de facturación</button></div>"; return; }
+  const tabs = [["facturas", "Facturas"], ["clientes", "Sus clientes (" + fxFichas(cid).length + ")"]];
+  let h = "<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;'>" +
+    tabs.map(([k, l]) => "<button class='btn " + (FX.vista === k ? "btn-primary" : "btn-secondary") + "' onclick=\"fxVista('" + k + "')\">" + l + "</button>").join("") +
+    "<span style='flex:1'></span><button class='btn btn-secondary' onclick='fxConfig()'>⚙ Datos del emisor</button>" +
+    "<button class='btn btn-primary' onclick='fxNueva()'>+ Nueva factura</button></div>";
+  if (FX.vista === "clientes") h += fxHtmlClientes(cid); else h += fxHtmlFacturas(cid);
+  box.innerHTML = h;
+}
+function fxHtmlFacturas(cid) {
+  const anios = [...new Set(fxDeEmisor(cid).map((f) => String(f.fecha || "").slice(0, 4)).concat([FX.anio]))].filter(Boolean).sort().reverse();
+  const L = fxDeEmisor(cid).filter((f) => String(f.fecha || "").slice(0, 4) === FX.anio)
+    .sort((a, b) => (a.estado === "borrador" ? -1 : 0) - (b.estado === "borrador" ? -1 : 0) || String(b.numero || "").localeCompare(String(a.numero || "")) || String(b.creado).localeCompare(String(a.creado)));
+  const tot = L.filter((f) => f.estado === "emitida").reduce((s, f) => { const c = fxCalc(f); s.b += c.base; s.t += c.total; return s; }, { b: 0, t: 0 });
+  let h = "<div style='display:flex;gap:10px;align-items:center;margin-bottom:8px;font-size:13px;'>Año <select class='fi2' style='width:auto;' onchange='FXanio(this.value)'>" +
+    anios.map((a) => "<option" + (a === FX.anio ? " selected" : "") + ">" + a + "</option>").join("") + "</select>" +
+    "<span style='color:var(--gray-600);'>" + L.filter((f) => f.estado === "emitida").length + " emitidas · base " + fxE(tot.b) + " · total " + fxE(tot.t) + "</span></div>";
+  if (!L.length) return h + "<div class='empty'>No hay facturas de " + FX.anio + ". Pulsa «+ Nueva factura».</div>";
+  h += "<div class='card' style='padding:0;overflow:auto;'><table><thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th style='text-align:right;'>Base</th><th style='text-align:right;'>IVA</th><th style='text-align:right;'>Total</th><th>Estado</th><th></th></tr></thead><tbody>" +
+    L.map((f) => {
+      const c = fxCalc(f), rect = f.tipo === "R";
+      const est = f.estado === "borrador" ? "<span class='badge' style='background:#FEF3C7;color:#92400E;'>Borrador</span>" :
+        "<span class='badge' style='background:#D1FAE5;color:#065F46;'>Emitida</span>" + (f.rectificadaPor ? " <span class='badge' style='background:#FEE2E2;color:#991B1B;'>rectificada</span>" : "") + (rect ? " <span class='badge' style='background:#E0E7FF;color:#3730A3;'>rectificativa</span>" : "");
+      const b = (t, fn, tit) => "<button class='btn btn-secondary' style='padding:4px 8px;font-size:12px;' title='" + tit + "' onclick=\"" + fn + "('" + f.id + "')\">" + t + "</button> ";
+      return "<tr ondblclick=\"fxAbrir('" + f.id + "')\" style='cursor:pointer;'><td><b>" + fxH(f.numero || "—") + "</b></td><td>" + fxF(f.fecha) + "</td><td>" + fxH((f.receptor || {}).nombre || "") + "</td>" +
+        "<td class='td-r'>" + fxE(c.base) + "</td><td class='td-r'>" + fxE(c.cuota) + "</td><td class='td-r' style='font-weight:600;'>" + fxE(c.total) + "</td><td>" + est + "</td><td style='white-space:nowrap;'>" +
+        b("✎", "fxAbrir", f.estado === "borrador" ? "Editar" : "Ver") + b("PDF", "fxPdf", "Descargar el PDF") + b("⧉", "fxDuplicar", "Nueva factura igual a esta") +
+        (f.estado === "emitida" && !rect && !f.rectificadaPor ? b("Rectificar", "fxRectificar", "Hacer una factura rectificativa") : "") +
+        (f.estado === "borrador" ? b("✕", "fxBorrar", "Borrar el borrador") : "") + "</td></tr>";
+    }).join("") + "</tbody></table></div>";
+  return h;
+}
+window.FXanio = (a) => { FX.anio = a; fxRender(); };
+
+// ---------- Datos del emisor ----------
+window.fxConfig = function () {
+  const cid = FX.emi; if (!cid) return;
+  const cl = (window.WC || []).find((c) => c.id === cid) || {};
+  const e = fxEmisor(cid) || { nombre: cl.nombre || "", nif: cl.nif || cl.cif || "", series: { F: "F", R: "R" }, formaPago: "Transferencia bancaria", cuentaVentas: "70000000" };
+  const anio = new Date().getFullYear(), ser = fxSerie(e, "F");
+  const inp = (id, lab, v, extra) => "<div class='fg'" + (extra || "") + "><label class='fl'>" + lab + "</label><input class='fi2' id='" + id + "' value='" + fxH(v || "") + "'></div>";
+  document.getElementById("fxModalT").textContent = "Datos de facturación de " + fxCliNom(cid);
+  document.getElementById("fxModalC").innerHTML =
+    "<div style='display:grid;grid-template-columns:1fr 1fr;gap:10px;'>" +
+    inp("fxeNom", "Nombre o razón social", e.nombre, " style='grid-column:1/3'") + inp("fxeNif", "NIF", e.nif) + inp("fxeNC", "Nombre comercial (opcional)", e.comercial) +
+    inp("fxeDom", "Domicilio", e.domicilio, " style='grid-column:1/3'") + inp("fxeCP", "Código postal", e.cp) + inp("fxePob", "Población", e.poblacion) +
+    inp("fxePrv", "Provincia", e.provincia) + inp("fxeTel", "Teléfono", e.tel) + inp("fxeMail", "Email", e.email) + inp("fxeIban", "IBAN para cobrar", e.iban) +
+    "<div class='fg'><label class='fl'>Forma de pago habitual</label><select class='fi2' id='fxePago'>" + FX_PAGO.map((p) => "<option" + (p === e.formaPago ? " selected" : "") + ">" + p + "</option>").join("") + "</select></div>" +
+    inp("fxeVto", "Vencimiento (días, opcional)", e.diasVto) +
+    inp("fxeSF", "Serie facturas", fxSerie(e, "F")) + inp("fxeSR", "Serie rectificativas", fxSerie(e, "R")) +
+    inp("fxeIni", "Primer número de " + anio + " (si ya ha hecho facturas este año fuera de la app)", ((e.inicio || {})[ser + anio]) || "", " style='grid-column:1/3'") +
+    inp("fxeCta", "Cuenta de ingresos para contabilidad", e.cuentaVentas || "70000000") +
+    "<div class='fg'><label class='fl'>Retención IRPF habitual</label><select class='fi2' id='fxeRet'>" + ["", "7", "15", "19"].map((r) => "<option value='" + r + "'" + (String(e.retPct || "") === r ? " selected" : "") + ">" + (r ? r + " %" : "Sin retención") + "</option>").join("") + "</select></div>" +
+    "<div class='fg' style='grid-column:1/3'><label class='fl'>Texto al pie (opcional: Registro Mercantil, etc.)</label><textarea class='fi2' id='fxePie' rows='2'>" + fxH(e.pie || "") + "</textarea></div>" +
+    "<div class='fg' style='grid-column:1/3'><label class='fl'>Logo (opcional)</label><div style='display:flex;gap:10px;align-items:center;'>" +
+    "<img id='fxeLogoV' src='" + (e.logo || "") + "' style='max-height:50px;max-width:200px;" + (e.logo ? "" : "display:none;") + "'>" +
+    "<input type='file' accept='image/png,image/jpeg' onchange='fxLogo(this)'> <button class='btn btn-secondary' onclick=\"FX._logo='';document.getElementById('fxeLogoV').style.display='none'\">Quitar</button></div></div></div>";
+  FX._logo = e.logo || "";
+  document.getElementById("fxModalB").innerHTML = "<button class='btn btn-secondary' onclick=\"closeM('fxModal')\">Cancelar</button><button class='btn btn-primary' onclick='fxGuardaConfig()'>Guardar</button>";
+  document.getElementById("fxModalIn").style.maxWidth = "640px";
+  document.getElementById("fxModal").classList.add("open");
+};
+window.fxLogo = function (inp) {
+  const f = inp.files && inp.files[0]; if (!f) return;
+  const img = new Image(), rd = new FileReader();
+  rd.onload = () => { img.onload = () => { const k = Math.min(1, 600 / img.width, 240 / img.height), c = document.createElement("canvas");
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+    FX._logo = c.toDataURL("image/jpeg", 0.9); const v = document.getElementById("fxeLogoV"); v.src = FX._logo; v.style.display = ""; }; img.src = rd.result; };
+  rd.readAsDataURL(f);
+};
+window.fxGuardaConfig = async function () {
+  const cid = FX.emi, g = (id) => (document.getElementById(id).value || "").trim();
+  if (!g("fxeNom") || !g("fxeNif") || !g("fxeDom")) { alert("Nombre, NIF y domicilio son obligatorios en una factura."); return; }
+  if (nifOK(g("fxeNif")) === false && !confirm("El NIF «" + g("fxeNif") + "» no parece válido. ¿Guardar igualmente?")) return;
+  const prev = fxEmisor(cid) || {}, anio = new Date().getFullYear(), ser = g("fxeSF") || "F";
+  const inicio = { ...(prev.inicio || {}) }; if (g("fxeIni")) inicio[ser + anio] = parseInt(g("fxeIni"), 10) || 1; else delete inicio[ser + anio];
+  await fbS("fact_emisores", cid, { ...prev, id: cid, clienteDespachoId: cid, nombre: g("fxeNom"), nif: g("fxeNif").toUpperCase(), comercial: g("fxeNC"), domicilio: g("fxeDom"), cp: g("fxeCP"),
+    poblacion: g("fxePob"), provincia: g("fxePrv"), tel: g("fxeTel"), email: g("fxeMail"), iban: g("fxeIban").toUpperCase(), formaPago: g("fxePago"), diasVto: g("fxeVto"),
+    series: { F: ser, R: g("fxeSR") || "R" }, inicio, cuentaVentas: g("fxeCta") || "70000000", retPct: g("fxeRet"), pie: g("fxePie"), logo: FX._logo || "",
+    modificado: new Date().toISOString(), creado: prev.creado || new Date().toISOString() });
+  closeM("fxModal"); showToast("✓ Datos del emisor guardados");
+};
+
+// ---------- Clientes del emisor (fichas 430 por NIF) ----------
+function fxHtmlClientes(cid) {
+  const L = fxFichas(cid);
+  let h = "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'><div style='font-size:12px;color:var(--gray-600);'>Son las mismas fichas de clientes (430) de «Cuentas contables». Para facturar, cada uno necesita NIF y domicilio.</div><button class='btn btn-primary' onclick=\"fxFicha('')\">+ Nuevo cliente</button></div>";
+  if (!L.length) return h + "<div class='empty'>Todavía no tiene clientes con NIF.</div>";
+  return h + "<div class='card' style='padding:0;overflow:auto;'><table><thead><tr><th>Cliente</th><th>NIF</th><th>Domicilio</th><th>Cuenta</th><th></th></tr></thead><tbody>" +
+    L.map((c) => "<tr ondblclick=\"fxFicha('" + c.id + "')\" style='cursor:pointer;'><td><b>" + fxH(c.nombre) + "</b></td><td>" + fxH(c.nif) + "</td><td style='font-size:11px;'>" +
+      (c.domicilio ? fxH([c.domicilio, [c.cp, c.poblacion].filter(Boolean).join(" ")].filter(Boolean).join(", ")) : "<span style='color:#B45309;'>falta el domicilio</span>") +
+      "</td><td style='font-family:monospace;'>" + fxH(c.cuenta || "") + "</td><td><button class='btn btn-secondary' style='padding:4px 8px;font-size:12px;' onclick=\"fxFicha('" + c.id + "')\">✎</button></td></tr>").join("") +
+    "</tbody></table></div>";
+}
+window.fxFicha = function (id, volver) {
+  const cid = FX.emi, c = (window.WCC || []).find((x) => x.id === id) || {};
+  const inp = (i, lab, v, st) => "<div class='fg'" + (st || "") + "><label class='fl'>" + lab + "</label><input class='fi2' id='" + i + "' value='" + fxH(v || "") + "'></div>";
+  document.getElementById("fxModal2T").textContent = id ? "Cliente de " + fxCliNom(cid) : "Nuevo cliente de " + fxCliNom(cid);
+  document.getElementById("fxModal2C").innerHTML = "<input type='hidden' id='fxcId' value='" + fxH(id || "") + "'><div style='display:grid;grid-template-columns:1fr 1fr;gap:10px;'>" +
+    inp("fxcNom", "Nombre o razón social", c.nombre, " style='grid-column:1/3'") + inp("fxcNif", "NIF / NIF-IVA", c.nif) + inp("fxcMail", "Email", c.email) +
+    inp("fxcDom", "Domicilio", c.domicilio, " style='grid-column:1/3'") + inp("fxcCP", "Código postal", c.cp) + inp("fxcPob", "Población", c.poblacion) +
+    inp("fxcPrv", "Provincia", c.provincia) + inp("fxcPais", "País", c.pais || "España") + "</div>";
+  FX._volver = volver || "";
+  document.getElementById("fxModal2B").innerHTML = "<button class='btn btn-secondary' onclick=\"closeM('fxModal2')\">Cancelar</button><button class='btn btn-primary' onclick='fxGuardaFicha()'>Guardar</button>";
+  document.getElementById("fxModal2").classList.add("open");
+};
+window.fxGuardaFicha = async function () {
+  const cid = FX.emi, g = (i) => (document.getElementById(i).value || "").trim();
+  const nom = g("fxcNom"), nif = g("fxcNif").toUpperCase();
+  if (!nom || !nif) { alert("Nombre y NIF son obligatorios."); return; }
+  if (nifOK(nif) === false && !confirm("El NIF «" + nif + "» no parece válido. ¿Guardar igualmente?")) return;
+  let id = g("fxcId");
+  const ex = id ? (window.WCC || []).find((x) => x.id === id) : ccBuscar(cid, nif, nom, true);
+  const datos = { nombre: nom, nif, email: g("fxcMail"), domicilio: g("fxcDom"), cp: g("fxcCP"), poblacion: g("fxcPob"), provincia: g("fxcPrv"), pais: g("fxcPais") || "España" };
+  if (ex) { id = ex.id; await window.fsSetDoc(window.fsDoc(window.db, "iva_cuentas", String(id)), datos, { merge: true }); }
+  else {
+    id = "cc" + Date.now(); const e = fxEmisor(cid) || {};
+    await fbS("iva_cuentas", id, { id, clienteDespachoId: cid, clienteDespachoNombre: fxCliNom(cid), ...datos, cuenta: ccSiguiente(cid, "430"), tipo: "cliente",
+      contrapartida: e.cuentaVentas || "70000000", retPct: "", m347: "0", creado: new Date().toISOString(), auto: true });
+  }
+  closeM("fxModal2");
+  if (FX._volver === "factura" && FX.ed) { FX.ed.receptorId = id; setTimeout(fxPintaEditor, 150); }
+  else setTimeout(fxRender, 150);
+};
+
+// ---------- Editor de factura ----------
+function fxVacia(cid) {
+  const e = fxEmisor(cid) || {};
+  return { id: "", emisor: cid, tipo: "F", estado: "borrador", fecha: fxHoy(), fechaOp: "", receptorId: "", lineas: [{ d: "", c: "1", p: "", dto: "", iva: "21" }],
+    retPct: e.retPct || "", formaPago: e.formaPago || "Transferencia bancaria", vto: "", obs: "", mencion: "" };
+}
+window.fxNueva = function () { if (!fxEmisor(FX.emi)) return fxConfig(); FX.ed = fxVacia(FX.emi); fxPintaEditor(); };
+window.fxAbrir = function (id) { const f = (window.WFX || []).find((x) => x.id === id); if (!f) return; FX.ed = JSON.parse(JSON.stringify(f)); fxPintaEditor(); };
+window.fxDuplicar = function (id) {
+  const f = (window.WFX || []).find((x) => x.id === id); if (!f) return;
+  FX.ed = { ...fxVacia(f.emisor), receptorId: f.receptorId, lineas: JSON.parse(JSON.stringify(f.lineas || [])).map((l) => ({ ...l, c: f.tipo === "R" ? String(Math.abs(fxNum(l.c))) : l.c })),
+    retPct: f.retPct || "", formaPago: f.formaPago, obs: f.obs || "", mencion: f.mencion || "" };
+  fxPintaEditor();
+};
+window.fxRectificar = function (id) {
+  const f = (window.WFX || []).find((x) => x.id === id); if (!f) return;
+  FX.ed = { ...fxVacia(f.emisor), tipo: "R", rectifica: { id: f.id, numero: f.numero, fecha: f.fecha }, motivo: "", receptorId: f.receptorId,
+    lineas: JSON.parse(JSON.stringify(f.lineas || [])).map((l) => ({ ...l, c: String(-(l.c === "" || l.c == null ? 1 : fxNum(l.c))) })),
+    retPct: f.retPct || "", formaPago: f.formaPago, mencion: f.mencion || "" };
+  fxPintaEditor();
+};
+function fxLeeEditor() {
+  const f = FX.ed; if (!f) return;
+  const g = (i) => { const el = document.getElementById(i); return el ? el.value : undefined; };
+  ["fecha", "fechaOp", "receptorId", "retPct", "formaPago", "vto", "obs", "mencion", "motivo"].forEach((k) => { const v = g("fxd_" + k); if (v !== undefined) f[k] = v; });
+  f.lineas = (f.lineas || []).map((l, i) => ({ d: g("fxl_d" + i) ?? l.d, c: g("fxl_c" + i) ?? l.c, p: g("fxl_p" + i) ?? l.p, dto: g("fxl_dto" + i) ?? l.dto, iva: g("fxl_iva" + i) ?? l.iva }));
+}
+window.fxLinea = function (accion, i) {
+  fxLeeEditor(); const L = FX.ed.lineas;
+  if (accion === "add") L.push({ d: "", c: "1", p: "", dto: "", iva: (L[L.length - 1] || {}).iva || "21" });
+  if (accion === "del") { L.splice(i, 1); if (!L.length) L.push({ d: "", c: "1", p: "", dto: "", iva: "21" }); }
+  fxPintaEditor();
+};
+window.fxRecalc = function () {
+  fxLeeEditor(); const c = fxCalc(FX.ed);
+  (FX.ed.lineas || []).forEach((l, i) => { const el = document.getElementById("fxl_imp" + i); if (el) { const x = fxR2((l.c === "" ? 1 : fxNum(l.c)) * fxNum(l.p) * (1 - fxNum(l.dto) / 100)); el.textContent = fxE(x); } });
+  const t = document.getElementById("fxTot"); if (t) t.innerHTML = fxHtmlTotales(c);
+};
+function fxHtmlTotales(c) {
+  return "<table style='width:auto;margin-left:auto;font-size:13px;'>" + c.tipos.map((t) => "<tr><td style='padding:2px 10px;'>Base " + (t.pct === "E" ? "exenta" : t.pct + " %") + "</td><td style='text-align:right;padding:2px 10px;'>" + fxE(t.base) + "</td><td style='padding:2px 10px;color:var(--gray-600);'>" + (t.pct === "E" ? "" : "IVA " + fxE(t.cuota)) + "</td></tr>").join("") +
+    (c.ret ? "<tr><td style='padding:2px 10px;'>Retención IRPF</td><td style='text-align:right;padding:2px 10px;'>− " + fxE(c.ret) + "</td><td></td></tr>" : "") +
+    "<tr><td style='padding:4px 10px;font-weight:700;'>TOTAL</td><td style='text-align:right;padding:4px 10px;font-weight:700;font-size:15px;'>" + fxE(c.total) + "</td><td></td></tr></table>";
+}
+function fxPintaEditor() {
+  const f = FX.ed, cid = f.emisor, sol = f.estado === "emitida";
+  const dis = sol ? " disabled" : "";
+  const fichas = fxFichas(cid), r = fichas.find((x) => x.id === f.receptorId);
+  const iv = (i, v) => "<select class='fi2' id='fxl_iva" + i + "' onchange='fxRecalc()'" + dis + ">" + FX_IVAS.map(([k, l]) => "<option value='" + k + "'" + (String(v) === k ? " selected" : "") + ">" + l + "</option>").join("") + "</select>";
+  const tit = (sol ? "Factura " + f.numero : (f.tipo === "R" ? "Nueva factura rectificativa" : "Nueva factura")) + " · " + fxH((fxEmisor(cid) || {}).nombre || fxCliNom(cid));
+  document.getElementById("fxModalT").innerHTML = tit;
+  const c = fxCalc(f);
+  document.getElementById("fxModalC").innerHTML =
+    (sol ? "<div style='font-size:12px;background:#ECFDF5;color:#065F46;padding:8px 10px;border-radius:8px;margin-bottom:10px;'>Emitida: no se puede modificar. Si hay un error, haz una factura rectificativa.</div>" : "") +
+    (f.tipo === "R" && f.rectifica ? "<div style='font-size:12px;background:#EEF2FF;color:#3730A3;padding:8px 10px;border-radius:8px;margin-bottom:10px;'>Rectifica la factura <b>" + fxH(f.rectifica.numero) + "</b> del " + fxF(f.rectifica.fecha) + ". Para anularla entera deja las cantidades en negativo; para corregir solo una parte, deja la diferencia.</div>" +
+      "<div class='fg' style='margin-bottom:10px;'><label class='fl'>Motivo de la rectificación</label><input class='fi2' id='fxd_motivo' value='" + fxH(f.motivo || "") + "' placeholder='p. ej. error en el precio, devolución, descuento posterior…'" + dis + "></div>" : "") +
+    "<div style='display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;align-items:end;'>" +
+    "<div class='fg'><label class='fl'>Cliente</label><div style='display:flex;gap:6px;'><select class='fi2' id='fxd_receptorId'" + dis + "><option value=''>Elige…</option>" +
+      fichas.map((x) => "<option value='" + x.id + "'" + (x.id === f.receptorId ? " selected" : "") + ">" + fxH(x.nombre) + " · " + fxH(x.nif) + "</option>").join("") + "</select>" +
+      (sol ? "" : "<button class='btn btn-secondary' title='Nuevo cliente' onclick=\"fxLeeEditor();fxFicha('','factura')\">+</button>") + "</div></div>" +
+    "<div class='fg'><label class='fl'>Fecha</label><input type='date' class='fi2' id='fxd_fecha' value='" + fxH(f.fecha) + "'" + dis + "></div>" +
+    "<div class='fg'><label class='fl'>Fecha operación (si es otra)</label><input type='date' class='fi2' id='fxd_fechaOp' value='" + fxH(f.fechaOp || "") + "'" + dis + "></div></div>" +
+    (r && !r.domicilio ? "<div style='font-size:12px;color:#B45309;margin-top:4px;'>⚠ A este cliente le falta el domicilio (obligatorio en la factura). <a href='#' onclick=\"fxLeeEditor();fxFicha('" + r.id + "','factura');return false;\">Completar</a></div>" : "") +
+    "<table style='margin-top:12px;font-size:12px;'><thead><tr><th style='width:46%'>Concepto</th><th>Cant.</th><th>Precio</th><th>Dto %</th><th>IVA</th><th style='text-align:right;'>Importe</th><th></th></tr></thead><tbody>" +
+    f.lineas.map((l, i) => "<tr><td><textarea class='fi2' rows='1' id='fxl_d" + i + "' style='resize:vertical;'" + dis + ">" + fxH(l.d) + "</textarea></td>" +
+      "<td><input class='fi2' id='fxl_c" + i + "' value='" + fxH(l.c) + "' style='width:64px;' oninput='fxRecalc()'" + dis + "></td>" +
+      "<td><input class='fi2' id='fxl_p" + i + "' value='" + fxH(l.p) + "' style='width:90px;' oninput='fxRecalc()'" + dis + "></td>" +
+      "<td><input class='fi2' id='fxl_dto" + i + "' value='" + fxH(l.dto) + "' style='width:56px;' oninput='fxRecalc()'" + dis + "></td>" +
+      "<td>" + iv(i, l.iva == null ? "21" : l.iva) + "</td><td id='fxl_imp" + i + "' style='text-align:right;white-space:nowrap;'>" + fxE(fxR2((l.c === "" ? 1 : fxNum(l.c)) * fxNum(l.p) * (1 - fxNum(l.dto) / 100))) + "</td>" +
+      "<td>" + (sol ? "" : "<button class='btn btn-secondary' style='padding:3px 8px;' onclick='fxLinea(\"del\"," + i + ")'>✕</button>") + "</td></tr>").join("") + "</tbody></table>" +
+    (sol ? "" : "<button class='btn btn-secondary' style='margin-top:6px;' onclick='fxLinea(\"add\")'>+ Línea</button>") +
+    "<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:12px;'>" +
+    "<div class='fg'><label class='fl'>Retención IRPF</label><select class='fi2' id='fxd_retPct' onchange='fxRecalc()'" + dis + ">" + ["", "1", "2", "7", "15", "19"].map((x) => "<option value='" + x + "'" + (String(f.retPct || "") === x ? " selected" : "") + ">" + (x ? x + " %" : "Sin retención") + "</option>").join("") + "</select></div>" +
+    "<div class='fg'><label class='fl'>Forma de pago</label><select class='fi2' id='fxd_formaPago'" + dis + ">" + FX_PAGO.map((p) => "<option" + (p === f.formaPago ? " selected" : "") + ">" + p + "</option>").join("") + "</select></div>" +
+    "<div class='fg'><label class='fl'>Vencimiento</label><input type='date' class='fi2' id='fxd_vto' value='" + fxH(f.vto || "") + "'" + dis + "></div></div>" +
+    "<div class='fg' style='margin-top:10px;'><label class='fl'>Mención legal (exención, inversión del sujeto pasivo…)</label><input class='fi2' id='fxd_mencion' value='" + fxH(f.mencion || "") + "' placeholder='p. ej. Operación exenta de IVA según el artículo 20.Uno.9º de la Ley 37/1992'" + dis + "></div>" +
+    "<div class='fg' style='margin-top:10px;'><label class='fl'>Observaciones (salen en la factura)</label><textarea class='fi2' id='fxd_obs' rows='2'" + dis + ">" + fxH(f.obs || "") + "</textarea></div>" +
+    "<div id='fxTot' style='margin-top:12px;'>" + fxHtmlTotales(c) + "</div>";
+  document.getElementById("fxModalB").innerHTML = "<button class='btn btn-secondary' onclick=\"closeM('fxModal')\">Cerrar</button>" +
+    "<button class='btn btn-secondary' onclick='fxVistaPrevia()'>Vista previa PDF</button>" +
+    (sol ? "<button class='btn btn-primary' onclick=\"fxPdf('" + f.id + "')\">Descargar PDF</button>" :
+      "<button class='btn btn-secondary' onclick='fxGuardar(false)'>Guardar borrador</button><button class='btn btn-primary' onclick='fxGuardar(true)'>Emitir</button>");
+  document.getElementById("fxModalIn").style.maxWidth = "900px";
+  document.getElementById("fxModal").classList.add("open");
+}
+function fxValida(f, emitir) {
+  const c = fxCalc(f), r = (window.WCC || []).find((x) => x.id === f.receptorId);
+  if (!f.receptorId || !r) return "Elige el cliente de la factura.";
+  if (!f.fecha) return "Pon la fecha.";
+  if (!c.L.length) return "La factura no tiene ninguna línea.";
+  if (c.L.some((l) => !String(l.d || "").trim())) return "Hay una línea sin concepto.";
+  if (c.tipos.filter((t) => t.pct !== "E").length > 3) return "Como máximo tres tipos de IVA distintos en una factura.";
+  if (f.tipo === "R" && !String(f.motivo || "").trim()) return "Escribe el motivo de la rectificación.";
+  if (emitir && !r.domicilio) return "Al cliente le falta el domicilio, que es obligatorio en la factura.";
+  if (emitir && c.tipos.some((t) => t.pct === "E" || t.pct === "0") && !String(f.mencion || "").trim()) return "Hay líneas exentas o al 0 %: indica en «Mención legal» el motivo (artículo de la ley).";
+  return "";
+}
+window.fxGuardar = async function (emitir) {
+  FX.vista = "facturas"; fxLeeEditor(); const f = FX.ed, cid = f.emisor, e = fxEmisor(cid);
+  const err = fxValida(f, emitir); if (err) { alert(err); return; }
+  const r = (window.WCC || []).find((x) => x.id === f.receptorId);
+  const id = f.id || "fx" + Date.now();
+  const doc = { ...f, id, emisor: cid, modificado: new Date().toISOString(), creado: f.creado || new Date().toISOString(),
+    receptor: { nombre: r.nombre, nif: r.nif, domicilio: r.domicilio || "", cp: r.cp || "", poblacion: r.poblacion || "", provincia: r.provincia || "", pais: r.pais || "", cuenta: r.cuenta || "" } };
+  if (emitir) {
+    const anio = String(f.fecha).slice(0, 4), ser = fxSerie(e, f.tipo), n = fxSiguiente(cid, f.tipo, anio);
+    const prev = fxDeEmisor(cid).filter((x) => x.estado === "emitida" && x.serie === ser && String(x.fecha).slice(0, 4) === anio && x.fecha > f.fecha);
+    if (prev.length && !confirm("Ya hay facturas de la serie " + ser + " con fecha posterior al " + fxF(f.fecha) + " (la última, " + prev.sort((a, b) => b.fecha.localeCompare(a.fecha))[0].numero + "). La numeración debe seguir el orden de fechas. ¿Emitir igualmente?")) return;
+    const numero = fxNumero(ser, anio, n);
+    const c = fxCalc(f);
+    if (!confirm("Se emitirá la factura " + numero + " por " + fxE(c.total) + " a " + r.nombre + ".\n\nUna vez emitida no se puede modificar (solo rectificar) y queda apuntada en el libro de emitidas de " + fxCliNom(cid) + ". ¿Seguir?")) return;
+    Object.assign(doc, { estado: "emitida", serie: ser, correlativo: n, numero, emitida: new Date().toISOString(),
+      emisorDatos: { nombre: e.nombre, nif: e.nif, comercial: e.comercial || "", domicilio: e.domicilio, cp: e.cp || "", poblacion: e.poblacion || "", provincia: e.provincia || "", tel: e.tel || "", email: e.email || "", iban: e.iban || "", pie: e.pie || "" } });
+    await fbS("fact_emitidas", id, doc);
+    await fxAlLibro(doc);
+    if (f.tipo === "R" && f.rectifica) await window.fsSetDoc(window.fsDoc(window.db, "fact_emitidas", f.rectifica.id), { rectificadaPor: numero }, { merge: true });
+    FX.ed = doc; closeM("fxModal"); showToast("✓ Factura " + numero + " emitida y apuntada en el libro");
+    setTimeout(() => fxPdf(id), 300);
+  } else {
+    doc.estado = "borrador"; await fbS("fact_emitidas", id, doc); FX.ed = doc; closeM("fxModal"); showToast("✓ Borrador guardado");
+  }
+  setTimeout(fxRender, 200);
+};
+// Libro de facturas emitidas (iva_facturas) de ese cliente del despacho
+async function fxAlLibro(f) {
+  const c = fxCalc(f), e = fxEmisor(f.emisor) || {};
+  const con = c.tipos.filter((t) => t.pct !== "E"), ex = c.tipos.find((t) => t.pct === "E");
+  const ficha = (window.WCC || []).find((x) => x.id === f.receptorId) || {};
+  const d = { id: "fx_" + f.id, tipo: "IVR", clienteDespachoId: f.emisor, clienteDespachoNombre: fxCliNom(f.emisor), fecha: f.fecha, fechaReg: f.fecha, numero: f.numero,
+    nombre: f.receptor.nombre, nif: f.receptor.nif, cuenta: ficha.cuenta || f.receptor.cuenta || "", contrapartida: ficha.contrapartida || e.cuentaVentas || "70000000",
+    concepto: String((c.L[0] || {}).d || "").slice(0, 120), exento: ex ? ex.base : 0, op: "int", rebuCoste: 0,
+    total: c.total, retPct: f.retPct || "", retImporte: c.ret, m347: "0", deducible: "", ocasional: false, origen: "facturacion", factId: f.id, creado: new Date().toISOString() };
+  [1, 2, 3].forEach((k, i) => { const t = con[i]; d["base" + k] = t ? t.base : 0; d["pct" + k] = t ? t.pct : ""; d["iva" + k] = t ? t.cuota : 0; });
+  await fbS("iva_facturas", d.id, d);
+}
+window.fxBorrar = async function (id) {
+  const f = (window.WFX || []).find((x) => x.id === id); if (!f || f.estado !== "borrador") return;
+  if (!confirm("¿Borrar este borrador?")) return; await fbD("fact_emitidas", id); setTimeout(fxRender, 150);
+};
+
+// ---------- PDF ----------
+let fxPdfLibP = null;
+function fxPdfLib() {
+  if (window.PDFLib && window.PDFLib.PDFDocument) return Promise.resolve(window.PDFLib);
+  if (!fxPdfLibP) fxPdfLibP = new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/@cantoo/pdf-lib@2.11.1/dist/pdf-lib.min.js"; s.onload = () => ok(window.PDFLib); s.onerror = () => { fxPdfLibP = null; ko(new Error("No se ha podido cargar el generador de PDF")); }; document.head.appendChild(s); });
+  return fxPdfLibP;
+}
+async function fxGenerarPdf(f) {
+  const { PDFDocument, StandardFonts, rgb } = await fxPdfLib();
+  const e = f.emisorDatos || fxEmisor(f.emisor) || {}, logo = (fxEmisor(f.emisor) || {}).logo || "";
+  const R = f.receptor || (() => { const r = (window.WCC || []).find((x) => x.id === f.receptorId) || {}; return r; })();
+  const c = fxCalc(f);
+  const pdf = await PDFDocument.create();
+  pdf.setTitle("Factura " + (f.numero || "borrador")); pdf.setAuthor(e.nombre || ""); pdf.setCreator("Durespin");
+  const F = { r: await pdf.embedFont(StandardFonts.Helvetica), b: await pdf.embedFont(StandardFonts.HelveticaBold) };
+  const san = (s) => { let o = ""; for (const ch of String(s == null ? "" : s)) { const x = { "−": "-", "→": "->", "✓": "X", " ": " " }[ch] || ch; try { F.r.encodeText(x); o += x; } catch (er) { o += "?"; } } return o; };
+  const W = 595.28, H = 841.89, M = 48, AN = W - 2 * M;
+  const NAVY = rgb(0.11, 0.2, 0.33), GR = rgb(0.42, 0.45, 0.5), LN = rgb(0.82, 0.85, 0.88), FON = rgb(0.95, 0.96, 0.98), TX = rgb(0.12, 0.12, 0.12);
+  let pg = pdf.addPage([W, H]), y = H - M;
+  const pags = [pg];
+  const txt = (s, x, yy, o = {}) => { const fn = o.b ? F.b : F.r, sz = o.s || 9.5, t = san(s); const w = fn.widthOfTextAtSize(t, sz);
+    pg.drawText(t, { x: o.r ? x - w : o.c ? x - w / 2 : x, y: yy, size: sz, font: fn, color: o.col || TX }); return w; };
+  const partir = (s, sz, ancho, fn) => { const out = []; String(s == null ? "" : s).split(/\n/).forEach((par) => { let cur = ""; san(par).split(/\s+/).forEach((w) => { const t = cur ? cur + " " + w : w; if ((fn || F.r).widthOfTextAtSize(t, sz) > ancho && cur) { out.push(cur); cur = w; } else cur = t; }); out.push(cur); }); return out; };
+  // Cabecera: logo o nombre del emisor
+  let yTop = y;
+  if (logo) {
+    try { const bytes = Uint8Array.from(atob(logo.split(",")[1]), (ch) => ch.charCodeAt(0)); const im = /png/.test(logo.slice(0, 30)) ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+      const k = Math.min(170 / im.width, 60 / im.height); pg.drawImage(im, { x: M, y: y - im.height * k, width: im.width * k, height: im.height * k }); y -= im.height * k + 10; } catch (er) { console.warn("logo", er); }
+  } else { txt(e.comercial || e.nombre, M, y - 14, { b: true, s: 15, col: NAVY }); y -= 24; }
+  [(logo || e.comercial) ? e.nombre : "", "NIF " + (e.nif || ""), e.domicilio, [e.cp, e.poblacion, e.provincia ? "(" + e.provincia + ")" : ""].filter(Boolean).join(" "), [e.tel, e.email].filter(Boolean).join(" · ")]
+    .filter((s) => String(s || "").trim()).forEach((s) => { txt(s, M, y - 10, { s: 9, col: GR }); y -= 12; });
+  // Título y datos de la factura (derecha)
+  const xr = W - M;
+  txt(f.tipo === "R" ? "FACTURA RECTIFICATIVA" : "FACTURA", xr, yTop - 16, { b: true, s: 18, col: NAVY, r: true });
+  let yr = yTop - 36;
+  const kv = (k, v) => { txt(k, xr - 120, yr, { s: 9, col: GR }); txt(v, xr, yr, { s: 9.5, b: true, r: true }); yr -= 13; };
+  kv("Número", f.numero || "BORRADOR"); kv("Fecha", fxF(f.fecha)); if (f.fechaOp && f.fechaOp !== f.fecha) kv("Fecha operación", fxF(f.fechaOp)); if (f.vto) kv("Vencimiento", fxF(f.vto));
+  y = Math.min(y, yr) - 14;
+  // Cliente
+  const rl = [R.nombre, "NIF " + (R.nif || ""), R.domicilio, [R.cp, R.poblacion, R.provincia ? "(" + R.provincia + ")" : ""].filter(Boolean).join(" "), R.pais && !/^espa/i.test(R.pais) ? R.pais : ""].filter((s) => String(s || "").trim());
+  const bh = 18 + rl.length * 12.5;
+  pg.drawRectangle({ x: M, y: y - bh, width: AN * 0.58, height: bh, color: FON });
+  txt("CLIENTE", M + 10, y - 13, { s: 8, b: true, col: GR }); let yc = y - 27;
+  rl.forEach((s, i) => { txt(s, M + 10, yc, { s: i ? 9.5 : 10.5, b: !i }); yc -= 12.5; });
+  y -= bh + 16;
+  if (f.tipo === "R" && f.rectifica) { partir("Rectifica la factura " + f.rectifica.numero + " de fecha " + fxF(f.rectifica.fecha) + ". Motivo: " + (f.motivo || ""), 9.5, AN).forEach((l) => { txt(l, M, y, { s: 9.5 }); y -= 12; }); y -= 6; }
+  // Tabla de líneas
+  const cols = [{ t: "Concepto", w: AN * 0.46 }, { t: "Cant.", w: AN * 0.09, r: 1 }, { t: "Precio", w: AN * 0.13, r: 1 }, { t: "Dto.", w: AN * 0.07, r: 1 }, { t: "IVA", w: AN * 0.09, r: 1 }, { t: "Importe", w: AN * 0.16, r: 1 }];
+  const cab = () => { pg.drawRectangle({ x: M, y: y - 18, width: AN, height: 18, color: NAVY }); let x = M; cols.forEach((cl) => { txt(cl.t, cl.r ? x + cl.w - 6 : x + 6, y - 12.5, { s: 8.5, b: true, col: rgb(1, 1, 1), r: !!cl.r }); x += cl.w; }); y -= 18; };
+  const nueva = () => { pg = pdf.addPage([W, H]); pags.push(pg); y = H - M; cab(); };
+  cab();
+  const num = (n, d) => (d === 0 && Math.abs(+n % 1) > 1e-9 ? fxMil(n, 2) : fxMil(n, d));
+  c.L.forEach((l) => {
+    const ls = partir(l.d, 9.5, cols[0].w - 12), hh = ls.length * 12 + 8;
+    if (y - hh < 170) nueva();
+    let x = M; const yy = y - 13;
+    ls.forEach((s, k) => txt(s, x + 6, yy - k * 12, { s: 9.5 })); x += cols[0].w;
+    [num(l.cN, 0).replace(/,00$/, ""), num(l.pN), l.dN ? num(l.dN, 0) + " %" : "", l.iva === "E" ? "Exento" : l.iva + " %", num(l.imp) + " €"].forEach((v, k) => { txt(v, x + cols[k + 1].w - 6, yy, { s: 9.5, r: true }); x += cols[k + 1].w; });
+    y -= hh; pg.drawLine({ start: { x: M, y }, end: { x: M + AN, y }, thickness: 0.5, color: LN });
+  });
+  // Totales
+  if (y < 200) nueva();
+  y -= 14;
+  const xt = M + AN * 0.5;
+  const fila = (k, v, o = {}) => { txt(k, xt, y, { s: o.s || 9.5, b: o.b }); txt(v, M + AN, y, { s: o.s || 9.5, b: o.b, r: true }); y -= o.s ? o.s + 6 : 14; };
+  c.tipos.forEach((t) => { if (t.pct === "E") fila("Base exenta / no sujeta", num(t.base) + " €"); else { fila("Base imponible " + t.pct + " %", num(t.base) + " €"); fila("Cuota IVA " + t.pct + " %", num(t.cuota) + " €"); } });
+  if (c.ret) fila("Retención IRPF " + f.retPct + " %", num(-c.ret) + " €");
+  y -= 10; pg.drawRectangle({ x: xt - 8, y: y - 8, width: M + AN - xt + 8, height: 24, color: NAVY });
+  txt("TOTAL FACTURA", xt, y, { s: 11, b: true, col: rgb(1, 1, 1) }); txt(num(c.total) + " €", M + AN - 6, y, { s: 12, b: true, col: rgb(1, 1, 1), r: true }); y -= 34;
+  // Pago, menciones y observaciones
+  const notas = [];
+  if (f.formaPago) notas.push("Forma de pago: " + f.formaPago + ((f.formaPago === "Transferencia bancaria" && (e.iban || "")) ? " · IBAN " + e.iban : ""));
+  if (f.mencion) notas.push(f.mencion);
+  if (f.obs) notas.push(f.obs);
+  notas.forEach((n) => partir(n, 9, AN).forEach((l) => { if (y < 70) { pg = pdf.addPage([W, H]); pags.push(pg); y = H - M; } txt(l, M, y, { s: 9 }); y -= 12; }));
+  // Pie
+  pags.forEach((p, k) => { pg = p;
+    if (e.pie) partir(e.pie, 7.5, AN).slice(0, 3).forEach((l, i) => txt(l, W / 2, 34 - i * 9, { s: 7.5, col: GR, c: true }));
+    if (pags.length > 1) txt("Página " + (k + 1) + " de " + pags.length, W - M, 48, { s: 7.5, col: GR, r: true });
+    if (!f.numero) txt("BORRADOR · SIN VALIDEZ COMO FACTURA", W / 2, H / 2, { s: 26, b: true, col: rgb(0.9, 0.85, 0.85), c: true });
+  });
+  return await pdf.save();
+}
+function fxNombrePdf(f) { return ("Factura_" + (f.numero || "borrador") + "_" + ((f.receptor || {}).nombre || "")).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9_.-]+/g, "_").slice(0, 90) + ".pdf"; }
+window.fxPdf = async function (id) {
+  const f = (window.WFX || []).find((x) => x.id === id) || (FX.ed && FX.ed.id === id ? FX.ed : null); if (!f) return;
+  try { const b = await fxGenerarPdf(f); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([b], { type: "application/pdf" })); a.download = fxNombrePdf(f); document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); }
+  catch (er) { alert("No se ha podido generar el PDF: " + er.message); }
+};
+window.fxVistaPrevia = async function () {
+  fxLeeEditor(); const f = { ...FX.ed };
+  if (!f.receptorId) { alert("Elige primero el cliente."); return; }
+  if (f.estado !== "emitida") { const r = (window.WCC || []).find((x) => x.id === f.receptorId) || {}; f.receptor = r; f.numero = ""; }
+  const w = window.open("", "_blank");
+  try { const b = await fxGenerarPdf(f); const u = URL.createObjectURL(new Blob([b], { type: "application/pdf" })); if (w) w.location = u; else location.href = u; }
+  catch (er) { if (w) w.close(); alert("No se ha podido generar el PDF: " + er.message); }
+};
+window._fxCalc = fxCalc; window._fxGenerarPdf = fxGenerarPdf;
+
 </script>
 </body>
 </html>
