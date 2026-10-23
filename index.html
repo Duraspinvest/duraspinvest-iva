@@ -216,7 +216,7 @@ body.visor-open .modal-overlay.open{display:flex;}
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
     <div><div style="font-size:16px;font-weight:600;color:var(--navy);">Cuentas contables</div>
     <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Por cliente del despacho. El mismo proveedor puede tener cuentas distintas para cada cliente.</div></div>
-    <div style="display:flex;gap:6px;"><button class="btn" onclick="crearCuentasBoton()" title="Crea las subcuentas 400/430 que falten para las facturas del cliente elegido">Crear cuentas que faltan</button><button class="btn btn-primary" onclick="openCM()">+ Anadir cuenta</button></div>
+    <div style="display:flex;gap:6px;"><button class="btn" onclick="ccRevisar()" title="Une fichas repetidas (mismo NIF o mismo nombre), separa las que comparten subcuenta y pone a cada factura y asiento la cuenta de su ficha">&#128269; Revisar y unificar cuentas</button><button class="btn" onclick="crearCuentasBoton()" title="Crea las subcuentas 400/430 que falten para las facturas del cliente elegido">Crear cuentas que faltan</button><button class="btn btn-primary" onclick="openCM()">+ Anadir cuenta</button></div>
   </div>
   <div class="filtros">
     <div class="filtro-group"><span class="filtro-label">Cliente</span>
@@ -2251,16 +2251,32 @@ async function saveF(mantenerAbierto){
   // Recordar el proveedor/cliente y su cuenta de gasto/ingreso para la próxima vez (salvo si es ocasional)
   if(!(document.getElementById("fOcas")||{}).checked) try{
     const _nif=(document.getElementById("fNif").value||"").trim(), _cp=(document.getElementById("fCP").value||"").trim();
-    const _cta=(document.getElementById("fCta").value||"").trim()||(tipo==="IVR"?"43000001":"40000001");
-    const _norm2=x=>String(x||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
     const _tipoC=tipo==="IVR"?"cliente":"proveedor";
-    const ex=(window.WCC||[]).find(x=>x.clienteDespachoId===cid&&((x.tipo==="cliente")===(tipo==="IVR"))&&((_nif&&_norm2(x.nif)===_norm2(_nif))||(String(x.nombre||"").trim().toLowerCase()===nom.toLowerCase())));
-    if(!ex){
+    const ex=ccBuscar(cid,_nif,nom,tipo==="IVR");
+    const _usadas=ccUsadas(cid);
+    let _cta=ctNorm((document.getElementById("fCta").value||"").trim());
+    // Ventas sin NIF: todas a la 430 genérica, con una sola ficha «Clientes varios (sin NIF)»
+    const _sinNifVenta=tipo==="IVR"&&!ccNif(_nif);
+    if(_sinNifVenta&&!ex){
+      const gen=(window.WCC||[]).find(x=>x.clienteDespachoId===cid&&x.tipo==="cliente"&&!ccNif(x.nif)&&ctNorm(x.cuenta));
+      if(!gen){const gid="cc"+Date.now();await fbS("iva_cuentas",gid,{id:gid,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",nombre:"CLIENTES VARIOS (SIN NIF)",nif:"",cuenta:CC_GEN_CLI,tipo:"cliente",contrapartida:_cp||"70000000",retPct:"",m347:"0",creado:new Date().toISOString(),auto:true});}
+      const _g=gen?ctNorm(gen.cuenta):CC_GEN_CLI;
+      if(id&&ctNorm((window.WF||[]).find(x=>x.id===id)?.cuenta)!==_g)await window.fsSetDoc(window.fsDoc(window.db,"iva_facturas",String(id)),{cuenta:_g},{merge:true});
+    } else if(!ex){
+      // Cuenta nueva: la escrita si está libre y no es la genérica; si no, la siguiente libre
+      const otra=(window.WCC||[]).find(x=>x.clienteDespachoId===cid&&ctNorm(x.cuenta)===_cta);
+      if(!_cta||/0000000$/.test(_cta)||_cta==="40000001"||_cta==="43000001"||otra)_cta=ccSiguiente(cid,tipo==="IVR"?"430":"400",_usadas);
       const nid="cc"+Date.now();
       await fbS("iva_cuentas",nid,{id:nid,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",nombre:nom,nif:_nif,cuenta:_cta,tipo:_tipoC,
         contrapartida:_cp||(tipo==="IVR"?"70000000":"60000000"),retPct:document.getElementById("fRP").value||"",m347:document.getElementById("f347").value||"0",creado:new Date().toISOString(),auto:true});
-    } else if(_cp && ex.contrapartida!==_cp){
-      await window.fsSetDoc(window.fsDoc(window.db,"iva_cuentas",String(ex.id)),{contrapartida:_cp},{merge:true});
+      if(id)await window.fsSetDoc(window.fsDoc(window.db,"iva_facturas",String(id)),{cuenta:_cta},{merge:true});
+    } else {
+      const upd={};
+      if(_cp && ex.contrapartida!==_cp)upd.contrapartida=_cp;
+      if(_nif&&!ccNif(ex.nif))upd.nif=_nif;   // completar el NIF de una ficha que no lo tenía
+      if(Object.keys(upd).length)await window.fsSetDoc(window.fsDoc(window.db,"iva_cuentas",String(ex.id)),upd,{merge:true});
+      // La factura lleva la subcuenta de su ficha
+      if(id&&ex.cuenta&&ctNorm((window.WF||[]).find(x=>x.id===id)?.cuenta)!==ctNorm(ex.cuenta))await window.fsSetDoc(window.fsDoc(window.db,"iva_facturas",String(id)),{cuenta:ex.cuenta},{merge:true});
     }
   }catch(e){console.warn("No se pudo guardar la cuenta del tercero",e);}
   // Si viene del portal, marcar documento como procesado y cargar el siguiente
@@ -2332,9 +2348,9 @@ async function crearCuentasFaltantes(cid,facts){
   const low=x=>String(x||"").trim().toLowerCase();
   const cl=(window.WC||[]).find(c=>c.id===cid);
   const ccs=(window.WCC||[]).filter(c=>c.clienteDespachoId===cid).slice();
-  const usadas=new Set([...ccs.map(c=>String(c.cuenta||"")),...(window.WF||[]).filter(f=>f.clienteDespachoId===cid).map(f=>String(f.cuenta||""))]);
-  const sig=pref=>{let n=parseInt(pref+"00001",10);while(usadas.has(String(n)))n++;usadas.add(String(n));return String(n);};
-  const busca=(f,esCli)=>ccs.find(c=>((c.tipo==="cliente")===esCli)&&((f.nif&&c.nif&&norm(c.nif)===norm(f.nif))||(low(c.nombre)&&low(c.nombre)===low(f.nombre))));
+  const usadas=ccUsadas(cid);
+  const sig=pref=>ccSiguiente(cid,pref,usadas);
+  const busca=(f,esCli)=>ccBuscar(cid,f.nif,f.nombre,esCli,ccs);
   let creadas=0,nf=0;const t0=Date.now();
   for(const f of facts){
     if(!f||!f.id||f.cuenta||f.ocasional||!low(f.nombre))continue;
@@ -2415,6 +2431,11 @@ async function saveC(){
   if(!cid||!nom||!cta){alert("Rellena cliente, nombre y cuenta contable.");return;}
   const id=document.getElementById("cId").value||String(Date.now());
   const cl=(window.WC||[]).find(c=>c.id===cid);
+  const _nifC=ccNif(document.getElementById("cNif").value),_tipC=document.getElementById("cTip").value;
+  const mismaCta=(window.WCC||[]).find(x=>x.id!==id&&x.clienteDespachoId===cid&&ctNorm(x.cuenta)===ctNorm(cta));
+  if(mismaCta){alert("La cuenta "+cta+" ya es de «"+mismaCta.nombre+"».\n\nCada proveedor o cliente tiene que tener su propia subcuenta.");return;}
+  const mismoNif=_nifC&&(window.WCC||[]).find(x=>x.id!==id&&x.clienteDespachoId===cid&&ccEsCli(x.tipo)===(_tipC==="cliente")&&ccNif(x.nif)===_nifC);
+  if(mismoNif){alert("Ya existe una ficha con el NIF "+_nifC+": «"+mismoNif.nombre+"» ("+mismoNif.cuenta+").\n\nEdita esa en vez de crear otra.");return;}
   await fbS("iva_cuentas",id,{
     id,clienteDespachoId:cid,clienteDespachoNombre:cl?cl.nombre:"",
     nombre:nom,nif:document.getElementById("cNif").value.trim(),
@@ -2438,6 +2459,92 @@ function editC(id){
 }
 
 async function delC(id){if(!confirm("Eliminar esta cuenta?"))return;await fbD("iva_cuentas",id);}
+
+// ---------- Revisar y unificar cuentas de un cliente del despacho ----------
+// 1) Fichas repetidas (mismo NIF, o sin NIF y mismo nombre) → se queda una (la de cuenta más baja) y se borran las demás.
+// 2) Fichas distintas con la misma subcuenta → sin NIF (ventas de caja…) se unen; con NIF, la segunda recibe subcuenta nueva.
+// 3) Cada factura pasa a llevar la subcuenta de su ficha.
+// 4) Asientos del banco/manuales y reglas del banco: se cambia la cuenta vieja por la nueva cuando el cambio es inequívoco.
+function ccPlanRevision(cid){
+  const fichas=(window.WCC||[]).filter(c=>c.clienteDespachoId===cid).map(c=>({...c}));
+  const usadas=ccUsadas(cid);
+  const borrar=[],cambiosFicha=[],mapaCta={},texto=[];
+  const grupo=c=>(ccEsCli(c.tipo)?"C":"P")+"|"+(ccNif(c.nif)?"N"+ccNif(c.nif):"M"+ccNom(c.nombre));
+  const G={};fichas.forEach(c=>{const k=grupo(c);(G[k]=G[k]||[]).push(c);});
+  // Una ficha SIN NIF con el mismo nombre que otra CON NIF (y del mismo tipo) es el mismo tercero: se une a la que tiene NIF
+  Object.keys(G).filter(k=>k.split("|")[1][0]==="M").forEach(k=>{
+    const [t,m]=[k.split("|")[0],k.split("|")[1].slice(1)];
+    const destino=Object.keys(G).filter(j=>j.startsWith(t+"|N")&&G[j].some(c=>ccNom(c.nombre)===m));
+    if(destino.length===1){G[destino[0]].push(...G[k]);delete G[k];}
+  });
+  const vivas=[];
+  Object.values(G).forEach(L=>{
+    L.sort((a,b)=>(!!ccNif(b.nif)-!!ccNif(a.nif))||String(ctNorm(a.cuenta)||"99999999").localeCompare(String(ctNorm(b.cuenta)||"99999999")));
+    const k=L[0];vivas.push(k);
+    if(L.length>1){
+      const upd={};L.slice(1).forEach(x=>{["nif","domicilio","poblacion","cp","provincia","telefono","contrapartida","retPct"].forEach(p=>{if(!k[p]&&x[p]){upd[p]=x[p];k[p]=x[p];}});
+        borrar.push(x);if(ctNorm(x.cuenta)&&ctNorm(x.cuenta)!==ctNorm(k.cuenta))mapaCta[ctNorm(x.cuenta)]=ctNorm(k.cuenta);});
+      if(Object.keys(upd).length)cambiosFicha.push({id:k.id,upd});
+      texto.push("Unir: «"+k.nombre+"» "+k.cuenta+" ← "+L.slice(1).map(x=>"«"+x.nombre+"» "+x.cuenta).join(", "));
+    }
+  });
+  // Misma subcuenta en fichas distintas
+  const porCta={};vivas.forEach(c=>{const ct=ctNorm(c.cuenta);if(ct)(porCta[ct]=porCta[ct]||[]).push(c);});
+  Object.entries(porCta).forEach(([ct,L])=>{
+    if(L.length<2)return;
+    const sinNif=L.filter(c=>!ccNif(c.nif)),conNif=L.filter(c=>ccNif(c.nif));
+    // las que no tienen NIF se unen en una sola (ventas de caja, clientes varios…)
+    if(sinNif.length>1){const k=sinNif[0];sinNif.slice(1).forEach(x=>{borrar.push(x);vivas.splice(vivas.indexOf(x),1);});texto.push("Unir (misma cuenta "+ct+", sin NIF): «"+k.nombre+"» ← "+sinNif.slice(1).map(x=>"«"+x.nombre+"»").join(", "));}
+    const quedan=L.filter(c=>vivas.includes(c));
+    quedan.slice(1).forEach(x=>{const nueva=ccSiguiente(cid,ccEsCli(x.tipo)?"430":"400",usadas);cambiosFicha.push({id:x.id,upd:{cuenta:nueva},vieja:ct,ficha:x});texto.push("Cuenta nueva para «"+x.nombre+"»: "+ct+" → "+nueva+" (la "+ct+" se queda para «"+quedan[0].nombre+"»)");x.cuenta=nueva;});
+  });
+  // Facturas: la subcuenta de su ficha
+  const cambiosFact=[],porVieja={};
+  (window.WF||[]).filter(f=>f.clienteDespachoId===cid&&!f.ocasional).forEach(f=>{
+    const fi=ccBuscar(cid,f.nif,f.nombre,f.tipo==="IVR",vivas);
+    let nueva=fi?ctNorm(fi.cuenta):"";
+    if(!fi&&f.tipo==="IVR"&&!ccNif(f.nif)){const g=vivas.find(x=>x.tipo==="cliente"&&!ccNif(x.nif)&&ctNorm(x.cuenta));nueva=g?ctNorm(g.cuenta):CC_GEN_CLI;}
+    const vieja=ctNorm(f.cuenta);
+    if(nueva&&vieja!==nueva){cambiosFact.push({id:f.id,cuenta:nueva});if(vieja)(porVieja[vieja]=porVieja[vieja]||new Set()).add(nueva);}
+  });
+  // Una cuenta vieja que en las facturas pasa siempre a la misma nueva → también en los asientos
+  Object.entries(porVieja).forEach(([v,S])=>{if(S.size===1&&!mapaCta[v]&&!vivas.some(c=>ctNorm(c.cuenta)===v))mapaCta[v]=[...S][0];});
+  const ambiguas=Object.entries(porVieja).filter(([v,S])=>S.size>1).map(([v,S])=>v+" → "+[...S].join(" / "));
+  const cambiosAs=[];
+  (window.WAS||[]).filter(a=>a.cid===cid).forEach(a=>{let mod=false;const L=(a.lineas||[]).map(l=>{const n=mapaCta[ctNorm(l.c)];if(n){mod=true;return {...l,c:n};}return l;});if(mod)cambiosAs.push({id:a.id,a:{...a,lineas:L}});});
+  const cambiosReg=(window.WREG||[]).filter(r=>r.cid===cid&&mapaCta[ctNorm(r.cuenta)]).map(r=>({id:r.id,cuenta:mapaCta[ctNorm(r.cuenta)]}));
+  // Cuentas de terceros (40x/41x/43x) que siguen en asientos sin ficha
+  const conFicha=new Set(vivas.map(c=>ctNorm(c.cuenta)));
+  const huerfanas=new Set();
+  (window.WAS||[]).filter(a=>a.cid===cid).forEach(a=>(a.lineas||[]).forEach(l=>{const c=mapaCta[ctNorm(l.c)]||ctNorm(l.c);if(/^4[013]/.test(c)&&!/0000000$/.test(c)&&!conFicha.has(c)&&c!==CC_GEN_CLI)huerfanas.add(c);}));
+  // Cuentas que compartían dos fichas: sus asientos del banco no se pueden repartir solos
+  const separadas=cambiosFicha.filter(c=>c.vieja).map(c=>c.vieja).filter((v,i,A)=>A.indexOf(v)===i);
+  const asSep=separadas.length?(window.WAS||[]).filter(a=>a.cid===cid&&(a.lineas||[]).some(l=>separadas.includes(ctNorm(l.c)))).length:0;
+  if(asSep)ambiguas.push("hay "+asSep+" asiento(s) del banco/manuales en la cuenta "+separadas.join(", ")+", que compartían dos fichas: abre su Mayor y comprueba de quién es cada pago (✎)");
+  return {borrar,cambiosFicha,cambiosFact,cambiosAs,cambiosReg,mapaCta,texto,ambiguas,huerfanas:[...huerfanas].sort()};
+}
+async function ccRevisar(){
+  const cid=document.getElementById("fCC").value;
+  if(!cid){alert("Elige primero un cliente en el filtro «Cliente».");return;}
+  const cl=(window.WC||[]).find(c=>c.id===cid);
+  const P=ccPlanRevision(cid);
+  const n=P.borrar.length+P.cambiosFicha.length+P.cambiosFact.length+P.cambiosAs.length+P.cambiosReg.length;
+  const extra=(P.ambiguas.length?"\n\n⚠ Para revisar a mano: "+P.ambiguas.join("; "):"")+
+    (P.huerfanas.length?"\n\n⚠ Cuentas de proveedor/cliente usadas en asientos que no tienen ficha: "+P.huerfanas.join(", ")+". Revísalas desde el Mayor (✎).":"");
+  if(!n){alert("Las cuentas de "+(cl?cl.nombre:"")+" están bien: sin fichas repetidas ni cuentas compartidas."+extra);return;}
+  const res=P.texto.slice(0,25).join("\n")+(P.texto.length>25?"\n…y "+(P.texto.length-25)+" más":"");
+  if(!confirm("Revisión de cuentas de "+(cl?cl.nombre:"")+":\n\n"+(res||"(sin fichas que unir)")+"\n\n· Fichas que se borran (repetidas): "+P.borrar.length+"\n· Fichas que cambian: "+P.cambiosFicha.length+
+    "\n· Facturas que cambian de subcuenta: "+P.cambiosFact.length+"\n· Asientos del banco/manuales que cambian: "+P.cambiosAs.length+"\n· Reglas del banco que cambian: "+P.cambiosReg.length+extra+"\n\nAntes de seguir, haz una copia de seguridad (Despacho > Backup). ¿Aplicar los cambios?"))return;
+  let ok=0,err=0;const up=async(fn)=>{try{await fn();ok++;}catch(e){console.error(e);err++;}};
+  for(const c of P.cambiosFicha)await up(()=>window.fsSetDoc(window.fsDoc(window.db,"iva_cuentas",String(c.id)),c.upd,{merge:true}));
+  for(const c of P.cambiosFact)await up(()=>window.fsSetDoc(window.fsDoc(window.db,"iva_facturas",String(c.id)),{cuenta:c.cuenta},{merge:true}));
+  for(const c of P.cambiosAs)await up(()=>window.fsSetDoc(window.fsDoc(window.db,"conta_asientos",String(c.id)),{...c.a,modificado:new Date().toISOString()}));
+  for(const c of P.cambiosReg)await up(()=>window.fsSetDoc(window.fsDoc(window.db,"conta_reglas",String(c.id)),{cuenta:c.cuenta},{merge:true}));
+  for(const c of P.borrar)await up(()=>fbD("iva_cuentas",c.id));
+  alert("Hecho: "+ok+" cambios"+(err?" ("+err+" con error: mira la consola)":"")+"."+extra);
+  renderC();
+}
+window.ccRevisar=ccRevisar;window._ccPlanRevision=ccPlanRevision;
 
 function onExpTipoChange(){}
 
@@ -4062,10 +4169,34 @@ function getTipoFactura(formato){
   return (formato==="IVR"||formato==="FAC"||formato==="LFA")?"IVR":"IVS";
 }
 
+// ===== Cuentas de proveedores y clientes: UNA ficha y UNA subcuenta por NIF (por cliente del despacho) =====
+function ccNif(x){let n=String(x||"").toUpperCase().replace(/[^A-Z0-9]/g,"");if(/^ES[A-Z0-9]{9}$/.test(n))n=n.slice(2);return n;}
+function ccNom(x){return String(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9 ]+/g," ")
+  .replace(/\b(S\s?L\s?U|S\s?L\s?L|S\s?L|S\s?A\s?U|S\s?A|C\s?B|S\s?C\s?P|S\s?C|S\s?COOP)\s*$/,"").replace(/\s+/g," ").trim();}
+const ccEsCli=t=>t==="cliente";
+// Ficha del tercero: primero por NIF; si no hay NIF en alguno de los dos, por nombre (sin puntos, comas ni S.L./S.A.)
+function ccBuscar(cid,nif,nombre,esCli,lista){
+  const L=(lista||window.WCC||[]).filter(c=>c.clienteDespachoId===cid&&ccEsCli(c.tipo)===!!esCli);
+  const n=ccNif(nif);
+  if(n){const x=L.find(c=>ccNif(c.nif)===n);if(x)return x;}
+  const m=ccNom(nombre);if(!m)return null;
+  return L.find(c=>ccNom(c.nombre)===m&&(!n||!ccNif(c.nif)))||null;
+}
+// Subcuentas ya usadas por un cliente del despacho (fichas, facturas y asientos)
+function ccUsadas(cid){
+  const u=new Set();
+  (window.WCC||[]).forEach(c=>{if(c.clienteDespachoId===cid&&c.cuenta)u.add(ctNorm(c.cuenta));});
+  (window.WF||[]).forEach(f=>{if(f.clienteDespachoId===cid&&f.cuenta)u.add(ctNorm(f.cuenta));});
+  (window.WAS||[]).forEach(a=>{if(a.cid===cid)(a.lineas||[]).forEach(l=>u.add(ctNorm(l.c)));});
+  return u;
+}
+function ccSiguiente(cid,pref,usadas){const u=usadas||ccUsadas(cid);let n=parseInt(pref+"00001",10);while(u.has(String(n)))n++;u.add(String(n));return String(n);}
+const CC_GEN_CLI="43000000";   // ventas sin NIF (caja, tickets): una sola cuenta genérica
+// Cuenta genérica de ventas sin NIF de un cliente del despacho: la de su ficha «sin NIF» si ya existe; si no, 43000000
+function ccGenCli(cid){const g=(window.WCC||[]).find(x=>x.clienteDespachoId===cid&&x.tipo==="cliente"&&!ccNif(x.nif)&&ctNorm(x.cuenta));return g?ctNorm(g.cuenta):CC_GEN_CLI;}
 function getCuentaParaFactura(f){
-  const cc=(window.WCC||[]).find(c=>
-    c.clienteDespachoId===f.clienteDespachoId && c.nombre===f.nombre
-  )||{cuenta:f.cuenta||"",contrapartida:"",domicilio:"",poblacion:"",cp:"",provincia:"",telefono:"",nif:""};
+  const cc=(!f.ocasional&&ccBuscar(f.clienteDespachoId,f.nif,f.nombre,f.tipo==="IVR"))
+    ||{cuenta:f.cuenta||"",contrapartida:"",domicilio:"",poblacion:"",cp:"",provincia:"",telefono:"",nif:""};
   // La cuenta de gasto/venta de la propia factura manda sobre la de la ficha
   return f.contrapartida?{...cc,contrapartida:f.contrapartida}:cc;
 }
