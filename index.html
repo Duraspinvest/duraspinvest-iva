@@ -564,11 +564,11 @@ body.visor-open .modal-overlay.open{display:flex;}
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   const app = initializeApp({apiKey:"AIzaSyCVK3yF15Udps1l046kv6M1TASIwVEPcVs",authDomain:"duraspinvest.firebaseapp.com",projectId:"duraspinvest",storageBucket:"duraspinvest-docs-eu",messagingSenderId:"280764832749",appId:"1:280764832749:web:a1fa6c44cf59518541a5e4"});
   const db=getFirestore(app),auth=getAuth(app);
   window.db=db;window.auth=auth;window.fsSignIn=signInWithEmailAndPassword;window.fsSignOut=signOut;
-  window.fsDoc=doc;window.fsSetDoc=setDoc;window.fsDeleteDoc=deleteDoc;window.fsCollection=collection;
+  window.fsDoc=doc;window.fsSetDoc=setDoc;window.fsDeleteDoc=deleteDoc;window.fsCollection=collection;window.fsBatch=()=>writeBatch(db);
   let u1,u2,u3;
   function act(){
     u1=onSnapshot(collection(db,"clients"),s=>{
@@ -598,7 +598,10 @@ body.visor-open .modal-overlay.open{display:flex;}
       if(typeof loadIngresos==="function")loadIngresos();
     });
     // Contabilidad
-    const _ctAct=()=>{const sec=document.getElementById("contab");if(sec&&sec.classList.contains("active")&&typeof ctRender==="function")ctRender();};
+    const _ctAct=()=>{const sec=document.getElementById("contab");if(!(sec&&sec.classList.contains("active")&&typeof ctRender==="function"))return;
+      const bus=document.getElementById("ctMayBus");
+      if(bus&&document.activeElement===bus){if(!window._ctPend){window._ctPend=true;bus.addEventListener("blur",()=>{window._ctPend=false;setTimeout(()=>{if(document.activeElement!==document.getElementById("ctMayBus"))ctRender();},250);},{once:true});}return;}
+      clearTimeout(window._ctT);window._ctT=setTimeout(ctRender,120);};   // agrupa varios cambios seguidos en un solo redibujado
     window.ctRefresh=_ctAct;
     onSnapshot(collection(db,"conta_asientos"),s=>{window.WAS=s.docs.map(d=>({...d.data(),id:d.id}));_ctAct();});
     onSnapshot(collection(db,"conta_inmov"),s=>{window.WINM=s.docs.map(d=>({...d.data(),id:d.id}));_ctAct();});
@@ -666,6 +669,7 @@ async function emCargar(input){
   window.db=window.db||{};
   window.fsDoc=(db,col,id)=>({c:col,id:String(id)});
   window.fsCollection=(db,col)=>({c:col});
+  window.fsBatch=null;   // modo emergencia: sin lotes, se guarda uno a uno en la copia local
   window.fsSetDoc=async(r,d,opt)=>{const E=window.__EM;E[r.c]=E[r.c]||{};E[r.c][r.id]=(opt&&opt.merge)?{...(E[r.c][r.id]||{}),...JSON.parse(JSON.stringify(d))}:JSON.parse(JSON.stringify(d));window.__EMcambios++;emSync();};
   window.fsDeleteDoc=async r=>{const E=window.__EM;if(E[r.c])delete E[r.c][r.id];window.__EMcambios++;emSync();};
   window.fsSignOut=async()=>{if(window.__EMcambios&&!confirm("Tienes "+window.__EMcambios+" cambios sin descargar. ¿Salir igualmente?"))return;location.reload();};
@@ -2535,12 +2539,26 @@ async function ccRevisar(){
   const res=P.texto.slice(0,25).join("\n")+(P.texto.length>25?"\n…y "+(P.texto.length-25)+" más":"");
   if(!confirm("Revisión de cuentas de "+(cl?cl.nombre:"")+":\n\n"+(res||"(sin fichas que unir)")+"\n\n· Fichas que se borran (repetidas): "+P.borrar.length+"\n· Fichas que cambian: "+P.cambiosFicha.length+
     "\n· Facturas que cambian de subcuenta: "+P.cambiosFact.length+"\n· Asientos del banco/manuales que cambian: "+P.cambiosAs.length+"\n· Reglas del banco que cambian: "+P.cambiosReg.length+extra+"\n\nAntes de seguir, haz una copia de seguridad (Despacho > Backup). ¿Aplicar los cambios?"))return;
-  let ok=0,err=0;const up=async(fn)=>{try{await fn();ok++;}catch(e){console.error(e);err++;}};
-  for(const c of P.cambiosFicha)await up(()=>window.fsSetDoc(window.fsDoc(window.db,"iva_cuentas",String(c.id)),c.upd,{merge:true}));
-  for(const c of P.cambiosFact)await up(()=>window.fsSetDoc(window.fsDoc(window.db,"iva_facturas",String(c.id)),{cuenta:c.cuenta},{merge:true}));
-  for(const c of P.cambiosAs)await up(()=>window.fsSetDoc(window.fsDoc(window.db,"conta_asientos",String(c.id)),{...c.a,modificado:new Date().toISOString()}));
-  for(const c of P.cambiosReg)await up(()=>window.fsSetDoc(window.fsDoc(window.db,"conta_reglas",String(c.id)),{cuenta:c.cuenta},{merge:true}));
-  for(const c of P.borrar)await up(()=>fbD("iva_cuentas",c.id));
+  if(window._ccEnCurso){alert("Ya hay una revisión aplicándose. Espera a que termine.");return;}
+  window._ccEnCurso=true;
+  const ops=[];
+  P.cambiosFicha.forEach(c=>ops.push(["set","iva_cuentas",c.id,c.upd,true]));
+  P.cambiosFact.forEach(c=>ops.push(["set","iva_facturas",c.id,{cuenta:c.cuenta},true]));
+  P.cambiosAs.forEach(c=>ops.push(["set","conta_asientos",c.id,{...c.a,modificado:new Date().toISOString()},false]));
+  P.cambiosReg.forEach(c=>ops.push(["set","conta_reglas",c.id,{cuenta:c.cuenta},true]));
+  P.borrar.forEach(c=>ops.push(["del","iva_cuentas",c.id]));
+  let ok=0,err=0;
+  try{
+    if(window.fsBatch){   // en lotes: se guarda todo de una vez y la pantalla se redibuja una sola vez
+      for(let i=0;i<ops.length;i+=400){
+        const b=window.fsBatch();
+        ops.slice(i,i+400).forEach(([t,col,id,d,merge])=>{const r=window.fsDoc(window.db,col,String(id));if(t==="del")b.delete(r);else b.set(r,d,merge?{merge:true}:undefined);});
+        try{await b.commit();ok+=Math.min(400,ops.length-i);}catch(e){console.error(e);err+=Math.min(400,ops.length-i);alert("Error al guardar: "+(e.message||e));break;}
+      }
+    } else {
+      for(const [t,col,id,d,merge] of ops){try{if(t==="del")await window.fsDeleteDoc(window.fsDoc(window.db,col,String(id)));else await window.fsSetDoc(window.fsDoc(window.db,col,String(id)),d,merge?{merge:true}:undefined);ok++;}catch(e){console.error(e);err++;}}
+    }
+  } finally { window._ccEnCurso=false; }
   alert("Hecho: "+ok+" cambios"+(err?" ("+err+" con error: mira la consola)":"")+"."+extra);
   renderC();
 }
