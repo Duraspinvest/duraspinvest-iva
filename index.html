@@ -1086,6 +1086,7 @@ function ctBanco(box,cid){
     "<div><div class='filtro-label'>Cuenta del banco</div><input class='fi' id='ctBcoCta' value='"+(window._ctBcoCta||CT_BANCO)+"' style='width:120px;font-family:monospace;' onchange='window._ctBcoCta=this.value'></div>"+
     "<input type='file' id='ctBcoFile' accept='.xlsx,.xls,.csv,.txt,.n43,.aeb,.q43' style='display:none;' onchange='ctLeerBanco(this)'>"+
     "<button class='btn btn-primary' onclick=\"document.getElementById('ctBcoFile').click()\">&#8679; Importar extracto</button>"+
+    "<button class='btn btn-secondary' onclick='ctReaplicar()' title='Pasa a su cuenta los movimientos que se quedaron en la 555 cuando ya has enseñado a la app ese concepto'>&#129504; Aplicar lo aprendido a lo ya importado</button>"+
     "<div style='font-size:12px;color:var(--gray-400);max-width:520px;'>Norma 43 (fichero del banco) o Excel/CSV con columnas de fecha, concepto e importe (o cargo y abono). La app propone la contrapartida: cobros y pagos de facturas, Seguridad Social, Hacienda, nóminas, comisiones... Revísala y pulsa «Crear asientos».</div></div></div>"+
     "<div id='ctBcoRes'></div>";
   if(window._ctMovs&&window._ctMovs.cid===cid)ctPintaMovs();
@@ -1148,7 +1149,7 @@ function ctProponer(cid,m){
   // 2) lo que ya elegiste antes para un concepto igual (se aprende al crear los asientos o al corregirlos en el Diario)
   const k=ctClaveBanco(m.concepto),sg=imp<0?"-":"+";
   const ap=k&&(window.WREG||[]).find(r=>r.cid===cid&&r.clave===k&&r.signo===sg);
-  if(ap)return {cta:ap.cuenta,txt:(ap.texto||m.concepto),por:"aprendida"};
+  if(ap)return {cta:ap.cuenta,txt:(k.endsWith("#")?m.concepto:(ap.texto||m.concepto)),por:"aprendida"};
   const R=[
     [/tgss|seguridad social|r ?e ?autonom|reta\b|cotizacion/,()=>/autonom|reta/.test(t)?"64200000":"47600000","Seguridad Social"],
     [/aeat|agencia tributaria|agencia estatal|hacienda|impuesto|modelo|mod\.? ?\d{3}/,()=>/130/.test(t)?"47300000":/111|115/.test(t)?"47510000":/200|202/.test(t)?"47300000":"47500000","Hacienda"],
@@ -1167,7 +1168,33 @@ function ctProponer(cid,m){
   return {cta:"55500000",txt:m.concepto,por:""};
 }
 // Clave de un concepto bancario para recordar la cuenta: sin números ni signos, 3 primeras palabras
-function ctClaveBanco(c){const w=_impNorm(c).replace(/[0-9]+/g," ").split(/\s+/).filter(x=>x.length>1).slice(0,3).join(" ");return w.length>=4?w:"";}
+function ctClaveBanco(c){
+  const n=_impNorm(c),ws=n.replace(/[0-9]+/g," ").split(/\s+/).filter(x=>x.length>1).slice(0,3),w=ws.join(" ");
+  if(w.length>=4)return w;
+  // Conceptos cortos con números que cambian (p. ej. cobros del TPV «ON 367607595 3112»): «ON #»
+  if(ws.length&&/[0-9]/.test(n))return (w+" #").trim();
+  return "";
+}
+// Aplicar lo aprendido a los movimientos del banco ya importados que se quedaron en la 555
+async function ctReaplicar(){
+  const cid=document.getElementById("ctCli").value;if(!cid)return;
+  const cambios=[];const resumen={};
+  (window.WAS||[]).filter(a=>a.cid===cid&&a.origen==="banco"&&a.banco&&(a.lineas||[]).some(l=>ctNorm(l.c).startsWith("555"))).forEach(a=>{
+    const k=ctClaveBanco(a.banco),sg=(a.importe||0)<0?"-":"+";
+    const r=k&&(window.WREG||[]).find(x=>x.cid===cid&&x.clave===k&&x.signo===sg);
+    if(!r||!r.cuenta||ctNorm(r.cuenta).startsWith("555"))return;
+    cambios.push({...a,lineas:a.lineas.map(l=>ctNorm(l.c).startsWith("555")?{...l,c:ctNorm(r.cuenta)}:l),modificado:new Date().toISOString()});
+    const t=k+" → "+r.cuenta;resumen[t]=(resumen[t]||0)+1;
+  });
+  if(!cambios.length){alert("No hay movimientos en la 555 que coincidan con algo aprendido.\n\nPara enseñarle: abre un movimiento de la 555 desde el Mayor (✎), cámbialo a su cuenta y guarda. Después vuelve a pulsar este botón.");return;}
+  if(!confirm("Se pasarán "+cambios.length+" movimientos de la 555 a su cuenta:\n\n"+Object.entries(resumen).map(([t,n])=>"· "+t+" ("+n+")").join("\n")+"\n\n¿Seguir?"))return;
+  try{
+    if(window.fsBatch){for(let i=0;i<cambios.length;i+=400){const b=window.fsBatch();cambios.slice(i,i+400).forEach(a=>b.set(window.fsDoc(window.db,"conta_asientos",String(a.id)),a));await b.commit();}}
+    else for(const a of cambios)await window.fsSetDoc(window.fsDoc(window.db,"conta_asientos",String(a.id)),a);
+    alert("Hecho: "+cambios.length+" movimientos reclasificados.");
+  }catch(e){console.error(e);alert("No se ha podido guardar: "+(e.message||e));}
+}
+window.ctReaplicar=ctReaplicar;
 async function ctAprender(cid,concepto,importe,cuenta,texto){
   const k=ctClaveBanco(concepto);cuenta=ctNorm(cuenta);if(!k||!cuenta||cuenta.startsWith("555"))return;
   const sg=importe<0?"-":"+";const id=(cid+"_"+sg+"_"+k).replace(/[^A-Za-z0-9_+-]/g,"_").slice(0,140);
