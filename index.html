@@ -230,7 +230,7 @@ body.visor-open .modal-overlay.open{display:flex;}
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
     <div><div style="font-size:16px;font-weight:600;color:var(--navy);">Cuentas contables</div>
     <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Por cliente del despacho. El mismo proveedor puede tener cuentas distintas para cada cliente.</div></div>
-    <div style="display:flex;gap:6px;"><button class="btn" onclick="ccRevisar()" title="Une fichas repetidas (mismo NIF o mismo nombre), separa las que comparten subcuenta y pone a cada factura y asiento la cuenta de su ficha">&#128269; Revisar y unificar cuentas</button><button class="btn" onclick="crearCuentasBoton()" title="Crea las subcuentas 400/430 que falten para las facturas del cliente elegido">Crear cuentas que faltan</button><button class="btn btn-primary" onclick="openCM()">+ Anadir cuenta</button></div>
+    <div style="display:flex;gap:6px;"><button class="btn" onclick="ccRevisar()" title="Une fichas repetidas (mismo NIF o mismo nombre), separa las que comparten subcuenta y pone a cada factura y asiento la cuenta de su ficha">&#128269; Revisar y unificar cuentas</button><button class="btn" onclick="crearCuentasBoton()" title="Crea las subcuentas 400/430 que falten para las facturas del cliente elegido">Crear cuentas que faltan</button><button class="btn" onclick="ccImportar()" title="Crea o completa fichas de clientes y proveedores desde un Excel (por ejemplo, un listado de Delsol)">&#8679; Importar desde Excel</button><button class="btn btn-primary" onclick="openCM()">+ Anadir cuenta</button></div>
   </div>
   <div class="filtros">
     <div class="filtro-group"><span class="filtro-label">Cliente</span>
@@ -578,11 +578,13 @@ body.visor-open .modal-overlay.open{display:flex;}
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   const app = initializeApp({apiKey:"AIzaSyCVK3yF15Udps1l046kv6M1TASIwVEPcVs",authDomain:"duraspinvest.firebaseapp.com",projectId:"duraspinvest",storageBucket:"duraspinvest-docs-eu",messagingSenderId:"280764832749",appId:"1:280764832749:web:a1fa6c44cf59518541a5e4"});
   const db=getFirestore(app),auth=getAuth(app);
   window.db=db;window.auth=auth;window.fsSignIn=signInWithEmailAndPassword;window.fsSignOut=signOut;
   window.fsDoc=doc;window.fsSetDoc=setDoc;window.fsDeleteDoc=deleteDoc;window.fsCollection=collection;window.fsBatch=()=>writeBatch(db);
+  // Transacción (VERI*FACTU): get devuelve {exists,data}
+  window.fsTx=(fn)=>runTransaction(db,async t=>fn({get:async r=>{const s=await t.get(r);return {exists:s.exists(),data:s.data()};},set:(r,d)=>t.set(r,d),delete:r=>t.delete(r)}));
   let u1,u2,u3;
   function act(){
     u1=onSnapshot(collection(db,"clients"),s=>{
@@ -601,6 +603,8 @@ body.visor-open .modal-overlay.open{display:flex;}
       clearTimeout(window._fxT);window._fxT=setTimeout(()=>{if(typeof fxInit==="function")fxInit();},120);};
     onSnapshot(collection(db,"fact_emisores"),s=>{const m={};s.docs.forEach(d=>{m[d.id]={...d.data(),id:d.id};});window.WFE=m;_fxAct();});
     onSnapshot(collection(db,"fact_emitidas"),s=>{window.WFX=s.docs.map(d=>({...d.data(),id:d.id}));_fxAct();});
+    onSnapshot(collection(db,"vf_registros"),s=>{window.WVF=s.docs.map(d=>({...d.data(),id:d.id}));_fxAct();},e=>console.warn("vf_registros",e));
+    onSnapshot(collection(db,"vf_cabeza"),s=>{const m={};s.docs.forEach(d=>{m[d.id]={...d.data(),id:d.id};});window.WVFC=m;},e=>console.warn("vf_cabeza",e));
     onSnapshot(collection(db,"epigrafes"),s=>{
       window.WEP=s.docs.map(d=>({...d.data(),id:d.id}));
       if(typeof renderEpis==="function") renderEpis();
@@ -713,7 +717,7 @@ function emSync(){
   window.WFI=map("iva_fiscal");window.WIN=map("iva_ingresos");window.WDOC=map("iva_docs");
   window.WAS=arr("conta_asientos");window.WREG=arr("conta_reglas");window.WINM=arr("conta_inmov");window.WCP=map("conta_plan");
   window.portalDocs=arr("portal_documentos");
-  window.WFE=map("fact_emisores");window.WFX=arr("fact_emitidas");
+  window.WFE=map("fact_emisores");window.WFX=arr("fact_emitidas");window.WVF=arr("vf_registros");window.WVFC=map("vf_cabeza");
   const call=f=>{try{if(typeof window[f]==="function")window[f]();}catch(e){console.warn(f,e);}};
   ["poblarSel","renderF","renderSt","renderC","renderEpis"].forEach(call);
   if(window.ctRefresh)try{window.ctRefresh();}catch(e){}
@@ -4768,12 +4772,12 @@ function fxRender() {
   if (!cid) { box.innerHTML = "<div class='empty'>🔒 Elige arriba el cliente para el que vas a hacer facturas.</div>"; return; }
   const e = fxEmisor(cid);
   if (!e) { box.innerHTML = "<div class='card'><div style='font-size:14px;margin-bottom:10px;'><b>" + fxH(fxCliNom(cid)) + "</b> todavía no tiene configurada la facturación.</div><button class='btn btn-primary' onclick='fxConfig()'>Configurar sus datos de facturación</button></div>"; return; }
-  const tabs = [["facturas", "Facturas"], ["clientes", "Sus clientes (" + fxFichas(cid).length + ")"]];
+  const tabs = [["facturas", "Facturas"], ["clientes", "Sus clientes (" + fxFichas(cid).length + ")"]].concat(e.verifactu ? [["verifactu", "VERI*FACTU" + (e.verifactu === "pruebas" ? " (pruebas)" : "")]] : []);
   let h = "<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;'>" +
     tabs.map(([k, l]) => "<button class='btn " + (FX.vista === k ? "btn-primary" : "btn-secondary") + "' onclick=\"fxVista('" + k + "')\">" + l + "</button>").join("") +
     "<span style='flex:1'></span><button class='btn btn-secondary' onclick='fxConfig()'>⚙ Datos del emisor</button>" +
     "<button class='btn btn-primary' onclick='fxNueva()'>+ Nueva factura</button></div>";
-  if (FX.vista === "clientes") h += fxHtmlClientes(cid); else h += fxHtmlFacturas(cid);
+  if (FX.vista === "clientes") h += fxHtmlClientes(cid); else if (FX.vista === "verifactu" && e.verifactu) h += vfHtmlRegistros(cid); else h += fxHtmlFacturas(cid);
   box.innerHTML = h;
 }
 function fxHtmlFacturas(cid) {
@@ -4788,13 +4792,15 @@ function fxHtmlFacturas(cid) {
   h += "<div class='card' style='padding:0;overflow:auto;'><table><thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th style='text-align:right;'>Base</th><th style='text-align:right;'>IVA</th><th style='text-align:right;'>Total</th><th>Estado</th><th></th></tr></thead><tbody>" +
     L.map((f) => {
       const c = fxCalc(f), rect = f.tipo === "R";
-      const est = f.estado === "borrador" ? "<span class='badge' style='background:#FEF3C7;color:#92400E;'>Borrador</span>" :
+      const est = f.estado === "borrador" ? "<span class='badge' style='background:#FEF3C7;color:#92400E;'>Borrador</span>" : f.estado === "anulada" ? "<span class='badge' style='background:#F3F4F6;color:#6B7280;text-decoration:line-through;'>Anulada</span>" :
         "<span class='badge' style='background:#D1FAE5;color:#065F46;'>Emitida</span>" + (f.rectificadaPor ? " <span class='badge' style='background:#FEE2E2;color:#991B1B;'>rectificada</span>" : "") + (rect ? " <span class='badge' style='background:#E0E7FF;color:#3730A3;'>rectificativa</span>" : "");
       const b = (t, fn, tit) => "<button class='btn btn-secondary' style='padding:4px 8px;font-size:12px;' title='" + tit + "' onclick=\"" + fn + "('" + f.id + "')\">" + t + "</button> ";
       return "<tr ondblclick=\"fxAbrir('" + f.id + "')\" style='cursor:pointer;'><td><b>" + fxH(f.numero || "—") + "</b></td><td>" + fxF(f.fecha) + "</td><td>" + fxH((f.receptor || {}).nombre || "") + "</td>" +
         "<td class='td-r'>" + fxE(c.base) + "</td><td class='td-r'>" + fxE(c.cuota) + "</td><td class='td-r' style='font-weight:600;'>" + fxE(c.total) + "</td><td>" + est + "</td><td style='white-space:nowrap;'>" +
         b("✎", "fxAbrir", f.estado === "borrador" ? "Editar" : "Ver") + b("PDF", "fxPdf", "Descargar el PDF") + b("⧉", "fxDuplicar", "Nueva factura igual a esta") +
         (f.estado === "emitida" && !rect && !f.rectificadaPor ? b("Rectificar", "fxRectificar", "Hacer una factura rectificativa") : "") +
+        (f.estado === "emitida" && !f.rectificadaPor ? b("Anular", "fxAnular", "Anular: solo si se emitió por error y no debió existir") : "") +
+        (f.vf ? " <span title='Registro VERI*FACTU " + fxH(f.vf.registro) + "' style='font-size:10px;color:#3730A3;'>VF</span>" : "") +
         (f.estado === "borrador" ? b("✕", "fxBorrar", "Borrar el borrador") : "") + "</td></tr>";
     }).join("") + "</tbody></table></div>";
   return h;
@@ -4819,6 +4825,10 @@ window.fxConfig = function () {
     inp("fxeSF", "Serie facturas", fxSerie(e, "F")) + inp("fxeSR", "Serie rectificativas", fxSerie(e, "R")) +
     inp("fxeIni", "Primer número de " + anio + " (si ya ha hecho facturas este año fuera de la app)", ((e.inicio || {})[ser + anio]) || "", " style='grid-column:1/3'") +
     inp("fxeCta", "Cuenta de ingresos para contabilidad", e.cuentaVentas || "70000000") +
+    "<div class='fg' style='grid-column:1/3'><label class='fl'>VERI*FACTU</label><select class='fi2' id='fxeVF'>" +
+      [["", "No (facturas sin VERI*FACTU)"], ["pruebas", "Pruebas: registros, huella y QR, con marca «PRUEBA» en el PDF"], ["produccion", "Real (cuando esté activado el envío a la AEAT)"]]
+        .map(([k, l]) => "<option value='" + k + "'" + ((e.verifactu || "") === k ? " selected" : "") + (k === "produccion" ? " disabled" : "") + ">" + l + "</option>").join("") +
+    "</select><div style='font-size:11px;color:var(--gray-600);margin-top:3px;'>En pruebas las facturas salen con la marca «PRUEBA · SIN VALIDEZ»: úsalo con un cliente de pruebas o con tus propios datos, no para facturar de verdad.</div></div>" +
     "<div class='fg'><label class='fl'>Retención IRPF habitual</label><select class='fi2' id='fxeRet'>" + ["", "7", "15", "19"].map((r) => "<option value='" + r + "'" + (String(e.retPct || "") === r ? " selected" : "") + ">" + (r ? r + " %" : "Sin retención") + "</option>").join("") + "</select></div>" +
     "<div class='fg' style='grid-column:1/3'><label class='fl'>Texto al pie (opcional: Registro Mercantil, etc.)</label><textarea class='fi2' id='fxePie' rows='2'>" + fxH(e.pie || "") + "</textarea></div>" +
     "<div class='fg' style='grid-column:1/3'><label class='fl'>Logo (opcional)</label><div style='display:flex;gap:10px;align-items:center;'>" +
@@ -4845,7 +4855,7 @@ window.fxGuardaConfig = async function () {
   const inicio = { ...(prev.inicio || {}) }; if (g("fxeIni")) inicio[ser + anio] = parseInt(g("fxeIni"), 10) || 1; else delete inicio[ser + anio];
   await fbS("fact_emisores", cid, { ...prev, id: cid, clienteDespachoId: cid, nombre: g("fxeNom"), nif: g("fxeNif").toUpperCase(), comercial: g("fxeNC"), domicilio: g("fxeDom"), cp: g("fxeCP"),
     poblacion: g("fxePob"), provincia: g("fxePrv"), tel: g("fxeTel"), email: g("fxeMail"), iban: g("fxeIban").toUpperCase(), formaPago: g("fxePago"), diasVto: g("fxeVto"),
-    series: { F: ser, R: g("fxeSR") || "R" }, inicio, cuentaVentas: g("fxeCta") || "70000000", retPct: g("fxeRet"), pie: g("fxePie"), logo: FX._logo || "",
+    series: { F: ser, R: g("fxeSR") || "R" }, inicio, cuentaVentas: g("fxeCta") || "70000000", retPct: g("fxeRet"), pie: g("fxePie"), logo: FX._logo || "", verifactu: g("fxeVF"),
     modificado: new Date().toISOString(), creado: prev.creado || new Date().toISOString() });
   closeM("fxModal"); showToast("✓ Datos del emisor guardados");
 };
@@ -4853,7 +4863,7 @@ window.fxGuardaConfig = async function () {
 // ---------- Clientes del emisor (fichas 430 por NIF) ----------
 function fxHtmlClientes(cid) {
   const L = fxFichas(cid);
-  let h = "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'><div style='font-size:12px;color:var(--gray-600);'>Son las mismas fichas de clientes (430) de «Cuentas contables». Para facturar, cada uno necesita NIF y domicilio.</div><button class='btn btn-primary' onclick=\"fxFicha('')\">+ Nuevo cliente</button></div>";
+  let h = "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'><div style='font-size:12px;color:var(--gray-600);'>Son las mismas fichas de clientes (430) de «Cuentas contables». Para facturar, cada uno necesita NIF y domicilio.</div><div style='display:flex;gap:6px;'><button class='btn btn-secondary' onclick=\"ccImportar('" + cid + "')\">⇪ Importar desde Excel</button><button class='btn btn-primary' onclick=\"fxFicha('')\">+ Nuevo cliente</button></div></div>";
   if (!L.length) return h + "<div class='empty'>Todavía no tiene clientes con NIF.</div>";
   return h + "<div class='card' style='padding:0;overflow:auto;'><table><thead><tr><th>Cliente</th><th>NIF</th><th>Domicilio</th><th>Cuenta</th><th></th></tr></thead><tbody>" +
     L.map((c) => "<tr ondblclick=\"fxFicha('" + c.id + "')\" style='cursor:pointer;'><td><b>" + fxH(c.nombre) + "</b></td><td>" + fxH(c.nif) + "</td><td style='font-size:11px;'>" +
@@ -4908,7 +4918,7 @@ window.fxDuplicar = function (id) {
 };
 window.fxRectificar = function (id) {
   const f = (window.WFX || []).find((x) => x.id === id); if (!f) return;
-  FX.ed = { ...fxVacia(f.emisor), tipo: "R", rectifica: { id: f.id, numero: f.numero, fecha: f.fecha }, motivo: "", receptorId: f.receptorId,
+  FX.ed = { ...fxVacia(f.emisor), tipo: "R", tipoRect: "R1", exencion: f.exencion || "E1", rectifica: { id: f.id, numero: f.numero, fecha: f.fecha }, motivo: "", receptorId: f.receptorId,
     lineas: JSON.parse(JSON.stringify(f.lineas || [])).map((l) => ({ ...l, c: String(-(l.c === "" || l.c == null ? 1 : fxNum(l.c))) })),
     retPct: f.retPct || "", formaPago: f.formaPago, mencion: f.mencion || "" };
   fxPintaEditor();
@@ -4916,7 +4926,7 @@ window.fxRectificar = function (id) {
 function fxLeeEditor() {
   const f = FX.ed; if (!f) return;
   const g = (i) => { const el = document.getElementById(i); return el ? el.value : undefined; };
-  ["fecha", "fechaOp", "receptorId", "retPct", "formaPago", "vto", "obs", "mencion", "motivo"].forEach((k) => { const v = g("fxd_" + k); if (v !== undefined) f[k] = v; });
+  ["fecha", "fechaOp", "receptorId", "retPct", "formaPago", "vto", "obs", "mencion", "motivo", "tipoRect", "exencion"].forEach((k) => { const v = g("fxd_" + k); if (v !== undefined) f[k] = v; });
   f.lineas = (f.lineas || []).map((l, i) => ({ d: g("fxl_d" + i) ?? l.d, c: g("fxl_c" + i) ?? l.c, p: g("fxl_p" + i) ?? l.p, dto: g("fxl_dto" + i) ?? l.dto, iva: g("fxl_iva" + i) ?? l.iva }));
 }
 window.fxLinea = function (accion, i) {
@@ -4936,7 +4946,7 @@ function fxHtmlTotales(c) {
     "<tr><td style='padding:4px 10px;font-weight:700;'>TOTAL</td><td style='text-align:right;padding:4px 10px;font-weight:700;font-size:15px;'>" + fxE(c.total) + "</td><td></td></tr></table>";
 }
 function fxPintaEditor() {
-  const f = FX.ed, cid = f.emisor, sol = f.estado === "emitida";
+  const f = FX.ed, cid = f.emisor, sol = f.estado === "emitida" || f.estado === "anulada";
   const dis = sol ? " disabled" : "";
   const fichas = fxFichas(cid), r = fichas.find((x) => x.id === f.receptorId);
   const iv = (i, v) => "<select class='fi2' id='fxl_iva" + i + "' onchange='fxRecalc()'" + dis + ">" + FX_IVAS.map(([k, l]) => "<option value='" + k + "'" + (String(v) === k ? " selected" : "") + ">" + l + "</option>").join("") + "</select>";
@@ -4944,8 +4954,10 @@ function fxPintaEditor() {
   document.getElementById("fxModalT").innerHTML = tit;
   const c = fxCalc(f);
   document.getElementById("fxModalC").innerHTML =
-    (sol ? "<div style='font-size:12px;background:#ECFDF5;color:#065F46;padding:8px 10px;border-radius:8px;margin-bottom:10px;'>Emitida: no se puede modificar. Si hay un error, haz una factura rectificativa.</div>" : "") +
+    (sol ? "<div style='font-size:12px;background:#ECFDF5;color:#065F46;padding:8px 10px;border-radius:8px;margin-bottom:10px;'>Emitida: no se puede modificar. Si hay un error, haz una factura rectificativa." + (f.vf ? " Registro VERI*FACTU " + fxH(f.vf.registro) + " · huella " + fxH(String(f.vf.huella).slice(0, 16)) + "…" : "") + "</div>" : "") +
+    (f.estado === "anulada" ? "<div style='font-size:12px;background:#F3F4F6;color:#374151;padding:8px 10px;border-radius:8px;margin-bottom:10px;'>Anulada el " + fxF(String((f.anulacion || {}).fecha || "").slice(0, 10)) + ": se considera no emitida.</div>" : "") +
     (f.tipo === "R" && f.rectifica ? "<div style='font-size:12px;background:#EEF2FF;color:#3730A3;padding:8px 10px;border-radius:8px;margin-bottom:10px;'>Rectifica la factura <b>" + fxH(f.rectifica.numero) + "</b> del " + fxF(f.rectifica.fecha) + ". Para anularla entera deja las cantidades en negativo; para corregir solo una parte, deja la diferencia.</div>" +
+      "<div class='fg' style='margin-bottom:10px;'><label class='fl'>Tipo de rectificativa</label><select class='fi2' id='fxd_tipoRect'" + dis + ">" + VF_RECT.map(([k, l]) => "<option value='" + k + "'" + ((f.tipoRect || "R1") === k ? " selected" : "") + ">" + k + " · " + l + "</option>").join("") + "</select></div>" +
       "<div class='fg' style='margin-bottom:10px;'><label class='fl'>Motivo de la rectificación</label><input class='fi2' id='fxd_motivo' value='" + fxH(f.motivo || "") + "' placeholder='p. ej. error en el precio, devolución, descuento posterior…'" + dis + "></div>" : "") +
     "<div style='display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;align-items:end;'>" +
     "<div class='fg'><label class='fl'>Cliente</label><div style='display:flex;gap:6px;'><select class='fi2' id='fxd_receptorId'" + dis + "><option value=''>Elige…</option>" +
@@ -4967,6 +4979,7 @@ function fxPintaEditor() {
     "<div class='fg'><label class='fl'>Forma de pago</label><select class='fi2' id='fxd_formaPago'" + dis + ">" + FX_PAGO.map((p) => "<option" + (p === f.formaPago ? " selected" : "") + ">" + p + "</option>").join("") + "</select></div>" +
     "<div class='fg'><label class='fl'>Vencimiento</label><input type='date' class='fi2' id='fxd_vto' value='" + fxH(f.vto || "") + "'" + dis + "></div></div>" +
     "<div class='fg' style='margin-top:10px;'><label class='fl'>Mención legal (exención, inversión del sujeto pasivo…)</label><input class='fi2' id='fxd_mencion' value='" + fxH(f.mencion || "") + "' placeholder='p. ej. Operación exenta de IVA según el artículo 20.Uno.9º de la Ley 37/1992'" + dis + "></div>" +
+    "<div class='fg' style='margin-top:10px;'><label class='fl'>Causa de exención (solo si hay líneas exentas)</label><select class='fi2' id='fxd_exencion'" + dis + ">" + VF_EXENTA.map(([k, l]) => "<option value='" + k + "'" + ((f.exencion || "E1") === k ? " selected" : "") + ">" + k + " · " + l + "</option>").join("") + "</select></div>" +
     "<div class='fg' style='margin-top:10px;'><label class='fl'>Observaciones (salen en la factura)</label><textarea class='fi2' id='fxd_obs' rows='2'" + dis + ">" + fxH(f.obs || "") + "</textarea></div>" +
     "<div id='fxTot' style='margin-top:12px;'>" + fxHtmlTotales(c) + "</div>";
   document.getElementById("fxModalB").innerHTML = "<button class='btn btn-secondary' onclick=\"closeM('fxModal')\">Cerrar</button>" +
@@ -5004,8 +5017,13 @@ window.fxGuardar = async function (emitir) {
     if (!confirm("Se emitirá la factura " + numero + " por " + fxE(c.total) + " a " + r.nombre + ".\n\nUna vez emitida no se puede modificar (solo rectificar) y queda apuntada en el libro de emitidas de " + fxCliNom(cid) + ". ¿Seguir?")) return;
     Object.assign(doc, { estado: "emitida", serie: ser, correlativo: n, numero, emitida: new Date().toISOString(),
       emisorDatos: { nombre: e.nombre, nif: e.nif, comercial: e.comercial || "", domicilio: e.domicilio, cp: e.cp || "", poblacion: e.poblacion || "", provincia: e.provincia || "", tel: e.tel || "", email: e.email || "", iban: e.iban || "", pie: e.pie || "" } });
-    await fbS("fact_emitidas", id, doc);
-    await fxAlLibro(doc);
+    if (e.verifactu) {
+      if (!window.fsTx) { alert("Las facturas VERI*FACTU no se pueden emitir en modo emergencia (sin conexión con la base de datos)."); return; }
+      try { await vfEmitir(doc, e); } catch (er) { alert("No se ha podido emitir: " + (er.message || er)); return; }
+    } else {
+      await fbS("fact_emitidas", id, doc);
+      await fbS("iva_facturas", "fx_" + id, fxLibroDoc(doc));
+    }
     if (f.tipo === "R" && f.rectifica) await window.fsSetDoc(window.fsDoc(window.db, "fact_emitidas", f.rectifica.id), { rectificadaPor: numero }, { merge: true });
     FX.ed = doc; closeM("fxModal"); showToast("✓ Factura " + numero + " emitida y apuntada en el libro");
     setTimeout(() => fxPdf(id), 300);
@@ -5015,7 +5033,7 @@ window.fxGuardar = async function (emitir) {
   setTimeout(fxRender, 200);
 };
 // Libro de facturas emitidas (iva_facturas) de ese cliente del despacho
-async function fxAlLibro(f) {
+function fxLibroDoc(f) {
   const c = fxCalc(f), e = fxEmisor(f.emisor) || {};
   const con = c.tipos.filter((t) => t.pct !== "E"), ex = c.tipos.find((t) => t.pct === "E");
   const ficha = (window.WCC || []).find((x) => x.id === f.receptorId) || {};
@@ -5024,7 +5042,7 @@ async function fxAlLibro(f) {
     concepto: String((c.L[0] || {}).d || "").slice(0, 120), exento: ex ? ex.base : 0, op: "int", rebuCoste: 0,
     total: c.total, retPct: f.retPct || "", retImporte: c.ret, m347: "0", deducible: "", ocasional: false, origen: "facturacion", factId: f.id, creado: new Date().toISOString() };
   [1, 2, 3].forEach((k, i) => { const t = con[i]; d["base" + k] = t ? t.base : 0; d["pct" + k] = t ? t.pct : ""; d["iva" + k] = t ? t.cuota : 0; });
-  await fbS("iva_facturas", d.id, d);
+  return d;
 }
 window.fxBorrar = async function (id) {
   const f = (window.WFX || []).find((x) => x.id === id); if (!f || f.estado !== "borrador") return;
@@ -5040,6 +5058,7 @@ function fxPdfLib() {
 }
 async function fxGenerarPdf(f) {
   const { PDFDocument, StandardFonts, rgb } = await fxPdfLib();
+  if (f.vf && f.vf.qr) await vfQRLib();
   const e = f.emisorDatos || fxEmisor(f.emisor) || {}, logo = (fxEmisor(f.emisor) || {}).logo || "";
   const R = f.receptor || (() => { const r = (window.WCC || []).find((x) => x.id === f.receptorId) || {}; return r; })();
   const c = fxCalc(f);
@@ -5052,14 +5071,15 @@ async function fxGenerarPdf(f) {
   let pg = pdf.addPage([W, H]), y = H - M;
   const pags = [pg];
   const txt = (s, x, yy, o = {}) => { const fn = o.b ? F.b : F.r, sz = o.s || 9.5, t = san(s); const w = fn.widthOfTextAtSize(t, sz);
-    pg.drawText(t, { x: o.r ? x - w : o.c ? x - w / 2 : x, y: yy, size: sz, font: fn, color: o.col || TX }); return w; };
+    pg.drawText(t, { x: o.r ? x - w : o.c ? x - w / 2 : x, y: yy, size: sz, font: fn, color: o.col || TX, opacity: o.op == null ? 1 : o.op }); return w; };
   const partir = (s, sz, ancho, fn) => { const out = []; String(s == null ? "" : s).split(/\n/).forEach((par) => { let cur = ""; san(par).split(/\s+/).forEach((w) => { const t = cur ? cur + " " + w : w; if ((fn || F.r).widthOfTextAtSize(t, sz) > ancho && cur) { out.push(cur); cur = w; } else cur = t; }); out.push(cur); }); return out; };
-  // Cabecera: logo o nombre del emisor
+  // QR tributario (VERI*FACTU): al principio de la factura, entre 30 y 40 mm
   let yTop = y;
+
   if (logo) {
     try { const bytes = Uint8Array.from(atob(logo.split(",")[1]), (ch) => ch.charCodeAt(0)); const im = /png/.test(logo.slice(0, 30)) ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
       const k = Math.min(170 / im.width, 60 / im.height); pg.drawImage(im, { x: M, y: y - im.height * k, width: im.width * k, height: im.height * k }); y -= im.height * k + 10; } catch (er) { console.warn("logo", er); }
-  } else { txt(e.comercial || e.nombre, M, y - 14, { b: true, s: 15, col: NAVY }); y -= 24; }
+  } else { const nm = san(e.comercial || e.nombre); let sz = 15; while (sz > 9 && F.b.widthOfTextAtSize(nm, sz) > 210) sz -= 0.5; txt(nm, M, y - 14, { b: true, s: sz, col: NAVY }); y -= 24; }
   [(logo || e.comercial) ? e.nombre : "", "NIF " + (e.nif || ""), e.domicilio, [e.cp, e.poblacion, e.provincia ? "(" + e.provincia + ")" : ""].filter(Boolean).join(" "), [e.tel, e.email].filter(Boolean).join(" · ")]
     .filter((s) => String(s || "").trim()).forEach((s) => { txt(s, M, y - 10, { s: 9, col: GR }); y -= 12; });
   // Título y datos de la factura (derecha)
@@ -5075,7 +5095,16 @@ async function fxGenerarPdf(f) {
   pg.drawRectangle({ x: M, y: y - bh, width: AN * 0.58, height: bh, color: FON });
   txt("CLIENTE", M + 10, y - 13, { s: 8, b: true, col: GR }); let yc = y - 27;
   rl.forEach((s, i) => { txt(s, M + 10, yc, { s: i ? 9.5 : 10.5, b: !i }); yc -= 12.5; });
-  y -= bh + 16;
+  let yFin = y - bh;
+  // QR tributario (VERI*FACTU): en la parte de arriba de la factura, 32 mm, con su leyenda
+  if (f.vf && f.vf.qr) {
+    const lado = 32 * 72 / 25.4, mods = vfQRMatriz(f.vf.qr), n = mods.length, m = lado / n, x0 = M + AN - lado, yq = y - 10;
+    txt("QR tributario:", x0 + lado / 2, y - 6, { s: 7.5, c: true, col: GR });
+    for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (mods[r][k]) pg.drawRectangle({ x: x0 + k * m, y: yq - (r + 1) * m, width: m + 0.05, height: m + 0.05, color: rgb(0, 0, 0) });
+    txt("VERI*FACTU", x0 + lado / 2, yq - lado - 11, { s: 9, b: true, c: true });
+    yFin = Math.min(yFin, yq - lado - 14);
+  }
+  y = yFin - 16;
   if (f.tipo === "R" && f.rectifica) { partir("Rectifica la factura " + f.rectifica.numero + " de fecha " + fxF(f.rectifica.fecha) + ". Motivo: " + (f.motivo || ""), 9.5, AN).forEach((l) => { txt(l, M, y, { s: 9.5 }); y -= 12; }); y -= 6; }
   // Tabla de líneas
   const cols = [{ t: "Concepto", w: AN * 0.46 }, { t: "Cant.", w: AN * 0.09, r: 1 }, { t: "Precio", w: AN * 0.13, r: 1 }, { t: "Dto.", w: AN * 0.07, r: 1 }, { t: "IVA", w: AN * 0.09, r: 1 }, { t: "Importe", w: AN * 0.16, r: 1 }];
@@ -5110,7 +5139,10 @@ async function fxGenerarPdf(f) {
   pags.forEach((p, k) => { pg = p;
     if (e.pie) partir(e.pie, 7.5, AN).slice(0, 3).forEach((l, i) => txt(l, W / 2, 34 - i * 9, { s: 7.5, col: GR, c: true }));
     if (pags.length > 1) txt("Página " + (k + 1) + " de " + pags.length, W - M, 48, { s: 7.5, col: GR, r: true });
-    if (!f.numero) txt("BORRADOR · SIN VALIDEZ COMO FACTURA", W / 2, H / 2, { s: 26, b: true, col: rgb(0.9, 0.85, 0.85), c: true });
+    const marca = (t, yy) => txt(t, W / 2, yy, { s: 34, b: true, col: rgb(0.8, 0.2, 0.2), c: true, op: 0.16 });
+    if (!f.numero) marca("BORRADOR · SIN VALIDEZ", H * 0.3);
+    else if (f.vf && f.vf.entorno === "pruebas") marca("PRUEBA · SIN VALIDEZ", H * 0.3);
+    if (f.estado === "anulada") marca("ANULADA", H * 0.3 - 50);
   });
   return await pdf.save();
 }
@@ -5130,6 +5162,275 @@ window.fxVistaPrevia = async function () {
 };
 window._fxCalc = fxCalc; window._fxGenerarPdf = fxGenerarPdf;
 
+// =====================================================================================
+// ===== VERI*FACTU · fase 1: registro de facturación de cada factura (alta o anulación),
+// ===== encadenado por huella SHA-256 dentro de cada emisor (NIF), y QR tributario en el PDF.
+// ===== Los registros (vf_registros) solo se pueden crear: las reglas impiden modificarlos o borrarlos.
+// ===== vf_cabeza/{NIF} guarda el último registro de la cadena. Todavía NO se envía nada a la AEAT.
+// =====================================================================================
+window.WVF = window.WVF || [];
+const VF_SISTEMA = { NombreRazon: "Emilio Durá Galán", NIF: "46568304C", NombreSistemaInformatico: "Durespin Fiscal", IdSistemaInformatico: "DF",
+  Version: "1.0", NumeroInstalacion: "1", TipoUsoPosibleSoloVerifactu: "S", TipoUsoPosibleMultiOT: "S", IndicadorMultiplesOT: "S" };
+const VF_QR_URL = { pruebas: "https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR", produccion: "https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR" };
+const VF_RECT = [["R1", "Error fundado en derecho y art. 80 Uno, Dos y Seis LIVA"], ["R2", "Art. 80.Tres LIVA (concurso)"], ["R3", "Art. 80.Cuatro LIVA (créditos incobrables)"], ["R4", "Resto de causas"]];
+const VF_EXENTA = [["E1", "Exenta por el art. 20 LIVA"], ["E2", "Exenta por el art. 21 LIVA (exportaciones)"], ["E3", "Exenta por el art. 22 LIVA"], ["E4", "Exenta por los arts. 23 y 24 LIVA"], ["E5", "Exenta por el art. 25 LIVA (entregas intracomunitarias)"], ["E6", "Exenta por otras causas"]];
+const vfImp = (n) => fxR2(n).toFixed(2);                                   // importe como texto: punto y dos decimales
+const vfFecha = (iso) => String(iso).split("-").reverse().join("-");        // AAAA-MM-DD → DD-MM-AAAA
+function vfAhora(d) {                                                      // fecha y hora de Madrid con su huso: 2026-10-24T10:15:00+02:00
+  d = d || new Date();
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(d).map((x) => [x.type, x.value]));
+  const off = Math.round((Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(d.getTime() / 1000) * 1000) / 60000), a = Math.abs(off);
+  return p.year + "-" + p.month + "-" + p.day + "T" + p.hour + ":" + p.minute + ":" + p.second + (off >= 0 ? "+" : "-") + String(Math.floor(a / 60)).padStart(2, "0") + ":" + String(a % 60).padStart(2, "0");
+}
+async function vfSha(txt) { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(txt)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase(); }
+const vfT = (v) => String(v == null ? "" : v).trim();
+function vfCadena(r) {
+  if (r.tipoRegistro === "anulacion") return "IDEmisorFacturaAnulada=" + vfT(r.IDFactura.IDEmisorFactura) + "&NumSerieFacturaAnulada=" + vfT(r.IDFactura.NumSerieFactura) +
+    "&FechaExpedicionFacturaAnulada=" + vfT(r.IDFactura.FechaExpedicionFactura) + "&Huella=" + vfT(r.HuellaAnterior) + "&FechaHoraHusoGenRegistro=" + vfT(r.FechaHoraHusoGenRegistro);
+  return "IDEmisorFactura=" + vfT(r.IDFactura.IDEmisorFactura) + "&NumSerieFactura=" + vfT(r.IDFactura.NumSerieFactura) + "&FechaExpedicionFactura=" + vfT(r.IDFactura.FechaExpedicionFactura) +
+    "&TipoFactura=" + vfT(r.TipoFactura) + "&CuotaTotal=" + vfT(r.CuotaTotal) + "&ImporteTotal=" + vfT(r.ImporteTotal) + "&Huella=" + vfT(r.HuellaAnterior) + "&FechaHoraHusoGenRegistro=" + vfT(r.FechaHoraHusoGenRegistro);
+}
+function vfUrlQR(nif, num, fecha, importe, entorno) {
+  return (VF_QR_URL[entorno] || VF_QR_URL.pruebas) + "?nif=" + encodeURIComponent(nif) + "&numserie=" + encodeURIComponent(num) + "&fecha=" + fecha + "&importe=" + importe;
+}
+// Datos del registro de alta según la Orden HAC/1177/2024 (nombres de campo de la AEAT)
+function vfRegistroAlta(f, e) {
+  const c = fxCalc(f), R = f.receptor || {};
+  const desglose = c.tipos.map((t) => t.pct === "E"
+    ? { Impuesto: "01", ClaveRegimen: "01", OperacionExenta: f.exencion || "E1", BaseImponibleOimporteNoSujeto: vfImp(t.base) }
+    : { Impuesto: "01", ClaveRegimen: "01", CalificacionOperacion: "S1", TipoImpositivo: vfImp(+t.pct), BaseImponibleOimporteNoSujeto: vfImp(t.base), CuotaRepercutida: vfImp(t.cuota) });
+  const r = {
+    tipoRegistro: "alta", IDVersion: "1.0",
+    IDFactura: { IDEmisorFactura: vfT(e.nif).toUpperCase(), NumSerieFactura: f.numero, FechaExpedicionFactura: vfFecha(f.fecha) },
+    NombreRazonEmisor: e.nombre, TipoFactura: f.tipo === "R" ? (f.tipoRect || "R1") : "F1",
+    DescripcionOperacion: (c.L.map((l) => vfT(l.d).replace(/\s+/g, " ")).join("; ") || "Prestación de servicios").slice(0, 500),
+    Destinatarios: [{ NombreRazon: R.nombre, NIF: vfT(R.nif).toUpperCase() }],
+    Desglose: desglose, CuotaTotal: vfImp(c.cuota), ImporteTotal: vfImp(c.base + c.cuota),   // la retención de IRPF no resta en VERI*FACTU
+    SistemaInformatico: VF_SISTEMA, TipoHuella: "01",
+  };
+  if (f.fechaOp && f.fechaOp !== f.fecha) r.FechaOperacion = vfFecha(f.fechaOp);
+  if (f.tipo === "R" && f.rectifica) { r.TipoRectificativa = "I"; r.FacturasRectificadas = [{ IDEmisorFactura: r.IDFactura.IDEmisorFactura, NumSerieFactura: f.rectifica.numero, FechaExpedicionFactura: vfFecha(f.rectifica.fecha) }]; }
+  return r;
+}
+// Escribe a la vez (transacción) el registro encadenado, la cabeza de la cadena, la factura y el libro
+async function vfGrabar(e, construir, extra) {
+  const nif = vfT(e.nif).toUpperCase(), cabRef = window.fsDoc(window.db, "vf_cabeza", nif);
+  let res = null;
+  await window.fsTx(async (t) => {
+    const cab = await t.get(cabRef), h = cab.exists ? cab.data : null;
+    const seq = (h ? +h.seq : 0) + 1, regId = nif + "_" + String(seq).padStart(7, "0"), regRef = window.fsDoc(window.db, "vf_registros", regId);
+    if ((await t.get(regRef)).exists) throw new Error("La cadena de registros ha cambiado mientras emitías. Vuelve a intentarlo.");
+    const r = construir();
+    r.FechaHoraHusoGenRegistro = vfAhora();
+    r.HuellaAnterior = h ? h.huella : "";
+    r.Encadenamiento = h ? { RegistroAnterior: { IDEmisorFactura: nif, NumSerieFactura: h.numero, FechaExpedicionFactura: h.fecha, Huella: h.huella } } : { PrimerRegistro: "S" };
+    r.Huella = await vfSha(vfCadena(r));
+    const reg = { id: regId, seq, nif, emisor: e.id || e.clienteDespachoId, entorno: e.verifactu, factId: extra.factId, registro: r, cadena: vfCadena(r), estadoEnvio: "pendiente", creado: new Date().toISOString() };
+    t.set(regRef, reg);
+    t.set(cabRef, { nif, seq, id: regId, huella: r.Huella, numero: r.IDFactura.NumSerieFactura, fecha: r.IDFactura.FechaExpedicionFactura, actualizado: new Date().toISOString() });
+    (extra.escribir || []).forEach(([col, id, d]) => t.set(window.fsDoc(window.db, col, id), typeof d === "function" ? d(r, regId) : d));
+    (extra.borrar || []).forEach(([col, id]) => t.delete(window.fsDoc(window.db, col, id)));
+    res = { r, regId };
+  });
+  return res;
+}
+async function vfEmitir(doc, e) {
+  return vfGrabar(e, () => vfRegistroAlta(doc, e), { factId: doc.id, escribir: [
+    ["fact_emitidas", doc.id, (r, regId) => ({ ...doc, vf: { registro: regId, huella: r.Huella, fechaHora: r.FechaHoraHusoGenRegistro, entorno: e.verifactu,
+      qr: vfUrlQR(r.IDFactura.IDEmisorFactura, r.IDFactura.NumSerieFactura, r.IDFactura.FechaExpedicionFactura, r.ImporteTotal, e.verifactu) } })],
+    ["iva_facturas", "fx_" + doc.id, fxLibroDoc(doc)]] });
+}
+// Anular una factura emitida por error (se considera no emitida). Si el emisor está en VERI*FACTU, lleva registro de anulación.
+window.fxAnular = async function (id) {
+  const f = (window.WFX || []).find((x) => x.id === id); if (!f || f.estado !== "emitida") return;
+  const e = fxEmisor(f.emisor) || {};
+  if (!confirm("¿ANULAR la factura " + f.numero + "?\n\nSolo se anula una factura que se emitió por error y no debió existir (por ejemplo, duplicada). Si la operación existió y hay que corregir importes o datos, usa «Rectificar».\n\nSe quitará del libro de emitidas" + (f.vf ? " y se creará un registro de anulación VERI*FACTU" : "") + ".")) return;
+  const anul = { fecha: new Date().toISOString() };
+  if (f.vf) {
+    if (!window.fsTx) { alert("No se puede anular en modo emergencia."); return; }
+    try {
+      await vfGrabar(e, () => ({ tipoRegistro: "anulacion", IDVersion: "1.0", IDFactura: { IDEmisorFactura: vfT(e.nif).toUpperCase(), NumSerieFactura: f.numero, FechaExpedicionFactura: vfFecha(f.fecha) }, SistemaInformatico: VF_SISTEMA, TipoHuella: "01" }),
+        { factId: f.id, escribir: [["fact_emitidas", f.id, (r, regId) => ({ ...f, estado: "anulada", anulacion: { ...anul, registro: regId, huella: r.Huella } })]], borrar: [["iva_facturas", "fx_" + f.id]] });
+    } catch (er) { alert("No se ha podido anular: " + (er.message || er)); return; }
+  } else {
+    await fbS("fact_emitidas", f.id, { ...f, estado: "anulada", anulacion: anul }); await fbD("iva_facturas", "fx_" + f.id);
+  }
+  showToast("Factura " + f.numero + " anulada"); setTimeout(fxRender, 200);
+};
+// ---------- Pestaña VERI*FACTU: registros y comprobación de la cadena ----------
+function vfDeNif(nif) { return (window.WVF || []).filter((r) => r.nif === nif).sort((a, b) => a.seq - b.seq); }
+function vfHtmlRegistros(cid) {
+  const e = fxEmisor(cid) || {}, L = vfDeNif(vfT(e.nif).toUpperCase());
+  let h = "<div class='card' style='font-size:12.5px;line-height:1.5;'>Cada factura emitida o anulada deja aquí un <b>registro de facturación</b> que no se puede modificar ni borrar. " +
+    "Cada registro lleva una huella (SHA-256) calculada con sus datos y con la huella del anterior: si alguien cambiara algo, la cadena se rompe. " +
+    "<b>Todavía no se envía nada a la AEAT</b> (eso será la fase 2)." + (e.verifactu === "pruebas" ? " Este emisor está en <b>pruebas</b>." : "") +
+    "<div style='margin-top:8px;'><button class='btn btn-primary' onclick=\"vfComprobar('" + cid + "')\">🔍 Comprobar la cadena</button> <span id='vfRes' style='margin-left:8px;'></span></div></div>";
+  if (!L.length) return h + "<div class='empty'>Todavía no hay registros. Emite una factura para crear el primero.</div>";
+  return h + "<div class='card' style='padding:0;overflow:auto;'><table><thead><tr><th>Nº</th><th>Tipo</th><th>Factura</th><th>Generado</th><th style='text-align:right;'>Importe</th><th>Huella</th><th>Envío</th></tr></thead><tbody>" +
+    L.slice().reverse().map((x) => { const r = x.registro || {};
+      return "<tr><td>" + x.seq + "</td><td>" + (r.tipoRegistro === "anulacion" ? "Anulación" : "Alta " + fxH(r.TipoFactura)) + "</td><td>" + fxH(r.IDFactura && r.IDFactura.NumSerieFactura) + "</td>" +
+        "<td style='font-size:11px;'>" + fxH(String(r.FechaHoraHusoGenRegistro || "").replace("T", " ")) + "</td><td class='td-r'>" + (r.ImporteTotal != null ? fxE(+r.ImporteTotal) : "") + "</td>" +
+        "<td style='font-family:monospace;font-size:11px;' title='" + fxH(r.Huella) + "'>" + fxH(String(r.Huella || "").slice(0, 16)) + "…</td><td style='font-size:11px;color:var(--gray-600);'>" + (x.estadoEnvio === "pendiente" ? "pendiente (fase 2)" : fxH(x.estadoEnvio)) + "</td></tr>"; }).join("") +
+    "</tbody></table></div>";
+}
+window.vfComprobar = async function (cid) {
+  const e = fxEmisor(cid) || {}, L = vfDeNif(vfT(e.nif).toUpperCase()), out = document.getElementById("vfRes"), err = [];
+  let prev = null;
+  for (const x of L) {
+    const r = x.registro || {}, n = r.IDFactura && r.IDFactura.NumSerieFactura;
+    if (prev && x.seq !== prev.seq + 1) err.push("Falta el registro " + (prev.seq + 1) + " (salta del " + prev.seq + " al " + x.seq + ")");
+    if ((r.HuellaAnterior || "") !== (prev ? prev.registro.Huella : "")) err.push("Registro " + x.seq + " (" + n + "): no enlaza con la huella del anterior");
+    if (await vfSha(vfCadena(r)) !== r.Huella) err.push("Registro " + x.seq + " (" + n + "): la huella no coincide con sus datos (registro alterado)");
+    const f = (window.WFX || []).find((y) => y.id === x.factId);
+    if (!f) err.push("Registro " + x.seq + " (" + n + "): no encuentro la factura");
+    else if (r.tipoRegistro === "alta") {
+      const c = fxCalc(f);
+      if (f.numero !== n || vfFecha(f.fecha) !== r.IDFactura.FechaExpedicionFactura || vfImp(c.cuota) !== r.CuotaTotal || vfImp(c.base + c.cuota) !== r.ImporteTotal) err.push("Factura " + n + ": sus datos actuales no coinciden con los del registro (factura modificada)");
+    } else if (f.estado !== "anulada") err.push("Factura " + n + ": tiene registro de anulación pero no figura como anulada");
+    prev = x;
+  }
+  const cab = (window.WVFC || {})[vfT(e.nif).toUpperCase()];
+  if (cab && prev && cab.seq !== prev.seq) err.push("La cabeza de la cadena indica " + cab.seq + " registros y hay " + prev.seq);
+  if (out) out.innerHTML = !L.length ? "No hay registros." : err.length ? "<span style='color:#B91C1C;font-weight:600;'>⚠ " + err.length + " problema(s):</span><div style='font-size:12px;color:#B91C1C;margin-top:4px;'>" + err.map(fxH).join("<br>") + "</div>"
+    : "<span style='color:#065F46;font-weight:600;'>✓ Cadena correcta: " + L.length + " registros, todas las huellas cuadran y ninguna factura se ha modificado.</span>";
+  return err;
+};
+// ---------- QR (librería qrcode-generator, nivel de corrección M) ----------
+let vfQRP = null;
+function vfQRLib() {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  if (!vfQRP) vfQRP = new Promise((ok, ko) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"; s.onload = () => ok(window.qrcode); s.onerror = () => { vfQRP = null; ko(new Error("No se ha podido cargar el generador de QR")); }; document.head.appendChild(s); });
+  return vfQRP;
+}
+function vfQRMatriz(txt) { const q = window.qrcode(0, "M"); q.addData(txt); q.make(); const n = q.getModuleCount(), m = []; for (let r = 0; r < n; r++) { m.push([]); for (let c = 0; c < n; c++) m[r].push(q.isDark(r, c)); } return m; }
+window._vf = { vfSha, vfCadena, vfAhora, vfUrlQR, vfRegistroAlta };
+
+// =====================================================================================
+// ===== IMPORTAR CLIENTES Y PROVEEDORES (fichas de iva_cuentas) desde un Excel/CSV (p. ej. listado de Delsol)
+// ===== Reconoce las columnas solo; si no acierta, se cambian en la vista previa. Por NIF: si la ficha ya existe,
+// ===== solo completa lo que le falte (no cambia nombre ni cuenta); si no existe, la crea con su subcuenta.
+// =====================================================================================
+const CI = { cid: "", filas: [], cab: [], map: {}, tipo: "cuenta", archivo: "" };
+const CI_CAMPOS = [["nombre", "Nombre / razón social"], ["comercial", "Nombre comercial"], ["nif", "NIF"], ["domicilio", "Domicilio"], ["cp", "Código postal"], ["poblacion", "Población"],
+  ["provincia", "Provincia"], ["pais", "País"], ["tel", "Teléfono"], ["email", "Email"], ["cuenta", "Subcuenta contable"]];
+function ciAdivina(cab) {
+  const n = cab.map((h) => _impNorm(h)), s = n.map((h) => h.replace(/ /g, "")), m = {};
+  const busca = (re, re2) => { let i = n.findIndex((h, k) => re.test(h) || (re2 && re2.test(s[k]))); return i; };
+  m.nombre = busca(/^(nombre fiscal|razon social|denominacion social|nombre o razon|razon)/);
+  if (m.nombre < 0) m.nombre = n.findIndex((h) => /^(nombre|denominacion|descripcion|titulo|cliente|proveedor)$/.test(h) || (/^nombre/.test(h) && !/comercial/.test(h)));
+  m.comercial = busca(/nombre comercial|^comercial/);
+  m.nif = busca(/^(n i f|c i f|d n i)/, /^(nif|cif|dni|nifcif|cifnif|nifiva|nifdni|documento|nifcifdni)/);
+  m.domicilio = busca(/domicilio|direccion|calle/);
+  m.cp = busca(/^(cp|c p|codigo postal|cod postal|postal|c postal)/);
+  m.poblacion = busca(/poblacion|localidad|municipio|ciudad/);
+  m.provincia = busca(/provincia/);
+  m.pais = busca(/^pais/);
+  m.tel = busca(/telefono|^tlf|^tfno|^tel|movil/);
+  m.email = busca(/e ?mail|correo/);
+  m.cuenta = busca(/subcuenta|cuenta contable|^cuenta|^cta/);
+  return m;
+}
+window.ccImportar = function (cid) {
+  cid = cid || (document.getElementById("fCC") || {}).value;
+  if (!cid) { alert("Primero elige el cliente del despacho en el filtro «Cliente»."); return; }
+  CI.cid = cid;
+  let inp = document.getElementById("ciFile");
+  if (!inp) { inp = document.createElement("input"); inp.type = "file"; inp.id = "ciFile"; inp.accept = ".xlsx,.xls,.csv,.ods"; inp.style.display = "none"; inp.onchange = () => ciLeer(inp); document.body.appendChild(inp); }
+  inp.value = ""; inp.click();
+};
+function ciLeer(inp) {
+  const file = inp.files && inp.files[0]; if (!file) return;
+  const rd = new FileReader();
+  rd.onload = (ev) => {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type: "array" });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: "" });
+      // fila de títulos: la primera (de las 30 primeras) que tenga columna de nombre y de NIF o cuenta
+      let hi = -1;
+      for (let i = 0; i < Math.min(rows.length, 30); i++) { const m = ciAdivina(rows[i]); if (m.nombre > -1 && (m.nif > -1 || m.cuenta > -1)) { hi = i; break; } }
+      if (hi < 0) throw new Error("no encuentro una fila de títulos con «Nombre» y «NIF» (o «Cuenta»). Revisa que el Excel tenga una fila de títulos.");
+      CI.cab = rows[hi].map((x) => String(x || "").trim()); CI.map = ciAdivina(CI.cab);
+      CI.filas = rows.slice(hi + 1).filter((r) => r.some((x) => String(x || "").trim()));
+      CI.archivo = file.name;
+      const cuentasOk = CI.map.cuenta > -1 && CI.filas.some((r) => /^4[03]/.test(ctNorm(r[CI.map.cuenta])));
+      CI.tipo = cuentasOk ? "cuenta" : (FX.vista === "clientes" && document.getElementById("facturacion").classList.contains("active") ? "cliente" : "");
+      ciPinta();
+    } catch (er) { alert("No se ha podido leer el archivo: " + er.message); }
+  };
+  rd.readAsArrayBuffer(file);
+}
+function ciVal(r, k) { const i = CI.map[k]; return i == null || i < 0 ? "" : String(r[i] == null ? "" : r[i]).replace(/\s+/g, " ").trim(); }
+function ciTipoDe(r) {
+  if (CI.tipo === "cliente" || CI.tipo === "proveedor") return CI.tipo;
+  const c = ctNorm(ciVal(r, "cuenta")); if (/^43/.test(c)) return "cliente"; if (/^4[01]/.test(c)) return "proveedor";
+  const n = ccNif(ciVal(r, "nif")), ya = n && (window.WCC || []).find((x) => x.clienteDespachoId === CI.cid && ccNif(x.nif) === n);   // sin cuenta: si ya hay ficha con ese NIF, su tipo
+  return ya ? (ccEsCli(ya.tipo) ? "cliente" : "proveedor") : "";
+}
+// Subcuentas de otra longitud (p. ej. 9 dígitos de Delsol: 430000012) → 8 dígitos (43000012) si solo sobran ceros
+function ciCuenta8(c) { c = ctNorm(c); if (c.length > 8 && /^0+$/.test(c.slice(3, 3 + c.length - 8))) c = c.slice(0, 3) + c.slice(3 + c.length - 8); return c; }
+// Calcula qué se haría con cada fila (sin guardar nada)
+function ciPlan() {
+  const cid = CI.cid, usadas = ccUsadas(cid), lista = (window.WCC || []).filter((c) => c.clienteDespachoId === cid).map((c) => ({ ...c })), e = fxEmisor(cid) || {};   // copias: la vista previa no toca los datos
+  const nuevos = [], completar = [], iguales = [], malas = [];
+  CI.filas.forEach((r, i) => {
+    const nombre = ciVal(r, "nombre"), tipo = ciTipoDe(r);
+    if (!nombre) { malas.push({ i, motivo: "sin nombre" }); return; }
+    if (!tipo) { malas.push({ i, motivo: "no sé si es cliente o proveedor", nombre }); return; }
+    const d = {}; ["comercial", "domicilio", "cp", "poblacion", "provincia", "pais", "tel", "email"].forEach((k) => { const v = ciVal(r, k); if (v) d[k] = v; });
+    const nifRaw = ciVal(r, "nif").toUpperCase().replace(/[\s.-]/g, ""); if (nifRaw) d.nif = nifRaw;
+    const ex = ccBuscar(cid, nifRaw, nombre, tipo === "cliente", lista);
+    if (ex) {
+      const upd = {}; Object.keys(d).forEach((k) => { if (!String(ex[k] || "").trim()) upd[k] = d[k]; });
+      if (Object.keys(upd).length) { completar.push({ id: ex.id, nombre: ex.nombre, upd }); Object.assign(ex, upd); } else iguales.push({ nombre });
+      return;
+    }
+    let cta = ciCuenta8(ciVal(r, "cuenta"));
+    const pref = tipo === "cliente" ? /^43/ : /^4[01]/;
+    if (!(cta.length === 8 && pref.test(cta) && !/0000000$/.test(cta) && !usadas.has(cta))) cta = ccSiguiente(cid, tipo === "cliente" ? "430" : "400", usadas); else usadas.add(cta);
+    const doc = { id: "cc" + Date.now() + "_" + i, clienteDespachoId: cid, clienteDespachoNombre: fxCliNom(cid), nombre, ...d, cuenta: cta, tipo,
+      contrapartida: tipo === "cliente" ? (e.cuentaVentas || "70000000") : "60000000", retPct: "", m347: "0", creado: new Date().toISOString(), importado: CI.archivo };
+    nuevos.push(doc); lista.push(doc);
+  });
+  return { nuevos, completar, iguales, malas };
+}
+function ciPinta() {
+  const P = ciPlan(), sel = (k) => "<select class='fi2' onchange=\"CI.map['" + k + "']=+this.value;ciPinta()\"><option value='-1'>—</option>" + CI.cab.map((h, i) => "<option value='" + i + "'" + (CI.map[k] === i ? " selected" : "") + ">" + fxH(h || "(columna " + (i + 1) + ")") + "</option>").join("") + "</select>";
+  const sinNif = P.nuevos.filter((x) => !ccNif(x.nif)).length;
+  document.getElementById("fxModalT").textContent = "Importar clientes y proveedores · " + fxCliNom(CI.cid);
+  document.getElementById("fxModalC").innerHTML =
+    "<div style='font-size:12px;color:var(--gray-600);margin-bottom:8px;'>Archivo: <b>" + fxH(CI.archivo) + "</b> · " + CI.filas.length + " filas. Revisa qué columna corresponde a cada dato.</div>" +
+    "<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:8px;'>" + CI_CAMPOS.map(([k, l]) => "<div class='fg'><label class='fl'>" + l + "</label>" + sel(k) + "</div>").join("") + "</div>" +
+    "<div class='fg' style='margin-top:10px;'><label class='fl'>¿Qué son?</label><select class='fi2' onchange='CI.tipo=this.value;ciPinta()'>" +
+      [["", "Elige…"], ["cuenta", "Según la subcuenta (43… clientes · 40/41… proveedores)"], ["cliente", "Todos son clientes"], ["proveedor", "Todos son proveedores"]].map(([k, l]) => "<option value='" + k + "'" + (CI.tipo === k ? " selected" : "") + ">" + l + "</option>").join("") + "</select></div>" +
+    "<div style='display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;font-size:13px;'>" +
+      "<span class='badge' style='background:#D1FAE5;color:#065F46;'>" + P.nuevos.length + " nuevos</span>" +
+      "<span class='badge' style='background:#DBEAFE;color:#1E40AF;'>" + P.completar.length + " ya existen y se completan</span>" +
+      "<span class='badge' style='background:#F3F4F6;color:#374151;'>" + P.iguales.length + " ya existen sin cambios</span>" +
+      (P.malas.length ? "<span class='badge' style='background:#FEE2E2;color:#991B1B;'>" + P.malas.length + " se descartan</span>" : "") +
+      (sinNif ? "<span class='badge' style='background:#FEF3C7;color:#92400E;'>" + sinNif + " nuevos sin NIF</span>" : "") + "</div>" +
+    (P.nuevos.length ? "<div style='max-height:260px;overflow:auto;'><table style='font-size:12px;'><thead><tr><th>Nombre</th><th>NIF</th><th>Tipo</th><th>Cuenta</th><th>Domicilio</th></tr></thead><tbody>" +
+      P.nuevos.slice(0, 200).map((x) => "<tr><td>" + fxH(x.nombre) + "</td><td>" + fxH(x.nif || "") + (x.nif && nifOK(x.nif) === false ? " ⚠" : "") + "</td><td>" + x.tipo + "</td><td style='font-family:monospace;'>" + x.cuenta + "</td><td>" + fxH([x.domicilio, x.cp, x.poblacion].filter(Boolean).join(", ")) + "</td></tr>").join("") +
+      "</tbody></table></div>" : "") +
+    (P.malas.length ? "<div style='font-size:11px;color:#991B1B;margin-top:6px;'>Descartadas: " + P.malas.slice(0, 12).map((m) => "fila " + (m.i + 1) + (m.nombre ? " (" + fxH(m.nombre) + ")" : "") + ": " + m.motivo).join(" · ") + (P.malas.length > 12 ? "…" : "") + "</div>" : "");
+  document.getElementById("fxModalB").innerHTML = "<button class='btn btn-secondary' onclick=\"closeM('fxModal')\">Cancelar</button><button class='btn btn-primary' onclick='ciGuardar()'" + (P.nuevos.length + P.completar.length ? "" : " disabled") + ">Importar</button>";
+  document.getElementById("fxModalIn").style.maxWidth = "980px";
+  document.getElementById("fxModal").classList.add("open");
+}
+window.ciPinta = ciPinta; window.CI = CI;
+window.ciGuardar = async function () {
+  const P = ciPlan(), ops = P.nuevos.map((d) => ["set", d.id, d]).concat(P.completar.map((c) => ["merge", c.id, c.upd]));
+  if (!ops.length) return;
+  if (!confirm("Se crearán " + P.nuevos.length + " fichas y se completarán " + P.completar.length + " en " + fxCliNom(CI.cid) + ". ¿Seguir?")) return;
+  try {
+    if (window.fsBatch) {
+      for (let i = 0; i < ops.length; i += 400) { const b = window.fsBatch();
+        ops.slice(i, i + 400).forEach(([t, id, d]) => t === "set" ? b.set(window.fsDoc(window.db, "iva_cuentas", String(id)), d) : b.set(window.fsDoc(window.db, "iva_cuentas", String(id)), d, { merge: true }));
+        await b.commit(); }
+    } else for (const [t, id, d] of ops) await window.fsSetDoc(window.fsDoc(window.db, "iva_cuentas", String(id)), d, t === "set" ? undefined : { merge: true });
+  } catch (er) { alert("Error al guardar: " + (er.message || er)); return; }
+  closeM("fxModal"); showToast("✓ " + P.nuevos.length + " fichas nuevas y " + P.completar.length + " completadas");
+  setTimeout(() => { if (typeof renderC === "function") renderC(); fxRender(); }, 300);
+};
 </script>
 </body>
 </html>
