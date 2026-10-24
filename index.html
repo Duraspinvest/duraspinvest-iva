@@ -5642,51 +5642,60 @@ function rtTrabajo(x) {
   const k = x.proyectar && llenos.length && llenos.length < 12 ? 12 / llenos.length : 1;
   return { b: rtR2(b * k + rtN(x.trabExtra)), ss: rtR2(ss * k), ret: rtR2(ret * k + rtN(x.trabExtraRet)), meses: llenos.length, k };
 }
-function rtCalcular(x, ej) {
-  const d = [], ccaa = x.ccaa || "CAT";
-  // 1. Trabajo
+// Rendimientos de una persona (lo que no depende de la modalidad)
+function rtRend(x) {
   const t = rtTrabajo(x);
   const otrosGastos = t.b > 0 ? 2000 : 0;
   const rnPrevio = Math.max(0, t.b - t.ss - rtN(x.trabGastos) - otrosGastos);
-  // 2. Actividad (estimación directa simplificada)
   const a = x.act || {};
   const actPrevio = rtN(a.ing) - rtN(a.gas) - rtN(a.reta);
   const actDJ = actPrevio > 0 ? Math.min(actPrevio * 0.05, 2000) : 0;
   const actRN = rtR2(actPrevio - actDJ);
-  // 3. Alquileres
   let alqRN = 0, alqRet = 0;
   (x.alq || []).forEach((r) => { let n = rtN(r.ing) - rtN(r.gas) - rtN(r.amort); if (n > 0 && +r.red) n *= 1 - (+r.red) / 100; alqRN += n; alqRet += rtN(r.ret); });
   alqRN = rtR2(alqRN);
-  // Reducción por rendimientos del trabajo (si las demás rentas no pasan de 6.500 €)
   const otrasRentas = Math.max(0, actRN) + Math.max(0, alqRN) + rtN(x.cmInt) + rtN(x.cmDiv) + rtN(x.ganAhorro) + rtN(x.ganGeneral);
   let red = 0;
   if (t.b > 0 && otrasRentas <= 6500) red = rnPrevio <= 14852 ? 7302 : rnPrevio <= 17673.52 ? 7302 - 1.75 * (rnPrevio - 14852) : rnPrevio < 19747.5 ? 2364.34 - 1.14 * (rnPrevio - 17673.52) : 0;
   const trabRN = rtR2(Math.max(0, rnPrevio - red));
-  // 4. Bases
   const big = rtR2(trabRN + actRN + alqRN + rtN(x.ganGeneral));
-  const limPP = Math.max(0, 0.3 * (trabRN + Math.max(0, actRN)));
-  const redPP = rtR2(Math.min(rtN(x.planes), 1500 + rtN(x.planesEmpresa), limPP));
-  const redConj = x.modalidad === "conjunta" ? 3400 : x.modalidad === "monoparental" ? 2150 : 0;
-  let blg = Math.max(0, big - redPP), sobrante = Math.max(0, redConj - blg); blg = rtR2(Math.max(0, blg - redConj));
-  const bla = rtR2(Math.max(0, rtN(x.cmInt) + rtN(x.cmDiv) - rtN(x.cmGas) + rtN(x.ganAhorro) - sobrante));
-  // 5. Mínimos y cuotas íntegras
-  const minEst = rtMinimo(RT_P.minimos.EST, x, ej), minAut = rtMinimo(RT_P.minimos[ccaa] || RT_P.minimos.EST, x, ej);
-  const cuota = (escG, escA, min) => { const mg = Math.min(min, blg), ma = Math.max(0, min - mg); return Math.max(0, rtEscala(escG, blg) - rtEscala(escG, mg)) + Math.max(0, rtEscala(escA, bla) - rtEscala(escA, ma)); };
-  const ciEst = rtR2(cuota(RT_P.estatal, RT_P.ahorro, minEst)), ciAut = rtR2(cuota(RT_P.aut[ccaa], RT_P.ahorro, minAut));
-  // 6. Deducciones
-  const viv = Math.min(rtN(x.vivienda), 9040), dVivE = rtR2(viv * 0.075), dVivA = rtR2(viv * 0.075);
-  const don = rtN(x.donativos), dDon = rtR2(Math.min(don, 250) * 0.8 + Math.max(0, don - 250) * 0.4);
-  let cl = Math.max(0, ciEst - dVivE - dDon) + Math.max(0, ciAut - dVivA) - rtN(x.dedOtras);
-  cl = rtR2(Math.max(0, cl));
-  // Deducción por rendimientos del trabajo (2025): hasta 340 € si el rendimiento íntegro del trabajo es menor de 18.276 €
-  let dSMI = 0; if (t.b > 0 && t.b < 18276 && otrasRentas <= 6500) dSMI = t.b < 16576 ? 340 : 340 - 0.2 * (t.b - 16576);
-  dSMI = rtR2(Math.min(dSMI, cl)); cl = rtR2(cl - dSMI);
-  // 7. Resultado
+  const redPP = rtR2(Math.min(rtN(x.planes), 1500 + rtN(x.planesEmpresa), Math.max(0, 0.3 * (trabRN + Math.max(0, actRN)))));
+  const ahorro = rtR2(Math.max(0, rtN(x.cmInt) + rtN(x.cmDiv) - rtN(x.cmGas) + rtN(x.ganAhorro)));
+  const viv = Math.min(rtN(x.vivienda), 9040), don = rtN(x.donativos);
+  let smi = 0; if (t.b > 0 && t.b < 18276 && otrasRentas <= 6500) smi = t.b < 16576 ? 340 : 340 - 0.2 * (t.b - 16576);
   const pagos = rtR2(t.ret + rtN(a.ret) + rtN(a.p130) + alqRet + rtN(x.cmRet) + rtN(x.pagosOtros));
-  const dif = rtR2(cl - pagos - rtN(x.maternidad));
-  return { t, otrosGastos, rnPrevio, red: rtR2(red), trabRN, actPrevio, actDJ: rtR2(actDJ), actRN, alqRN, big, redPP, redConj, blg, bla, minEst, minAut, ciEst, ciAut, dVivE, dVivA, dDon, dSMI, cl, pagos, dif };
+  return { t, otrosGastos, rnPrevio, red: rtR2(red), trabRN, actPrevio, actDJ: rtR2(actDJ), actRN, alqRN, big, redPP, ahorro,
+    dVivE: rtR2(viv * 0.075), dVivA: rtR2(viv * 0.075), dDon: rtR2(Math.min(don, 250) * 0.8 + Math.max(0, don - 250) * 0.4), dedOtras: rtN(x.dedOtras), smi: rtR2(smi), pagos, maternidad: rtN(x.maternidad) };
 }
-window._rtCalcular = rtCalcular; window._rtEscala = rtEscala; window._rtMinimo = rtMinimo;
+// Cuotas y resultado a partir de las bases (P = una persona o la suma de las dos)
+function rtLiquidar(P, redConj, minEst, minAut, ccaa) {
+  let blg = Math.max(0, P.big - P.redPP); const sobrante = Math.max(0, redConj - blg); blg = rtR2(Math.max(0, blg - redConj));
+  const bla = rtR2(Math.max(0, P.ahorro - sobrante));
+  const cuota = (escG, escA, min) => { const mg = Math.min(min, blg), ma = Math.max(0, min - mg); return Math.max(0, rtEscala(escG, blg) - rtEscala(escG, mg)) + Math.max(0, rtEscala(escA, bla) - rtEscala(escA, ma)); };
+  const ciEst = rtR2(cuota(RT_P.estatal, RT_P.ahorro, minEst)), ciAut = rtR2(cuota(RT_P.aut[ccaa] || RT_P.aut.CAT, RT_P.ahorro, minAut));
+  let cl = rtR2(Math.max(0, Math.max(0, ciEst - P.dVivE - P.dDon) + Math.max(0, ciAut - P.dVivA) - P.dedOtras));
+  const dSMI = rtR2(Math.min(P.smi, cl)); cl = rtR2(cl - dSMI);
+  const dif = rtR2(cl - P.pagos - P.maternidad);
+  return { blg, bla, redConj, minEst, minAut, ciEst, ciAut, dSMI, cl, dif };
+}
+function rtCalcular(x, ej) {
+  const ccaa = x.ccaa || "CAT", P = rtRend(x);
+  const redConj = x.modalidad === "conjunta" ? 3400 : x.modalidad === "monoparental" ? 2150 : 0;
+  return { ...P, ...rtLiquidar(P, redConj, rtMinimo(RT_P.minimos.EST, x, ej), rtMinimo(RT_P.minimos[ccaa] || RT_P.minimos.EST, x, ej), ccaa) };
+}
+// Declaración conjunta de un matrimonio: se suman rentas, reducciones, deducciones y pagos; un solo mínimo del contribuyente
+// (más los incrementos por edad y discapacidad de cada cónyuge) y los hijos y ascendientes una sola vez.
+function rtConjunta(xa, xb, ej) {
+  const ccaa = xa.ccaa || "CAT", A = rtRend(xa), B = rtRend(xb), P = {};
+  ["big", "redPP", "ahorro", "dVivE", "dVivA", "dDon", "dedOtras", "smi", "pagos", "maternidad"].forEach((k) => (P[k] = rtR2(A[k] + B[k])));
+  // el mismo hijo en los dos expedientes = hijo de los dos: en la conjunta cuenta entero; si solo está en uno, se respeta su «compartido»
+  const unir = (k) => { const v = {}, out = []; [...(xa[k] || []), ...(xb[k] || [])].filter((p) => p.nombre || p.nac).forEach((p) => { const id = String(p.nombre || "").trim().toLowerCase() + "|" + (p.nac || ""); if (v[id]) { v[id].mitad = false; return; } v[id] = { ...p }; out.push(v[id]); }); return out; };
+  const minC = (T) => { const sinPers = (x) => rtMinimo(T, { ...x, desc: [], asc: [] }, ej) - T.c;   // incrementos por edad y discapacidad de cada cónyuge
+    return rtR2(rtMinimo(T, { nac: "", disc: "", desc: unir("desc"), asc: unir("asc") }, ej) + sinPers(xa) + sinPers(xb)); };
+  const TA = RT_P.minimos[ccaa] || RT_P.minimos.EST;
+  return { A, B, ...P, ...rtLiquidar(P, 3400, minC(RT_P.minimos.EST), minC(TA), ccaa) };
+}
+window._rtCalcular = rtCalcular; window._rtConjunta = rtConjunta; window._rtEscala = rtEscala; window._rtMinimo = rtMinimo;
 
 // ---------- Personas ----------
 function rtPersonas() {
@@ -5715,7 +5724,7 @@ function rtVacio(per, ej) {
   const base = { id: rtExpId(per, ej), persona: per, ejercicio: String(ej), nombre: p.nombre || "", nif: p.nif || "", estado: "pendiente", modalidad: "individual", ccaa: "CAT", nac: "", disc: "", asis: false,
     desc: [], asc: [], trabajo: RT_MESES.map(() => ({ b: "", ss: "", ret: "" })), proyectar: true, act: {}, alq: [], docs: RT_DOCS.map((t) => ({ t, ok: false })), notas: [], resultado: {} };
   if (prev) Object.assign(base, { modalidad: prev.modalidad, ccaa: prev.ccaa, nac: prev.nac, disc: prev.disc, asis: prev.asis, desc: prev.desc || [], asc: prev.asc || [],
-    alq: (prev.alq || []).map((r) => ({ ...r })), planes: prev.planes, planesEmpresa: prev.planesEmpresa, vivienda: prev.vivienda, donativos: prev.donativos, docs: (prev.docs || base.docs).map((d) => ({ t: d.t, ok: false })), copiadoDe: prev.id });
+    alq: (prev.alq || []).map((r) => ({ ...r })), planes: prev.planes, planesEmpresa: prev.planesEmpresa, vivienda: prev.vivienda, donativos: prev.donativos, docs: (prev.docs || base.docs).map((d) => ({ t: d.t, ok: false })), conyuge: prev.conyuge || "", copiadoDe: prev.id });
   return base;
 }
 function rtRender() {
@@ -5749,6 +5758,7 @@ function rtPinta() {
     (prev ? "<div style='font-size:12px;color:var(--gray-600);margin-top:2px;'>Año anterior: " + (prev.resultado && prev.resultado.importe !== undefined && prev.resultado.importe !== "" ? "presentada " + res((prev.resultado.tipo === "devolver" ? -1 : 1) * rtN(prev.resultado.importe)) : "previsión " + res(rtCalcular(prev, prev.ejercicio).dif)) + "</div>" : "") + "</div>" +
     "<span style='flex:1'></span><select class='fi2' style='width:auto;background:" + est[2] + ";color:" + est[3] + ";font-weight:600;' data-k='estado' onchange='rtCampo(this);rtPinta()'>" + RT_ESTADOS.map((e) => "<option value='" + e[0] + "'" + (e[0] === x.estado ? " selected" : "") + ">" + e[1] + "</option>").join("") + "</select>" +
     "<button class='btn btn-primary' onclick='rtGuardar()'>" + (RT.sucio ? "💾 Guardar cambios" : "Guardado") + "</button></div>";
+  h += rtHtmlComparar(x, ej);
   h += "<div style='font-size:11.5px;color:var(--gray-600);margin:-6px 0 12px;'>Previsión orientativa con la normativa de 2025 (tarifas, mínimos y reducciones de la AEAT). La declaración se calcula y se presenta en Renta Web.</div>";
   // Datos personales y familiares
   h += "<div class='card'>" + cardT("👤 Datos personales y familiares") + "<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:10px;'>" +
@@ -5756,6 +5766,9 @@ function rtPinta() {
     sel("ccaa", "Comunidad de residencia", RT_CCAA, x.ccaa) +
     "<div class='fg'><label class='fl'>Fecha de nacimiento</label><input type='date' class='fi2' data-k='nac' value='" + rtH(x.nac || "") + "' onchange='rtCampo(this)'></div>" +
     sel("disc", "Discapacidad", [["", "No"], ["33", "Del 33 al 64 %"], ["65", "65 % o más"]], x.disc) + "</div>" +
+    "<div style='display:grid;grid-template-columns:2fr 2fr;gap:10px;margin-top:10px;'>" +
+    sel("conyuge", "Cónyuge (para comparar individual y conjunta)", [["", "—"]].concat(rtPersonas().filter((p) => p.key !== x.persona).map((p) => [p.key, p.nombre])), x.conyuge) +
+    "<div style='font-size:11.5px;color:var(--gray-600);align-self:end;'>El cónyuge tiene su propio expediente con sus ingresos. Si los hijos son de los dos, marca «Compartido 50 %» en los dos expedientes: en la conjunta se cuentan una sola vez.</div></div>" +
     "<div style='margin-top:10px;font-size:12.5px;font-weight:600;'>Descendientes (menores de 25 o con discapacidad)</div>" +
     "<table style='font-size:12px;margin-top:4px;'><thead><tr><th>Nombre</th><th>Nacimiento</th><th>Discap. %</th><th>Compartido 50 %</th><th></th></tr></thead><tbody>" +
     (x.desc || []).map((d, i) => "<tr><td><input class='fi2' value='" + rtH(d.nombre || "") + "' oninput=\"rtFila('desc'," + i + ",'nombre',this.value)\"></td><td><input type='date' class='fi2' value='" + rtH(d.nac || "") + "' onchange=\"rtFila('desc'," + i + ",'nac',this.value)\"></td><td><input class='fi2' style='width:70px' value='" + rtH(d.disc || "") + "' oninput=\"rtFila('desc'," + i + ",'disc',this.value)\"></td><td style='text-align:center;'><input type='checkbox'" + (d.mitad ? " checked" : "") + " onchange=\"rtFila('desc'," + i + ",'mitad',this.checked)\"></td><td><button class='btn btn-secondary' style='padding:3px 8px;' onclick=\"rtQuitar('desc'," + i + ")\">✕</button></td></tr>").join("") +
@@ -5820,6 +5833,25 @@ function rtPinta() {
     (dReal !== null ? "<div style='font-size:12.5px;margin-top:8px;'>Diferencia con la previsión: <b>" + rtE(Math.abs(rtR2(dReal - c.dif))) + "</b> " + (Math.abs(dReal - c.dif) < 1 ? "(coincide)" : "") + "</div>" : "") + "</div>";
   box.innerHTML = h;
 }
+// ---------- Individual o conjunta ----------
+function rtHtmlComparar(x, ej) {
+  if (!x.conyuge) return "";
+  const p = rtPersonas().find((q) => q.key === x.conyuge) || {}, y = rtExp(x.conyuge, ej);
+  const caja = (inner) => "<div class='card' style='border:1px solid #C7D2FE;'><div style='font-weight:600;color:var(--navy);margin-bottom:8px;'>⚖ Individual o conjunta</div>" + inner + "</div>";
+  if (!y) return caja("<div style='font-size:13px;'>" + rtH(p.nombre || "El cónyuge") + " no tiene expediente de " + ej + ". <button class='btn btn-secondary' onclick=\"rtIrConyuge()\">Abrir su expediente</button></div>");
+  const ia = rtCalcular({ ...x, modalidad: "individual" }, ej), ib = rtCalcular({ ...y, modalidad: "individual" }, ej), ind = rtR2(ia.dif + ib.dif), cj = rtConjunta(x, y, ej);
+  const r = (n) => Math.abs(n) < 0.005 ? "cuota cero" : n < 0 ? "<span style='color:#065F46;'>a devolver " + rtE(-n) + "</span>" : "<span style='color:#B91C1C;'>a ingresar " + rtE(n) + "</span>";
+  const mejor = cj.dif < ind - 0.005 ? "conjunta" : "individual", ahorro = rtE(Math.abs(rtR2(ind - cj.dif)));
+  const fl = (l, v, b) => "<tr><td style='padding:3px 10px;" + (b ? "font-weight:700;" : "") + "'>" + l + "</td><td style='text-align:right;padding:3px 10px;" + (b ? "font-weight:700;" : "") + "'>" + v + "</td></tr>";
+  return caja("<table style='width:auto;font-size:13px;'>" + fl("Individual · " + rtH(x.nombre), r(ia.dif)) + fl("Individual · " + rtH(y.nombre), r(ib.dif)) + fl("Total en individual", r(ind), 1) + fl("Conjunta", r(cj.dif), 1) + "</table>" +
+    "<div style='margin-top:8px;font-size:13.5px;'>Sale mejor la <b>" + mejor + "</b>" + (Math.abs(ind - cj.dif) >= 0.01 ? " (" + ahorro + " de diferencia)" : " (da lo mismo)") + ".</div>" +
+    (x.ccaa !== y.ccaa ? "<div style='font-size:12px;color:#B45309;margin-top:4px;'>⚠ Las dos fichas tienen comunidades distintas; en la conjunta se usa la de " + rtH(x.nombre) + ".</div>" : "") +
+    "<details style='margin-top:6px;font-size:12px;'><summary style='cursor:pointer;color:var(--gray-600);'>Detalle de la conjunta</summary><table style='width:auto;font-size:12px;margin-top:4px;'>" +
+    fl("Base imponible general (suma)", rtE(cj.big)) + fl("Reducción por tributación conjunta", "− " + rtE(3400)) + fl("Base liquidable general", rtE(cj.blg)) + fl("Base liquidable del ahorro", rtE(cj.bla)) +
+    fl("Mínimo personal y familiar (estatal / autonómico)", rtE(cj.minEst) + " / " + rtE(cj.minAut)) + fl("Cuota íntegra estatal + autonómica", rtE(cj.ciEst + cj.ciAut)) + fl("Cuota líquida", rtE(cj.cl)) + fl("Retenciones y pagos de los dos", "− " + rtE(cj.pagos)) + "</table></details>" +
+    "<div style='font-size:11.5px;color:var(--gray-600);margin-top:4px;'>Los datos del cónyuge se cambian en su expediente.</div>");
+}
+window.rtIrConyuge = function () { if (RT.sucio && !confirm("Hay cambios sin guardar. ¿Salir sin guardar?")) return; rtAbrirExp(RT.ed.conyuge, RT.ed.ejercicio); };
 // ---------- Edición ----------
 function rtSet(k, v) { const p = k.split("."); let o = RT.ed; for (let i = 0; i < p.length - 1; i++) { o[p[i]] = o[p[i]] || {}; o = o[p[i]]; } o[p[p.length - 1]] = v; RT.sucio = true; }
 window.rtCampo = function (el) { rtSet(el.dataset.k, el.type === "checkbox" ? el.checked : el.value); rtRefrescar(); };
@@ -5890,7 +5922,6 @@ window.rtCampana = function () {
 };
 window.rtAbrirExp = function (per, ej) { RT.per = per; RT.ej = String(ej); RT.ed = null; RT.sucio = false; document.getElementById("rtPer").value = per; document.getElementById("rtEj").value = ej; rtRender(); };
 window.addEventListener("beforeunload", (e) => { if (RT.sucio) { e.preventDefault(); e.returnValue = ""; } });
-
 </script>
 </body>
 </html>
