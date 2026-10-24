@@ -169,6 +169,7 @@ body.visor-open .modal-overlay.open{display:flex;}
   <button class="nav-btn" onclick="showSection('cuentas',this)">Cuentas contables</button>
   <button class="nav-btn" onclick="showSection('exportar',this)">Exportar a Delsol</button>
   <button class="nav-btn" onclick="showSection('fiscal',this)">&#128203; Fiscal / Liquidacion</button>
+  <button class="nav-btn" onclick="showSection('renta',this);rtInit()">&#127968; Renta</button>
   <button class="nav-btn" onclick="showSection('portal',this)">&#128229; Portal clientes</button>
   <button class="nav-btn" onclick="showSection('docs',this);renderDocs()">&#9989; Documentación</button>
   <button class="nav-btn" onclick="showSection('contab',this);ctInit();ctRender()">&#128210; Contabilidad</button>
@@ -225,6 +226,17 @@ body.visor-open .modal-overlay.open{display:flex;}
 </div>
 <div class="modal-overlay" id="fxModal2" onclick="closeMO(event,'fxModal2')">
   <div class="modal" style="max-width:560px;"><div class="modal-title" id="fxModal2T"></div><div id="fxModal2C"></div><div class="ma" id="fxModal2B"></div></div>
+</div>
+<div id="renta" class="section">
+  <div class="card" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+    <div style="font-weight:600;color:var(--navy);">Renta (IRPF)</div>
+    <select class="fi2" id="rtPer" style="max-width:340px;" onchange="rtCambia()"><option value="">Elige la persona…</option></select>
+    <select class="fi2" id="rtEj" style="width:auto;" onchange="rtCambia()"></select>
+    <span style="flex:1"></span>
+    <button class="btn btn-secondary" onclick="rtCampana()">📋 Campaña</button>
+    <button class="btn btn-secondary" onclick="rtNuevaPersona()">+ Persona solo de renta</button>
+  </div>
+  <div id="rtCuerpo"></div>
 </div>
 <div id="cuentas" class="section">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
@@ -603,6 +615,10 @@ body.visor-open .modal-overlay.open{display:flex;}
       clearTimeout(window._fxT);window._fxT=setTimeout(()=>{if(typeof fxInit==="function")fxInit();},120);};
     onSnapshot(collection(db,"fact_emisores"),s=>{const m={};s.docs.forEach(d=>{m[d.id]={...d.data(),id:d.id};});window.WFE=m;_fxAct();});
     onSnapshot(collection(db,"fact_emitidas"),s=>{window.WFX=s.docs.map(d=>({...d.data(),id:d.id}));_fxAct();});
+    onSnapshot(collection(db,"fact_recurrentes"),s=>{window.WFR=s.docs.map(d=>({...d.data(),id:d.id}));_fxAct();});
+    const _rtAct=()=>{const sec=document.getElementById("renta");if(sec&&sec.classList.contains("active")&&typeof rtInit==="function"){clearTimeout(window._rtT);window._rtT=setTimeout(rtInit,150);}};
+    onSnapshot(collection(db,"renta_personas"),s=>{window.WRP=s.docs.map(d=>({...d.data(),id:d.id}));_rtAct();});
+    onSnapshot(collection(db,"renta_exp"),s=>{window.WRE=s.docs.map(d=>({...d.data(),id:d.id}));_rtAct();});
     onSnapshot(collection(db,"vf_registros"),s=>{window.WVF=s.docs.map(d=>({...d.data(),id:d.id}));_fxAct();},e=>console.warn("vf_registros",e));
     onSnapshot(collection(db,"vf_cabeza"),s=>{const m={};s.docs.forEach(d=>{m[d.id]={...d.data(),id:d.id};});window.WVFC=m;},e=>console.warn("vf_cabeza",e));
     onSnapshot(collection(db,"epigrafes"),s=>{
@@ -717,7 +733,7 @@ function emSync(){
   window.WFI=map("iva_fiscal");window.WIN=map("iva_ingresos");window.WDOC=map("iva_docs");
   window.WAS=arr("conta_asientos");window.WREG=arr("conta_reglas");window.WINM=arr("conta_inmov");window.WCP=map("conta_plan");
   window.portalDocs=arr("portal_documentos");
-  window.WFE=map("fact_emisores");window.WFX=arr("fact_emitidas");window.WVF=arr("vf_registros");window.WVFC=map("vf_cabeza");
+  window.WFE=map("fact_emisores");window.WFX=arr("fact_emitidas");window.WVF=arr("vf_registros");window.WFR=arr("fact_recurrentes");window.WRP=arr("renta_personas");window.WRE=arr("renta_exp");window.WVFC=map("vf_cabeza");
   const call=f=>{try{if(typeof window[f]==="function")window[f]();}catch(e){console.warn(f,e);}};
   ["poblarSel","renderF","renderSt","renderC","renderEpis"].forEach(call);
   if(window.ctRefresh)try{window.ctRefresh();}catch(e){}
@@ -4750,8 +4766,8 @@ function fxSerie(e, tipo) { const s = (e && e.series) || {}; return String((tipo
 function fxSiguiente(cid, tipo, anio) {
   const e = fxEmisor(cid) || {}, ser = fxSerie(e, tipo);
   const usados = fxDeEmisor(cid).filter((f) => f.estado === "emitida" && f.serie === ser && String(f.fecha).slice(0, 4) === String(anio)).map((f) => +f.correlativo || 0);
-  const ini = +(((e.inicio || {})[ser + anio]) || 1);
-  return Math.max(ini, (usados.length ? Math.max(...usados) : 0) + 1);
+  const ini = +(((e.inicio || {})[ser + anio]) || 1), loc = (FX.usados || {})[cid + "|" + ser + "|" + anio] || 0;
+  return Math.max(ini, (usados.length ? Math.max(...usados) : 0) + 1, loc + 1);
 }
 const fxNumero = (ser, anio, n) => ser + anio + "-" + String(n).padStart(4, "0");
 
@@ -4760,7 +4776,7 @@ window.fxInit = function () {
   const s = document.getElementById("fxEmi"); if (!s) return;
   const v = FX.emi || s.value;
   s.innerHTML = "<option value=''>Elige el cliente que factura…</option>" + (window.WC || []).slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"))
-    .map((c) => "<option value='" + fxH(c.id) + "'>" + (window.WFE[c.id] ? "🧾 " : "") + fxH(c.nombre) + "</option>").join("");
+    .map((c) => { const np = window.WFE[c.id] ? frPendientes(c.id).length : 0; return "<option value='" + fxH(c.id) + "'>" + (window.WFE[c.id] ? "🧾 " : "") + fxH(c.nombre) + (np ? " · " + np + " cuota" + (np > 1 ? "s" : "") + " pendiente" + (np > 1 ? "s" : "") : "") + "</option>"; }).join("");
   s.value = v; FX.emi = s.value;
   fxRender();
 };
@@ -4772,12 +4788,16 @@ function fxRender() {
   if (!cid) { box.innerHTML = "<div class='empty'>🔒 Elige arriba el cliente para el que vas a hacer facturas.</div>"; return; }
   const e = fxEmisor(cid);
   if (!e) { box.innerHTML = "<div class='card'><div style='font-size:14px;margin-bottom:10px;'><b>" + fxH(fxCliNom(cid)) + "</b> todavía no tiene configurada la facturación.</div><button class='btn btn-primary' onclick='fxConfig()'>Configurar sus datos de facturación</button></div>"; return; }
-  const tabs = [["facturas", "Facturas"], ["clientes", "Sus clientes (" + fxFichas(cid).length + ")"]].concat(e.verifactu ? [["verifactu", "VERI*FACTU" + (e.verifactu === "pruebas" ? " (pruebas)" : "")]] : []);
+  const tabs = [["facturas", "Facturas"], ["recurrentes", "Cuotas recurrentes (" + frDeEmisor(cid).length + ")"], ["clientes", "Sus clientes (" + fxFichas(cid).length + ")"]].concat(e.verifactu ? [["verifactu", "VERI*FACTU" + (e.verifactu === "pruebas" ? " (pruebas)" : "")]] : []);
   let h = "<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;'>" +
     tabs.map(([k, l]) => "<button class='btn " + (FX.vista === k ? "btn-primary" : "btn-secondary") + "' onclick=\"fxVista('" + k + "')\">" + l + "</button>").join("") +
     "<span style='flex:1'></span><button class='btn btn-secondary' onclick='fxConfig()'>⚙ Datos del emisor</button>" +
     "<button class='btn btn-primary' onclick='fxNueva()'>+ Nueva factura</button></div>";
-  if (FX.vista === "clientes") h += fxHtmlClientes(cid); else if (FX.vista === "verifactu" && e.verifactu) h += vfHtmlRegistros(cid); else h += fxHtmlFacturas(cid);
+  const pend = frPendientes(cid);
+  if (pend.length) h += "<div class='card' style='background:#FFFBEB;border:1px solid #FDE68A;display:flex;gap:12px;align-items:center;flex-wrap:wrap;'><div style='flex:1;font-size:13px;color:#92400E;'>🔁 Hay <b>" + pend.length + "</b> cuota" + (pend.length > 1 ? "s" : "") + " recurrente" + (pend.length > 1 ? "s" : "") + " pendiente" + (pend.length > 1 ? "s" : "") + " de facturar (hasta hoy).</div><button class='btn btn-primary' onclick=\"frGenerar('" + cid + "')\">Preparar borradores</button></div>";
+  const nb = fxDeEmisor(cid).filter((f) => f.estado === "borrador").length;
+  if (nb && FX.vista === "facturas") h += "<div style='margin:-4px 0 10px;text-align:right;'><button class='btn btn-secondary' onclick=\"fxEmitirBorradores('" + cid + "')\">Emitir los " + nb + " borradores</button></div>";
+  if (FX.vista === "clientes") h += fxHtmlClientes(cid); else if (FX.vista === "recurrentes") h += frHtml(cid); else if (FX.vista === "verifactu" && e.verifactu) h += vfHtmlRegistros(cid); else h += fxHtmlFacturas(cid);
   box.innerHTML = h;
 }
 function fxHtmlFacturas(cid) {
@@ -4798,6 +4818,7 @@ function fxHtmlFacturas(cid) {
       return "<tr ondblclick=\"fxAbrir('" + f.id + "')\" style='cursor:pointer;'><td><b>" + fxH(f.numero || "—") + "</b></td><td>" + fxF(f.fecha) + "</td><td>" + fxH((f.receptor || {}).nombre || "") + "</td>" +
         "<td class='td-r'>" + fxE(c.base) + "</td><td class='td-r'>" + fxE(c.cuota) + "</td><td class='td-r' style='font-weight:600;'>" + fxE(c.total) + "</td><td>" + est + "</td><td style='white-space:nowrap;'>" +
         b("✎", "fxAbrir", f.estado === "borrador" ? "Editar" : "Ver") + b("PDF", "fxPdf", "Descargar el PDF") + b("⧉", "fxDuplicar", "Nueva factura igual a esta") +
+        (f.tipo !== "R" ? b("🔁", "frDesdeFactura", "Convertir en cuota recurrente") : "") +
         (f.estado === "emitida" && !rect && !f.rectificadaPor ? b("Rectificar", "fxRectificar", "Hacer una factura rectificativa") : "") +
         (f.estado === "emitida" && !f.rectificadaPor ? b("Anular", "fxAnular", "Anular: solo si se emitió por error y no debió existir") : "") +
         (f.vf ? " <span title='Registro VERI*FACTU " + fxH(f.vf.registro) + "' style='font-size:10px;color:#3730A3;'>VF</span>" : "") +
@@ -4926,7 +4947,7 @@ window.fxRectificar = function (id) {
 function fxLeeEditor() {
   const f = FX.ed; if (!f) return;
   const g = (i) => { const el = document.getElementById(i); return el ? el.value : undefined; };
-  ["fecha", "fechaOp", "receptorId", "retPct", "formaPago", "vto", "obs", "mencion", "motivo", "tipoRect", "exencion"].forEach((k) => { const v = g("fxd_" + k); if (v !== undefined) f[k] = v; });
+  ["fecha", "fechaOp", "receptorId", "retPct", "formaPago", "vto", "obs", "mencion", "motivo", "tipoRect", "exencion", "periodo", "proxima", "dia", "hasta"].forEach((k) => { const v = g("fxd_" + k); if (v !== undefined) f[k] = v; });
   f.lineas = (f.lineas || []).map((l, i) => ({ d: g("fxl_d" + i) ?? l.d, c: g("fxl_c" + i) ?? l.c, p: g("fxl_p" + i) ?? l.p, dto: g("fxl_dto" + i) ?? l.dto, iva: g("fxl_iva" + i) ?? l.iva }));
 }
 window.fxLinea = function (accion, i) {
@@ -4950,7 +4971,7 @@ function fxPintaEditor() {
   const dis = sol ? " disabled" : "";
   const fichas = fxFichas(cid), r = fichas.find((x) => x.id === f.receptorId);
   const iv = (i, v) => "<select class='fi2' id='fxl_iva" + i + "' onchange='fxRecalc()'" + dis + ">" + FX_IVAS.map(([k, l]) => "<option value='" + k + "'" + (String(v) === k ? " selected" : "") + ">" + l + "</option>").join("") + "</select>";
-  const tit = (sol ? "Factura " + f.numero : (f.tipo === "R" ? "Nueva factura rectificativa" : "Nueva factura")) + " · " + fxH((fxEmisor(cid) || {}).nombre || fxCliNom(cid));
+  const tit = f._rec ? "Cuota recurrente · " + fxH((fxEmisor(cid) || {}).nombre || fxCliNom(cid)) : (sol ? "Factura " + f.numero : (f.tipo === "R" ? "Nueva factura rectificativa" : "Nueva factura")) + " · " + fxH((fxEmisor(cid) || {}).nombre || fxCliNom(cid));
   document.getElementById("fxModalT").innerHTML = tit;
   const c = fxCalc(f);
   document.getElementById("fxModalC").innerHTML =
@@ -4963,8 +4984,9 @@ function fxPintaEditor() {
     "<div class='fg'><label class='fl'>Cliente</label><div style='display:flex;gap:6px;'><select class='fi2' id='fxd_receptorId'" + dis + "><option value=''>Elige…</option>" +
       fichas.map((x) => "<option value='" + x.id + "'" + (x.id === f.receptorId ? " selected" : "") + ">" + fxH(x.nombre) + " · " + fxH(x.nif) + "</option>").join("") + "</select>" +
       (sol ? "" : "<button class='btn btn-secondary' title='Nuevo cliente' onclick=\"fxLeeEditor();fxFicha('','factura')\">+</button>") + "</div></div>" +
+    (f._rec ? frCamposPeriodo(f) :
     "<div class='fg'><label class='fl'>Fecha</label><input type='date' class='fi2' id='fxd_fecha' value='" + fxH(f.fecha) + "'" + dis + "></div>" +
-    "<div class='fg'><label class='fl'>Fecha operación (si es otra)</label><input type='date' class='fi2' id='fxd_fechaOp' value='" + fxH(f.fechaOp || "") + "'" + dis + "></div></div>" +
+    "<div class='fg'><label class='fl'>Fecha operación (si es otra)</label><input type='date' class='fi2' id='fxd_fechaOp' value='" + fxH(f.fechaOp || "") + "'" + dis + "></div></div>") +
     (r && !r.domicilio ? "<div style='font-size:12px;color:#B45309;margin-top:4px;'>⚠ A este cliente le falta el domicilio (obligatorio en la factura). <a href='#' onclick=\"fxLeeEditor();fxFicha('" + r.id + "','factura');return false;\">Completar</a></div>" : "") +
     "<table style='margin-top:12px;font-size:12px;'><thead><tr><th style='width:46%'>Concepto</th><th>Cant.</th><th>Precio</th><th>Dto %</th><th>IVA</th><th style='text-align:right;'>Importe</th><th></th></tr></thead><tbody>" +
     f.lineas.map((l, i) => "<tr><td><textarea class='fi2' rows='1' id='fxl_d" + i + "' style='resize:vertical;'" + dis + ">" + fxH(l.d) + "</textarea></td>" +
@@ -4983,9 +5005,9 @@ function fxPintaEditor() {
     "<div class='fg' style='margin-top:10px;'><label class='fl'>Observaciones (salen en la factura)</label><textarea class='fi2' id='fxd_obs' rows='2'" + dis + ">" + fxH(f.obs || "") + "</textarea></div>" +
     "<div id='fxTot' style='margin-top:12px;'>" + fxHtmlTotales(c) + "</div>";
   document.getElementById("fxModalB").innerHTML = "<button class='btn btn-secondary' onclick=\"closeM('fxModal')\">Cerrar</button>" +
-    "<button class='btn btn-secondary' onclick='fxVistaPrevia()'>Vista previa PDF</button>" +
+    (f._rec ? "<button class='btn btn-primary' onclick='frGuardar()'>Guardar cuota recurrente</button>" : "<button class='btn btn-secondary' onclick='fxVistaPrevia()'>Vista previa PDF</button>" +
     (sol ? "<button class='btn btn-primary' onclick=\"fxPdf('" + f.id + "')\">Descargar PDF</button>" :
-      "<button class='btn btn-secondary' onclick='fxGuardar(false)'>Guardar borrador</button><button class='btn btn-primary' onclick='fxGuardar(true)'>Emitir</button>");
+      "<button class='btn btn-secondary' onclick='fxGuardar(false)'>Guardar borrador</button><button class='btn btn-primary' onclick='fxGuardar(true)'>Emitir</button>"));
   document.getElementById("fxModalIn").style.maxWidth = "900px";
   document.getElementById("fxModal").classList.add("open");
 }
@@ -5001,31 +5023,40 @@ function fxValida(f, emitir) {
   if (emitir && c.tipos.some((t) => t.pct === "E" || t.pct === "0") && !String(f.mencion || "").trim()) return "Hay líneas exentas o al 0 %: indica en «Mención legal» el motivo (artículo de la ley).";
   return "";
 }
+function fxPreparar(f) {
+  const r = (window.WCC || []).find((x) => x.id === f.receptorId) || {};
+  return { ...f, id: f.id || "fx" + Date.now() + Math.floor(Math.random() * 1000), emisor: f.emisor, modificado: new Date().toISOString(), creado: f.creado || new Date().toISOString(),
+    receptor: { nombre: r.nombre, nif: r.nif, domicilio: r.domicilio || "", cp: r.cp || "", poblacion: r.poblacion || "", provincia: r.provincia || "", pais: r.pais || "", cuenta: r.cuenta || "" } };
+}
+// Emite (numera, guarda la factura y su apunte en el libro; si es VERI*FACTU, con su registro). Lanza error si no puede.
+async function fxEmitirDoc(doc) {
+  const cid = doc.emisor, e = fxEmisor(cid), anio = String(doc.fecha).slice(0, 4), ser = fxSerie(e, doc.tipo), n = fxSiguiente(cid, doc.tipo, anio), numero = fxNumero(ser, anio, n);
+  Object.assign(doc, { estado: "emitida", serie: ser, correlativo: n, numero, emitida: new Date().toISOString(),
+    emisorDatos: { nombre: e.nombre, nif: e.nif, comercial: e.comercial || "", domicilio: e.domicilio, cp: e.cp || "", poblacion: e.poblacion || "", provincia: e.provincia || "", tel: e.tel || "", email: e.email || "", iban: e.iban || "", pie: e.pie || "" } });
+  if (e.verifactu) {
+    if (!window.fsTx) throw new Error("Las facturas VERI*FACTU no se pueden emitir en modo emergencia (sin conexión con la base de datos).");
+    await vfEmitir(doc, e);
+  } else {
+    await fbS("fact_emitidas", doc.id, doc);
+    await fbS("iva_facturas", "fx_" + doc.id, fxLibroDoc(doc));
+  }
+  FX.usados = FX.usados || {}; FX.usados[cid + "|" + ser + "|" + anio] = n;
+  if (doc.tipo === "R" && doc.rectifica) await window.fsSetDoc(window.fsDoc(window.db, "fact_emitidas", doc.rectifica.id), { rectificadaPor: numero }, { merge: true });
+  return doc;
+}
 window.fxGuardar = async function (emitir) {
   FX.vista = "facturas"; fxLeeEditor(); const f = FX.ed, cid = f.emisor, e = fxEmisor(cid);
   const err = fxValida(f, emitir); if (err) { alert(err); return; }
   const r = (window.WCC || []).find((x) => x.id === f.receptorId);
-  const id = f.id || "fx" + Date.now();
-  const doc = { ...f, id, emisor: cid, modificado: new Date().toISOString(), creado: f.creado || new Date().toISOString(),
-    receptor: { nombre: r.nombre, nif: r.nif, domicilio: r.domicilio || "", cp: r.cp || "", poblacion: r.poblacion || "", provincia: r.provincia || "", pais: r.pais || "", cuenta: r.cuenta || "" } };
+  const doc = fxPreparar(f), id = doc.id;
   if (emitir) {
     const anio = String(f.fecha).slice(0, 4), ser = fxSerie(e, f.tipo), n = fxSiguiente(cid, f.tipo, anio);
     const prev = fxDeEmisor(cid).filter((x) => x.estado === "emitida" && x.serie === ser && String(x.fecha).slice(0, 4) === anio && x.fecha > f.fecha);
     if (prev.length && !confirm("Ya hay facturas de la serie " + ser + " con fecha posterior al " + fxF(f.fecha) + " (la última, " + prev.sort((a, b) => b.fecha.localeCompare(a.fecha))[0].numero + "). La numeración debe seguir el orden de fechas. ¿Emitir igualmente?")) return;
-    const numero = fxNumero(ser, anio, n);
     const c = fxCalc(f);
-    if (!confirm("Se emitirá la factura " + numero + " por " + fxE(c.total) + " a " + r.nombre + ".\n\nUna vez emitida no se puede modificar (solo rectificar) y queda apuntada en el libro de emitidas de " + fxCliNom(cid) + ". ¿Seguir?")) return;
-    Object.assign(doc, { estado: "emitida", serie: ser, correlativo: n, numero, emitida: new Date().toISOString(),
-      emisorDatos: { nombre: e.nombre, nif: e.nif, comercial: e.comercial || "", domicilio: e.domicilio, cp: e.cp || "", poblacion: e.poblacion || "", provincia: e.provincia || "", tel: e.tel || "", email: e.email || "", iban: e.iban || "", pie: e.pie || "" } });
-    if (e.verifactu) {
-      if (!window.fsTx) { alert("Las facturas VERI*FACTU no se pueden emitir en modo emergencia (sin conexión con la base de datos)."); return; }
-      try { await vfEmitir(doc, e); } catch (er) { alert("No se ha podido emitir: " + (er.message || er)); return; }
-    } else {
-      await fbS("fact_emitidas", id, doc);
-      await fbS("iva_facturas", "fx_" + id, fxLibroDoc(doc));
-    }
-    if (f.tipo === "R" && f.rectifica) await window.fsSetDoc(window.fsDoc(window.db, "fact_emitidas", f.rectifica.id), { rectificadaPor: numero }, { merge: true });
-    FX.ed = doc; closeM("fxModal"); showToast("✓ Factura " + numero + " emitida y apuntada en el libro");
+    if (!confirm("Se emitirá la factura " + fxNumero(ser, anio, n) + " por " + fxE(c.total) + " a " + r.nombre + ".\n\nUna vez emitida no se puede modificar (solo rectificar) y queda apuntada en el libro de emitidas de " + fxCliNom(cid) + ". ¿Seguir?")) return;
+    try { await fxEmitirDoc(doc); } catch (er) { alert("No se ha podido emitir: " + (er.message || er)); return; }
+    FX.ed = doc; closeM("fxModal"); showToast("✓ Factura " + doc.numero + " emitida y apuntada en el libro");
     setTimeout(() => fxPdf(id), 300);
   } else {
     doc.estado = "borrador"; await fbS("fact_emitidas", id, doc); FX.ed = doc; closeM("fxModal"); showToast("✓ Borrador guardado");
@@ -5431,6 +5462,435 @@ window.ciGuardar = async function () {
   closeM("fxModal"); showToast("✓ " + P.nuevos.length + " fichas nuevas y " + P.completar.length + " completadas");
   setTimeout(() => { if (typeof renderC === "function") renderC(); fxRender(); }, 300);
 };
+
+// =====================================================================================
+// ===== CUOTAS RECURRENTES · fact_recurrentes/{id}: cliente, líneas, periodicidad y próxima fecha.
+// ===== Cuando llega la fecha, «Preparar borradores» crea las facturas en borrador (no las emite) y adelanta
+// ===== la próxima fecha. Después se revisan y se emiten de una en una o todas juntas.
+// ===== En los conceptos se puede escribir {periodo}, {mes}, {trimestre} o {año}.
+// =====================================================================================
+window.WFR = window.WFR || [];
+const FR_PER = [["1", "Mensual"], ["2", "Bimestral"], ["3", "Trimestral"], ["6", "Semestral"], ["12", "Anual"]];
+const FR_MES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const frDeEmisor = (cid) => (window.WFR || []).filter((r) => r.emisor === cid);
+const frIso = (y, m, d) => y + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+const frUltimo = (y, m) => new Date(y, m, 0).getDate();     // m: 1-12
+function frSumar(iso, meses, dia) {
+  let [y, m, d] = iso.split("-").map(Number); m += +meses; while (m > 12) { m -= 12; y++; }
+  const u = frUltimo(y, m); return frIso(y, m, dia === "ultimo" ? u : Math.min(+(dia || d), u));
+}
+// Texto del periodo al que corresponde una fecha según la periodicidad (el periodo en curso)
+function frPeriodo(iso, per) {
+  const [y, m] = iso.split("-").map(Number); per = +per || 1;
+  if (per === 1) return FR_MES[m - 1] + " " + y;
+  if (per === 2) { const a = m - ((m - 1) % 2); return FR_MES[a - 1] + "-" + FR_MES[a] + " " + y; }
+  if (per === 3) return Math.ceil(m / 3) + "T " + y;
+  if (per === 6) return (m <= 6 ? "1er" : "2º") + " semestre " + y;
+  return String(y);
+}
+function frTexto(txt, iso, per) {
+  const [y, m] = iso.split("-").map(Number);
+  return String(txt || "").replace(/\{periodo\}/gi, frPeriodo(iso, per)).replace(/\{mes\}/gi, FR_MES[m - 1]).replace(/\{trimestre\}/gi, Math.ceil(m / 3) + "T").replace(/\{a[ñn]o\}/gi, String(y));
+}
+function frPendientes(cid) {
+  const hoy = fxHoy(), L = [];
+  frDeEmisor(cid).forEach((r) => { if (r.activa === false || !r.proxima) return; let p = r.proxima, k = 0;
+    while (p <= hoy && (!r.hasta || p <= r.hasta) && k < 24) { L.push({ r, fecha: p }); p = frSumar(p, r.periodo, r.dia); k++; } });
+  return L;
+}
+function frCamposPeriodo(f) {
+  const prox = f.proxima || fxHoy();
+  return "<div class='fg'><label class='fl'>Periodicidad</label><select class='fi2' id='fxd_periodo' onchange='frAyuda()'>" + FR_PER.map(([k, l]) => "<option value='" + k + "'" + (String(f.periodo || "1") === k ? " selected" : "") + ">" + l + "</option>").join("") + "</select></div>" +
+    "<div class='fg'><label class='fl'>Próxima factura</label><input type='date' class='fi2' id='fxd_proxima' value='" + fxH(prox) + "' onchange='frAyuda()'></div></div>" +
+    "<div style='display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;align-items:end;margin-top:8px;'>" +
+    "<div id='frAyuda' style='font-size:12px;color:var(--gray-600);'></div>" +
+    "<div class='fg'><label class='fl'>Día de las siguientes</label><select class='fi2' id='fxd_dia' onchange='frAyuda()'><option value=''>El mismo día</option><option value='ultimo'" + (f.dia === "ultimo" ? " selected" : "") + ">Último día del mes</option></select></div>" +
+    "<div class='fg'><label class='fl'>Hasta (opcional)</label><input type='date' class='fi2' id='fxd_hasta' value='" + fxH(f.hasta || "") + "'></div></div>" +
+    "<div style='font-size:11.5px;color:var(--gray-600);margin-top:6px;'>En los conceptos puedes escribir <b>{periodo}</b> (p. ej. «octubre 2026», «4T 2026»), <b>{mes}</b>, <b>{trimestre}</b> o <b>{año}</b>: se cambian solos en cada factura. Ejemplo: «Cuota de asesoría {periodo}».</div>";
+}
+window.frAyuda = function () {
+  const el = document.getElementById("frAyuda"); if (!el) return;
+  const per = document.getElementById("fxd_periodo").value, p = document.getElementById("fxd_proxima").value, dia = document.getElementById("fxd_dia").value;
+  if (!p) { el.textContent = ""; return; }
+  const s1 = frSumar(p, per, dia), s2 = frSumar(s1, per, dia);
+  const c = (document.getElementById("fxl_d0") || {}).value || "";
+  el.innerHTML = "Fechas: <b>" + fxF(p) + "</b>, " + fxF(s1) + ", " + fxF(s2) + "…" + (c ? "<br>Concepto de la próxima: «" + fxH(frTexto(c, p, per)) + "»" : "");
+};
+function frHtml(cid) {
+  const L = frDeEmisor(cid).sort((a, b) => String(a.proxima).localeCompare(String(b.proxima)));
+  let h = "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'><div style='font-size:12px;color:var(--gray-600);'>Facturas que se repiten (cuotas). Cuando llega la fecha te avisa y prepara los borradores; tú los revisas y los emites.</div><button class='btn btn-primary' onclick='frNueva()'>+ Nueva cuota recurrente</button></div>";
+  if (!L.length) return h + "<div class='empty'>No hay cuotas recurrentes. Crea una o, desde una factura emitida, pulsa 🔁.</div>";
+  const per = (k) => (FR_PER.find((x) => x[0] === String(k)) || [, "?"])[1];
+  return h + "<div class='card' style='padding:0;overflow:auto;'><table><thead><tr><th>Cliente</th><th>Concepto</th><th style='text-align:right;'>Total</th><th>Periodicidad</th><th>Próxima</th><th>Estado</th><th></th></tr></thead><tbody>" +
+    L.map((r) => { const c = fxCalc(r), ficha = (window.WCC || []).find((x) => x.id === r.receptorId) || {}, fin = r.hasta && r.proxima > r.hasta;
+      const b = (t, fn, tit) => "<button class='btn btn-secondary' style='padding:4px 8px;font-size:12px;' title='" + tit + "' onclick=\"" + fn + "('" + r.id + "')\">" + t + "</button> ";
+      return "<tr ondblclick=\"frAbrir('" + r.id + "')\" style='cursor:pointer;'><td><b>" + fxH(ficha.nombre || "¿cliente borrado?") + "</b></td><td style='font-size:12px;'>" + fxH(frTexto((r.lineas[0] || {}).d, r.proxima || fxHoy(), r.periodo)) + (r.lineas.length > 1 ? " <span style='color:var(--gray-400);'>+" + (r.lineas.length - 1) + "</span>" : "") + "</td>" +
+        "<td class='td-r' style='font-weight:600;'>" + fxE(c.total) + "</td><td>" + per(r.periodo) + (r.dia === "ultimo" ? " · último día" : "") + "</td><td>" + fxF(r.proxima) + "</td><td>" +
+        (r.activa === false ? "<span class='badge' style='background:#F3F4F6;color:#6B7280;'>Pausada</span>" : fin ? "<span class='badge' style='background:#F3F4F6;color:#6B7280;'>Terminada</span>" : r.proxima <= fxHoy() ? "<span class='badge' style='background:#FEF3C7;color:#92400E;'>Pendiente</span>" : "<span class='badge' style='background:#D1FAE5;color:#065F46;'>Activa</span>") + "</td>" +
+        "<td style='white-space:nowrap;'>" + b("✎", "frAbrir", "Editar") + b(r.activa === false ? "▶" : "⏸", "frPausar", r.activa === false ? "Reanudar" : "Pausar") + b("✕", "frBorrar", "Borrar la cuota (no toca las facturas ya hechas)") + "</td></tr>"; }).join("") +
+    "</tbody></table></div>";
+}
+window.frNueva = function () { if (!fxEmisor(FX.emi)) return fxConfig(); FX.ed = { ...fxVacia(FX.emi), _rec: true, periodo: "1", proxima: fxHoy(), dia: "", hasta: "", activa: true, lineas: [{ d: "Cuota de asesoría {periodo}", c: "1", p: "", dto: "", iva: "21" }] }; fxPintaEditor(); setTimeout(frAyuda, 50); };
+window.frAbrir = function (id) { const r = (window.WFR || []).find((x) => x.id === id); if (!r) return; FX.ed = { ...JSON.parse(JSON.stringify(r)), _rec: true, estado: "borrador", tipo: "F" }; fxPintaEditor(); setTimeout(frAyuda, 50); };
+window.frDesdeFactura = function (id) {
+  const f = (window.WFX || []).find((x) => x.id === id); if (!f) return;
+  const [y, m, d] = String(f.fecha).split("-").map(Number); const prox = frSumar(f.fecha, 1, "");
+  FX.ed = { ...fxVacia(f.emisor), _rec: true, receptorId: f.receptorId, periodo: "1", proxima: prox, dia: d === frUltimo(y, m) ? "ultimo" : "", hasta: "", activa: true,
+    lineas: JSON.parse(JSON.stringify(f.lineas || [])), retPct: f.retPct || "", formaPago: f.formaPago, mencion: f.mencion || "", exencion: f.exencion || "E1", obs: f.obs || "" };
+  fxPintaEditor(); setTimeout(frAyuda, 50);
+};
+window.frGuardar = async function () {
+  fxLeeEditor(); const f = FX.ed;
+  const c = fxCalc(f);
+  if (!f.receptorId) { alert("Elige el cliente."); return; }
+  if (!c.L.length || c.L.some((l) => !String(l.d || "").trim())) { alert("Revisa las líneas: todas necesitan concepto."); return; }
+  if (!f.proxima) { alert("Pon la fecha de la próxima factura."); return; }
+  const id = f.id || "fr" + Date.now();
+  const d = { id, emisor: f.emisor, receptorId: f.receptorId, lineas: f.lineas, retPct: f.retPct || "", formaPago: f.formaPago || "", mencion: f.mencion || "", exencion: f.exencion || "E1", obs: f.obs || "",
+    periodo: String(f.periodo || "1"), proxima: f.proxima, dia: f.dia || "", hasta: f.hasta || "", activa: f.activa !== false, modificado: new Date().toISOString(), creado: f.creado || new Date().toISOString() };
+  await fbS("fact_recurrentes", id, d); closeM("fxModal"); FX.vista = "recurrentes"; showToast("✓ Cuota recurrente guardada"); setTimeout(fxRender, 200);
+};
+window.frPausar = async function (id) { const r = (window.WFR || []).find((x) => x.id === id); if (!r) return; await window.fsSetDoc(window.fsDoc(window.db, "fact_recurrentes", id), { activa: r.activa === false }, { merge: true }); setTimeout(fxRender, 150); };
+window.frBorrar = async function (id) { if (!confirm("¿Borrar esta cuota recurrente? Las facturas ya hechas no se tocan.")) return; await fbD("fact_recurrentes", id); setTimeout(fxRender, 150); };
+// Crea los borradores de las cuotas vencidas y adelanta su próxima fecha
+window.frGenerar = async function (cid) {
+  const P = frPendientes(cid); if (!P.length) return;
+  const tot = P.reduce((s, x) => s + fxCalc(x.r).total, 0);
+  if (!confirm("Se prepararán " + P.length + " factura(s) en BORRADOR por " + fxE(tot) + " en total.\n\nNo se emite nada: después las revisas y las emites (una a una o todas con «Emitir los borradores»). ¿Seguir?")) return;
+  const prox = {};
+  for (const [i, x] of P.entries()) {
+    const r = x.r, per = r.periodo;
+    const doc = fxPreparar({ ...fxVacia(cid), id: "fx" + Date.now() + "_" + i, receptorId: r.receptorId, fecha: x.fecha, retPct: r.retPct || "", formaPago: r.formaPago || "", mencion: frTexto(r.mencion, x.fecha, per),
+      exencion: r.exencion || "E1", obs: frTexto(r.obs, x.fecha, per), lineas: (r.lineas || []).map((l) => ({ ...l, d: frTexto(l.d, x.fecha, per) })), recurrente: r.id });
+    doc.estado = "borrador"; await fbS("fact_emitidas", doc.id, doc);
+    prox[r.id] = frSumar(x.fecha, per, r.dia);
+  }
+  for (const [id, p] of Object.entries(prox)) await window.fsSetDoc(window.fsDoc(window.db, "fact_recurrentes", id), { proxima: p, ultimaGenerada: new Date().toISOString() }, { merge: true });
+  FX.vista = "facturas"; showToast("✓ " + P.length + " borrador(es) preparados"); setTimeout(fxRender, 250);
+};
+// Emite todos los borradores del emisor, por orden de fecha
+window.fxEmitirBorradores = async function (cid) {
+  const L = fxDeEmisor(cid).filter((f) => f.estado === "borrador").sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)) || String(a.creado).localeCompare(String(b.creado)));
+  if (!L.length) return;
+  const malos = L.map((f) => [f, fxValida(f, true)]).filter(([, e]) => e), buenos = L.filter((f) => !malos.some(([m]) => m.id === f.id));
+  const tot = buenos.reduce((s, f) => s + fxCalc(f).total, 0);
+  if (!buenos.length) { alert("Ningún borrador se puede emitir todavía:\n\n" + malos.map(([f, e]) => "· " + ((f.receptor || {}).nombre || "") + ": " + e).join("\n")); return; }
+  if (!confirm("Se emitirán " + buenos.length + " factura(s) por " + fxE(tot) + " en total, numeradas por orden de fecha." + (malos.length ? "\n\n" + malos.length + " borrador(es) se quedan sin emitir porque les falta algo:\n" + malos.map(([f, e]) => "· " + ((f.receptor || {}).nombre || "") + ": " + e).join("\n") : "") + "\n\nUna vez emitidas no se pueden modificar (solo rectificar). ¿Seguir?")) return;
+  let ok = 0;
+  for (const f of buenos) { try { await fxEmitirDoc(fxPreparar(JSON.parse(JSON.stringify(f)))); ok++; } catch (er) { alert("Se ha parado en el borrador de " + ((f.receptor || {}).nombre || "") + ": " + (er.message || er)); break; } }
+  showToast("✓ " + ok + " factura(s) emitidas. Descarga los PDF desde la lista."); setTimeout(fxRender, 300);
+};
+</script>
+<script>
+// =====================================================================================
+// ===== RENTA (IRPF) · expediente por persona y ejercicio, datos mes a mes y previsión del resultado
+// ===== renta_personas/{id}: personas que solo son clientes de renta (los del despacho salen de «clients»)
+// ===== renta_exp/{persona}_{ejercicio}: expediente (datos, ingresos, notas, documentos, resultado presentado)
+// ===== La previsión usa los parámetros del ejercicio 2025 (Manual práctico de Renta 2025 de la AEAT). Es orientativa:
+// ===== la declaración se calcula y presenta en Renta Web.
+// =====================================================================================
+window.WRP = window.WRP || []; window.WRE = window.WRE || [];
+const RT = { per: "", ej: String(new Date().getFullYear() - (new Date().getMonth() < 6 ? 1 : 0)), ed: null, sucio: false };
+const rtR2 = (n) => { n = +n || 0; return Math.sign(n) * Math.round(Math.abs(n) * 100 + 1e-9) / 100; };
+const rtN = (v) => { const s = String(v == null ? "" : v).trim().replace(/\s/g, ""); if (!s) return 0; return parseFloat(/,/.test(s) ? s.replace(/\./g, "").replace(",", ".") : s) || 0; };
+const rtE = (n) => (typeof fxE === "function" ? fxE(n) : (+n || 0).toFixed(2) + " €");
+const rtH = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const RT_MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const RT_ESTADOS = [["pendiente", "Pendiente de documentos", "#FEF3C7", "#92400E"], ["preparacion", "En preparación", "#DBEAFE", "#1E40AF"], ["borrador", "Borrador enviado al cliente", "#E0E7FF", "#3730A3"],
+  ["aceptado", "Aceptado por el cliente", "#EDE9FE", "#5B21B6"], ["presentada", "Presentada", "#D1FAE5", "#065F46"], ["nodeclara", "No tiene que declarar", "#F3F4F6", "#374151"]];
+const RT_DOCS = ["DNI / NIE", "Datos fiscales de la AEAT", "Certificados de retenciones (nóminas, pensiones, desempleo)", "Recibos de IBI de los inmuebles", "Préstamo hipotecario (vivienda anterior a 2013)",
+  "Alquileres: contratos, ingresos y gastos", "Certificados del banco (intereses, dividendos)", "Ventas de acciones, fondos o inmuebles", "Aportaciones a planes de pensiones", "Donativos", "Cuotas sindicales / colegio profesional", "Datos de hijos y ascendientes (y discapacidad)"];
+
+// ---------- Parámetros del ejercicio 2025 (AEAT, Manual práctico de Renta 2025) ----------
+const RT_P = {
+  estatal: [[0, 0, 12450, 9.5], [12450, 1182.75, 7750, 12], [20200, 2112.75, 15000, 15], [35200, 4362.75, 24800, 18.5], [60000, 8950.75, 240000, 22.5], [300000, 62950.75, null, 24.5]],
+  ahorro: [[0, 0, 6000, 9.5], [6000, 570, 44000, 10.5], [50000, 5190, 150000, 11.5], [200000, 22440, 100000, 13.5], [300000, 35940, null, 15]],   // estatal = autonómica
+  aut: {
+    CAT: [[0, 0, 12500, 9.5], [12500, 1187.5, 9500, 12.5], [22000, 2375, 11000, 16], [33000, 4135, 20000, 19], [53000, 7935, 37000, 21.5], [90000, 15890, 30000, 23.5], [120000, 22940, 55000, 24.5], [175000, 36415, null, 25.5]],
+    MAD: [[0, 0, 13362.22, 8.5], [13362.22, 1135.79, 5642.41, 10.7], [19004.63, 1739.53, 16421.05, 12.8], [35425.68, 3841.42, 21894.72, 17.4], [57320.4, 7651.1, null, 20.5]],
+    AND: [[0, 0, 13000, 9.5], [13000, 1235, 8100, 12], [21100, 2207, 14100, 15], [35200, 4322, 24800, 18.5], [60000, 8910, null, 22.5]],
+    VAL: [[0, 0, 12000, 9], [12000, 1080, 10000, 12], [22000, 2280, 10000, 15], [32000, 3780, 10000, 17.5], [42000, 5530, 10000, 20], [52000, 7530, 10000, 22.5], [62000, 9780, 10000, 25], [72000, 12280, 28000, 26.5], [100000, 19700, 50000, 27.5], [150000, 33450, 50000, 28.5], [200000, 47700, null, 29.5]],
+  },
+  minimos: {
+    EST: { c: 5550, m65: 1150, m75: 1400, d: [2400, 2700, 4000, 4500], d3: 2800, a: 1150, a75: 1400, dis33: 3000, dis65: 9000, asis: 3000 },
+    CAT: null,   // igual que el estatal
+    MAD: { c: 5956.65, m65: 1234.26, m75: 1502.58, d: [2575.85, 2897.83, 4400, 4950], d3: 3005.16, a: 1234.26, a75: 1502.58, dis33: 3219.81, dis65: 9659.44, asis: 3219.81 },
+    AND: { c: 5790, m65: 1200, m75: 1460, d: [2510, 2820, 4170, 4700], d3: 2920, a: 1200, a75: 1460, dis33: 3130, dis65: 9390, asis: 3130 },
+    VAL: { c: 6105, m65: 1265, m75: 1540, d: [2640, 2970, 4400, 4950], d3: 3080, a: 1265, a75: 1540, dis33: 3300, dis65: 9900, asis: 3300 },
+  },
+};
+const RT_CCAA = [["CAT", "Cataluña"], ["MAD", "Comunidad de Madrid"], ["AND", "Andalucía"], ["VAL", "Comunitat Valenciana"]];
+function rtEscala(t, b) { b = Math.max(0, +b || 0); let i = t.length - 1; while (i > 0 && b < t[i][0]) i--; return t[i][1] + (b - t[i][0]) * t[i][3] / 100; }
+const rtEdad = (nac, ej) => { if (!nac) return 0; return +ej - +String(nac).slice(0, 4); };   // edad a 31/12 del ejercicio
+
+// Mínimo personal y familiar con una tabla (estatal o autonómica)
+function rtMinimo(T, x, ej) {
+  let m = T.c, det = [];
+  const ed = rtEdad(x.nac, ej);
+  if (ed >= 65) m += T.m65; if (ed >= 75) m += T.m75;
+  const dis = (p) => (+p.disc >= 65 ? T.dis65 + T.asis : +p.disc >= 33 ? T.dis33 + (p.asis ? T.asis : 0) : 0);
+  m += dis(x);
+  const ds = (x.desc || []).filter((d) => d.nombre || d.nac).filter((d) => rtEdad(d.nac, ej) < 25 || +d.disc >= 33).sort((a, b) => String(a.nac).localeCompare(String(b.nac)));
+  ds.forEach((d, i) => { const k = d.mitad ? 0.5 : 1; m += (T.d[Math.min(i, 3)] + (rtEdad(d.nac, ej) < 3 ? T.d3 : 0) + dis(d)) * k; });
+  (x.asc || []).filter((a) => a.nombre || a.nac).forEach((a) => { const ea = rtEdad(a.nac, ej); if (ea < 65 && !(+a.disc >= 33)) return; const k = a.mitad ? 0.5 : 1; m += ((ea >= 65 || +a.disc >= 33 ? T.a : 0) + (ea >= 75 ? T.a75 : 0) + dis(a)) * k; });
+  return rtR2(m);
+}
+// ---------- Cálculo de la previsión ----------
+function rtTrabajo(x) {
+  const L = x.trabajo || [], llenos = L.filter((r) => rtN(r.b) || rtN(r.ss) || rtN(r.ret));
+  let b = L.reduce((s, r) => s + rtN(r.b), 0), ss = L.reduce((s, r) => s + rtN(r.ss), 0), ret = L.reduce((s, r) => s + rtN(r.ret), 0);
+  const k = x.proyectar && llenos.length && llenos.length < 12 ? 12 / llenos.length : 1;
+  return { b: rtR2(b * k + rtN(x.trabExtra)), ss: rtR2(ss * k), ret: rtR2(ret * k + rtN(x.trabExtraRet)), meses: llenos.length, k };
+}
+function rtCalcular(x, ej) {
+  const d = [], ccaa = x.ccaa || "CAT";
+  // 1. Trabajo
+  const t = rtTrabajo(x);
+  const otrosGastos = t.b > 0 ? 2000 : 0;
+  const rnPrevio = Math.max(0, t.b - t.ss - rtN(x.trabGastos) - otrosGastos);
+  // 2. Actividad (estimación directa simplificada)
+  const a = x.act || {};
+  const actPrevio = rtN(a.ing) - rtN(a.gas) - rtN(a.reta);
+  const actDJ = actPrevio > 0 ? Math.min(actPrevio * 0.05, 2000) : 0;
+  const actRN = rtR2(actPrevio - actDJ);
+  // 3. Alquileres
+  let alqRN = 0, alqRet = 0;
+  (x.alq || []).forEach((r) => { let n = rtN(r.ing) - rtN(r.gas) - rtN(r.amort); if (n > 0 && +r.red) n *= 1 - (+r.red) / 100; alqRN += n; alqRet += rtN(r.ret); });
+  alqRN = rtR2(alqRN);
+  // Reducción por rendimientos del trabajo (si las demás rentas no pasan de 6.500 €)
+  const otrasRentas = Math.max(0, actRN) + Math.max(0, alqRN) + rtN(x.cmInt) + rtN(x.cmDiv) + rtN(x.ganAhorro) + rtN(x.ganGeneral);
+  let red = 0;
+  if (t.b > 0 && otrasRentas <= 6500) red = rnPrevio <= 14852 ? 7302 : rnPrevio <= 17673.52 ? 7302 - 1.75 * (rnPrevio - 14852) : rnPrevio < 19747.5 ? 2364.34 - 1.14 * (rnPrevio - 17673.52) : 0;
+  const trabRN = rtR2(Math.max(0, rnPrevio - red));
+  // 4. Bases
+  const big = rtR2(trabRN + actRN + alqRN + rtN(x.ganGeneral));
+  const limPP = Math.max(0, 0.3 * (trabRN + Math.max(0, actRN)));
+  const redPP = rtR2(Math.min(rtN(x.planes), 1500 + rtN(x.planesEmpresa), limPP));
+  const redConj = x.modalidad === "conjunta" ? 3400 : x.modalidad === "monoparental" ? 2150 : 0;
+  let blg = Math.max(0, big - redPP), sobrante = Math.max(0, redConj - blg); blg = rtR2(Math.max(0, blg - redConj));
+  const bla = rtR2(Math.max(0, rtN(x.cmInt) + rtN(x.cmDiv) - rtN(x.cmGas) + rtN(x.ganAhorro) - sobrante));
+  // 5. Mínimos y cuotas íntegras
+  const minEst = rtMinimo(RT_P.minimos.EST, x, ej), minAut = rtMinimo(RT_P.minimos[ccaa] || RT_P.minimos.EST, x, ej);
+  const cuota = (escG, escA, min) => { const mg = Math.min(min, blg), ma = Math.max(0, min - mg); return Math.max(0, rtEscala(escG, blg) - rtEscala(escG, mg)) + Math.max(0, rtEscala(escA, bla) - rtEscala(escA, ma)); };
+  const ciEst = rtR2(cuota(RT_P.estatal, RT_P.ahorro, minEst)), ciAut = rtR2(cuota(RT_P.aut[ccaa], RT_P.ahorro, minAut));
+  // 6. Deducciones
+  const viv = Math.min(rtN(x.vivienda), 9040), dVivE = rtR2(viv * 0.075), dVivA = rtR2(viv * 0.075);
+  const don = rtN(x.donativos), dDon = rtR2(Math.min(don, 250) * 0.8 + Math.max(0, don - 250) * 0.4);
+  let cl = Math.max(0, ciEst - dVivE - dDon) + Math.max(0, ciAut - dVivA) - rtN(x.dedOtras);
+  cl = rtR2(Math.max(0, cl));
+  // Deducción por rendimientos del trabajo (2025): hasta 340 € si el rendimiento íntegro del trabajo es menor de 18.276 €
+  let dSMI = 0; if (t.b > 0 && t.b < 18276 && otrasRentas <= 6500) dSMI = t.b < 16576 ? 340 : 340 - 0.2 * (t.b - 16576);
+  dSMI = rtR2(Math.min(dSMI, cl)); cl = rtR2(cl - dSMI);
+  // 7. Resultado
+  const pagos = rtR2(t.ret + rtN(a.ret) + rtN(a.p130) + alqRet + rtN(x.cmRet) + rtN(x.pagosOtros));
+  const dif = rtR2(cl - pagos - rtN(x.maternidad));
+  return { t, otrosGastos, rnPrevio, red: rtR2(red), trabRN, actPrevio, actDJ: rtR2(actDJ), actRN, alqRN, big, redPP, redConj, blg, bla, minEst, minAut, ciEst, ciAut, dVivE, dVivA, dDon, dSMI, cl, pagos, dif };
+}
+window._rtCalcular = rtCalcular; window._rtEscala = rtEscala; window._rtMinimo = rtMinimo;
+
+// ---------- Personas ----------
+function rtPersonas() {
+  const L = (window.WC || []).map((c) => ({ key: "c_" + c.id, nombre: c.nombre, nif: c.nif || c.cif || c.NIF || "", cid: c.id }))
+    .concat((window.WRP || []).map((p) => ({ key: "p_" + p.id, nombre: p.nombre, nif: p.nif || "", soloRenta: true })));
+  return L.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
+}
+const rtExpId = (per, ej) => per + "_" + ej;
+const rtExp = (per, ej) => (window.WRE || []).find((x) => x.id === rtExpId(per, ej));
+
+window.rtInit = function () {
+  const s = document.getElementById("rtPer"), e = document.getElementById("rtEj"); if (!s) return;
+  const v = RT.per;
+  s.innerHTML = "<option value=''>Elige la persona…</option>" + rtPersonas().map((p) => "<option value='" + rtH(p.key) + "'>" + rtH(p.nombre) + (p.soloRenta ? " · solo renta" : "") + "</option>").join("");
+  s.value = v;
+  const y = new Date().getFullYear(); e.innerHTML = [y, y - 1, y - 2, y - 3].map((a) => "<option" + (String(a) === RT.ej ? " selected" : "") + ">" + a + "</option>").join("");
+  if (!RT.sucio) rtRender();
+};
+window.rtCambia = function () {
+  if (RT.sucio && !confirm("Hay cambios sin guardar en el expediente abierto. ¿Salir sin guardar?")) { document.getElementById("rtPer").value = RT.per; document.getElementById("rtEj").value = RT.ej; return; }
+  RT.per = document.getElementById("rtPer").value; RT.ej = document.getElementById("rtEj").value; RT.ed = null; RT.sucio = false; rtRender();
+};
+function rtVacio(per, ej) {
+  const p = rtPersonas().find((x) => x.key === per) || {};
+  const prev = rtExp(per, String(+ej - 1));
+  const base = { id: rtExpId(per, ej), persona: per, ejercicio: String(ej), nombre: p.nombre || "", nif: p.nif || "", estado: "pendiente", modalidad: "individual", ccaa: "CAT", nac: "", disc: "", asis: false,
+    desc: [], asc: [], trabajo: RT_MESES.map(() => ({ b: "", ss: "", ret: "" })), proyectar: true, act: {}, alq: [], docs: RT_DOCS.map((t) => ({ t, ok: false })), notas: [], resultado: {} };
+  if (prev) Object.assign(base, { modalidad: prev.modalidad, ccaa: prev.ccaa, nac: prev.nac, disc: prev.disc, asis: prev.asis, desc: prev.desc || [], asc: prev.asc || [],
+    alq: (prev.alq || []).map((r) => ({ ...r })), planes: prev.planes, planesEmpresa: prev.planesEmpresa, vivienda: prev.vivienda, donativos: prev.donativos, docs: (prev.docs || base.docs).map((d) => ({ t: d.t, ok: false })), copiadoDe: prev.id });
+  return base;
+}
+function rtRender() {
+  const box = document.getElementById("rtCuerpo"); if (!box) return;
+  if (!RT.per) { box.innerHTML = "<div class='empty'>🔒 Elige arriba la persona y el ejercicio.<div style='margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;'><button class='btn btn-secondary' onclick='rtCampana()'>📋 Ver la campaña de " + RT.ej + "</button><button class='btn btn-secondary' onclick='rtNuevaPersona()'>+ Persona solo de renta</button></div></div>"; return; }
+  if (!RT.ed) { const ex = rtExp(RT.per, RT.ej); RT.ed = ex ? JSON.parse(JSON.stringify(ex)) : null; }
+  if (!RT.ed) {
+    const prev = rtExp(RT.per, String(+RT.ej - 1));
+    box.innerHTML = "<div class='card'><div style='margin-bottom:10px;'>No hay expediente de la renta <b>" + RT.ej + "</b> para esta persona.</div><button class='btn btn-primary' onclick='rtCrear()'>Crear el expediente " + RT.ej + "</button>" +
+      (prev ? " <span style='font-size:12px;color:var(--gray-600);margin-left:8px;'>Se copian los datos personales, alquileres, reducciones y documentos de " + (+RT.ej - 1) + ".</span>" : "") + "</div>";
+    return;
+  }
+  rtPinta();
+}
+window.rtCrear = function () { RT.ed = rtVacio(RT.per, RT.ej); RT.sucio = true; rtPinta(); };
+// ---------- Pantalla del expediente ----------
+function rtPinta() {
+  const x = RT.ed, ej = x.ejercicio, c = rtCalcular(x, ej), prev = rtExp(x.persona, String(+ej - 1));
+  const box = document.getElementById("rtCuerpo");
+  const inp = (k, lab, v, extra) => "<div class='fg'" + (extra || "") + "><label class='fl'>" + lab + "</label><input class='fi2' data-k='" + k + "' value='" + rtH(v == null ? "" : v) + "' oninput='rtCampo(this)'></div>";
+  const sel = (k, lab, ops, v) => "<div class='fg'><label class='fl'>" + lab + "</label><select class='fi2' data-k='" + k + "' onchange='rtCampo(this)'>" + ops.map(([a, b]) => "<option value='" + a + "'" + (String(v || "") === a ? " selected" : "") + ">" + b + "</option>").join("") + "</select></div>";
+  const est = RT_ESTADOS.find((e) => e[0] === x.estado) || RT_ESTADOS[0];
+  const res = (n) => n < 0 ? "<span style='color:#065F46;'>a devolver " + rtE(-n) + "</span>" : "<span style='color:#B91C1C;'>a ingresar " + rtE(n) + "</span>";
+  const cardT = (t) => "<div style='font-weight:600;color:var(--navy);margin-bottom:10px;'>" + t + "</div>";
+  const fila = (arr, k, i, campos) => "<tr>" + campos.map(([f, w, tipo]) => "<td><input class='fi2' style='width:" + w + "' " + (tipo === "date" ? "type='date' " : "") + "value='" + rtH(arr[i][f] == null ? "" : arr[i][f]) + "' oninput=\"rtFila('" + k + "'," + i + ",'" + f + "',this.value)\"></td>").join("") + "</tr>";
+  let h = "";
+  // Resumen
+  h += "<div class='card' style='display:flex;gap:16px;align-items:center;flex-wrap:wrap;'>" +
+    "<div><div style='font-size:12px;color:var(--gray-600);'>Renta " + ej + " · " + rtH(x.nombre) + (x.nif ? " · " + rtH(x.nif) : "") + "</div>" +
+    "<div style='font-size:18px;font-weight:700;margin-top:2px;'>Previsión: " + res(c.dif) + "</div>" +
+    (prev ? "<div style='font-size:12px;color:var(--gray-600);margin-top:2px;'>Año anterior: " + (prev.resultado && prev.resultado.importe !== undefined && prev.resultado.importe !== "" ? "presentada " + res((prev.resultado.tipo === "devolver" ? -1 : 1) * rtN(prev.resultado.importe)) : "previsión " + res(rtCalcular(prev, prev.ejercicio).dif)) + "</div>" : "") + "</div>" +
+    "<span style='flex:1'></span><select class='fi2' style='width:auto;background:" + est[2] + ";color:" + est[3] + ";font-weight:600;' data-k='estado' onchange='rtCampo(this);rtPinta()'>" + RT_ESTADOS.map((e) => "<option value='" + e[0] + "'" + (e[0] === x.estado ? " selected" : "") + ">" + e[1] + "</option>").join("") + "</select>" +
+    "<button class='btn btn-primary' onclick='rtGuardar()'>" + (RT.sucio ? "💾 Guardar cambios" : "Guardado") + "</button></div>";
+  h += "<div style='font-size:11.5px;color:var(--gray-600);margin:-6px 0 12px;'>Previsión orientativa con la normativa de 2025 (tarifas, mínimos y reducciones de la AEAT). La declaración se calcula y se presenta en Renta Web.</div>";
+  // Datos personales y familiares
+  h += "<div class='card'>" + cardT("👤 Datos personales y familiares") + "<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:10px;'>" +
+    sel("modalidad", "Modalidad", [["individual", "Individual"], ["conjunta", "Conjunta (matrimonio)"], ["monoparental", "Conjunta monoparental"]], x.modalidad) +
+    sel("ccaa", "Comunidad de residencia", RT_CCAA, x.ccaa) +
+    "<div class='fg'><label class='fl'>Fecha de nacimiento</label><input type='date' class='fi2' data-k='nac' value='" + rtH(x.nac || "") + "' onchange='rtCampo(this)'></div>" +
+    sel("disc", "Discapacidad", [["", "No"], ["33", "Del 33 al 64 %"], ["65", "65 % o más"]], x.disc) + "</div>" +
+    "<div style='margin-top:10px;font-size:12.5px;font-weight:600;'>Descendientes (menores de 25 o con discapacidad)</div>" +
+    "<table style='font-size:12px;margin-top:4px;'><thead><tr><th>Nombre</th><th>Nacimiento</th><th>Discap. %</th><th>Compartido 50 %</th><th></th></tr></thead><tbody>" +
+    (x.desc || []).map((d, i) => "<tr><td><input class='fi2' value='" + rtH(d.nombre || "") + "' oninput=\"rtFila('desc'," + i + ",'nombre',this.value)\"></td><td><input type='date' class='fi2' value='" + rtH(d.nac || "") + "' onchange=\"rtFila('desc'," + i + ",'nac',this.value)\"></td><td><input class='fi2' style='width:70px' value='" + rtH(d.disc || "") + "' oninput=\"rtFila('desc'," + i + ",'disc',this.value)\"></td><td style='text-align:center;'><input type='checkbox'" + (d.mitad ? " checked" : "") + " onchange=\"rtFila('desc'," + i + ",'mitad',this.checked)\"></td><td><button class='btn btn-secondary' style='padding:3px 8px;' onclick=\"rtQuitar('desc'," + i + ")\">✕</button></td></tr>").join("") +
+    "</tbody></table><button class='btn btn-secondary' style='margin-top:4px;' onclick=\"rtAnadir('desc')\">+ Descendiente</button>" +
+    "<div style='margin-top:10px;font-size:12.5px;font-weight:600;'>Ascendientes que conviven (65 años o más, o con discapacidad)</div>" +
+    "<table style='font-size:12px;margin-top:4px;'><thead><tr><th>Nombre</th><th>Nacimiento</th><th>Discap. %</th><th>Compartido</th><th></th></tr></thead><tbody>" +
+    (x.asc || []).map((d, i) => "<tr><td><input class='fi2' value='" + rtH(d.nombre || "") + "' oninput=\"rtFila('asc'," + i + ",'nombre',this.value)\"></td><td><input type='date' class='fi2' value='" + rtH(d.nac || "") + "' onchange=\"rtFila('asc'," + i + ",'nac',this.value)\"></td><td><input class='fi2' style='width:70px' value='" + rtH(d.disc || "") + "' oninput=\"rtFila('asc'," + i + ",'disc',this.value)\"></td><td style='text-align:center;'><input type='checkbox'" + (d.mitad ? " checked" : "") + " onchange=\"rtFila('asc'," + i + ",'mitad',this.checked)\"></td><td><button class='btn btn-secondary' style='padding:3px 8px;' onclick=\"rtQuitar('asc'," + i + ")\">✕</button></td></tr>").join("") +
+    "</tbody></table><button class='btn btn-secondary' style='margin-top:4px;' onclick=\"rtAnadir('asc')\">+ Ascendiente</button></div>";
+  // Trabajo mes a mes
+  const t = c.t;
+  h += "<div class='card'>" + cardT("💼 Rendimientos del trabajo (mes a mes)") +
+    "<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;margin-bottom:6px;'><label><input type='checkbox' data-k='proyectar'" + (x.proyectar ? " checked" : "") + " onchange='rtCampo(this)'> Proyectar a 12 meses con la media de los meses que hay</label><span style='color:var(--gray-600);font-size:11.5px;'>(las pagas extra que no se prorratean, súmalas en «Otros ingresos del trabajo»)</span>" +
+    "<button class='btn btn-secondary' style='padding:4px 10px;font-size:12px;' onclick='rtDeLaboral()'>⇩ Traer de Laboral (nóminas cerradas)</button></div>" +
+    "<div style='overflow:auto;'><table style='font-size:12px;'><thead><tr><th></th>" + RT_MESES.map((m) => "<th style='text-align:center;'>" + m + "</th>").join("") + "<th>Total</th></tr></thead><tbody>" +
+    [["b", "Bruto"], ["ss", "Seg. Social"], ["ret", "Retención"]].map(([f, l]) => "<tr><td style='font-weight:600;'>" + l + "</td>" + x.trabajo.map((r, i) => "<td><input class='fi2' style='width:74px;padding:5px;' value='" + rtH(r[f] || "") + "' oninput=\"rtFila('trabajo'," + i + ",'" + f + "',this.value)\"></td>").join("") + "<td class='td-r' style='font-weight:600;'>" + rtE(x.trabajo.reduce((s, r) => s + rtN(r[f]), 0)) + "</td></tr>").join("") +
+    "</tbody></table></div><div style='display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:8px;'>" + inp("trabExtra", "Otros ingresos del trabajo (pensión, paro, atrasos…)", x.trabExtra) + inp("trabExtraRet", "Sus retenciones", x.trabExtraRet) + inp("trabGastos", "Cuotas sindicales / colegio", x.trabGastos) + "</div>" +
+    "<div style='font-size:12px;color:var(--gray-600);margin-top:6px;'>" + (t.k > 1 ? "Proyectado: " + t.meses + " meses × " + (Math.round(t.k * 100) / 100) + " → " : "") + "bruto " + rtE(t.b) + " · SS " + rtE(t.ss) + " · retenciones " + rtE(t.ret) + " · reducción por rendimientos del trabajo " + rtE(c.red) + " → rendimiento neto " + rtE(c.trabRN) + "</div></div>";
+  // Actividad
+  const a = x.act || {};
+  h += "<div class='card'>" + cardT("🧾 Actividad económica (estimación directa)") + "<div style='display:grid;grid-template-columns:repeat(6,1fr);gap:10px;'>" +
+    inp("act.ing", "Ingresos", a.ing) + inp("act.gas", "Gastos", a.gas) + inp("act.reta", "Cuota de autónomo (año)", a.reta) + inp("act.ret", "Retenciones soportadas", a.ret) + inp("act.p130", "Pagos del 130", a.p130) +
+    "<div class='fg'><label class='fl'>&nbsp;</label><button class='btn btn-secondary' onclick='rtDeFiscal()' title='Suma las facturas del año en Fiscal y los 130 apuntados'>⇩ Traer de Fiscal</button></div></div>" +
+    "<div style='font-size:12px;color:var(--gray-600);margin-top:6px;'>Rendimiento " + rtE(c.actPrevio) + (c.actDJ ? " − gastos de difícil justificación 5 % (" + rtE(c.actDJ) + ")" : "") + " → " + rtE(c.actRN) + (a.origen ? " · " + rtH(a.origen) : "") + "</div></div>";
+  // Alquileres
+  h += "<div class='card'>" + cardT("🏠 Inmuebles alquilados") + "<table style='font-size:12px;'><thead><tr><th>Inmueble</th><th>Ingresos (año)</th><th>Gastos</th><th>Amortización</th><th>Reducción vivienda</th><th>Retenciones</th><th></th></tr></thead><tbody>" +
+    (x.alq || []).map((r, i) => "<tr>" + [["nombre", "180px"], ["ing", "90px"], ["gas", "90px"], ["amort", "90px"]].map(([f, w]) => "<td><input class='fi2' style='width:" + w + "' value='" + rtH(r[f] || "") + "' oninput=\"rtFila('alq'," + i + ",'" + f + "',this.value)\"></td>").join("") +
+      "<td><select class='fi2' onchange=\"rtFila('alq'," + i + ",'red',this.value)\">" + [["0", "No (local, temporada…)"], ["60", "60 % (contrato anterior al 26/05/2023 o vivienda rehabilitada)"], ["50", "50 % (general, contratos nuevos)"], ["70", "70 % (zona tensionada, joven o alquiler social)"], ["90", "90 % (zona tensionada con rebaja de renta)"]].map(([k, l]) => "<option value='" + k + "'" + (String(r.red || "0") === k ? " selected" : "") + ">" + l + "</option>").join("") + "</select></td>" +
+      "<td><input class='fi2' style='width:80px' value='" + rtH(r.ret || "") + "' oninput=\"rtFila('alq'," + i + ",'ret',this.value)\"></td><td><button class='btn btn-secondary' style='padding:3px 8px;' onclick=\"rtQuitar('alq'," + i + ")\">✕</button></td></tr>").join("") +
+    "</tbody></table><button class='btn btn-secondary' style='margin-top:4px;' onclick=\"rtAnadir('alq')\">+ Inmueble</button><div style='font-size:12px;color:var(--gray-600);margin-top:6px;'>Amortización: 3 % del valor de la construcción (sin el suelo). Rendimiento neto de los alquileres: " + rtE(c.alqRN) + "</div></div>";
+  // Ahorro, reducciones y deducciones
+  h += "<div class='card'>" + cardT("💶 Ahorro, reducciones y deducciones") + "<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:10px;'>" +
+    inp("cmInt", "Intereses", x.cmInt) + inp("cmDiv", "Dividendos", x.cmDiv) + inp("cmGas", "Gastos de custodia", x.cmGas) + inp("cmRet", "Retenciones del capital", x.cmRet) +
+    inp("ganAhorro", "Ganancias (ventas de acciones, fondos, inmuebles)", x.ganAhorro) + inp("ganGeneral", "Otras ganancias (premios, subvenciones…)", x.ganGeneral) + inp("planes", "Aportación a planes de pensiones", x.planes) + inp("planesEmpresa", "Aportación de la empresa", x.planesEmpresa) +
+    inp("vivienda", "Vivienda habitual antes de 2013 (pagado)", x.vivienda) + inp("donativos", "Donativos", x.donativos) + inp("maternidad", "Deducción por maternidad (año)", x.maternidad) + inp("dedOtras", "Otras deducciones (autonómicas…)", x.dedOtras) +
+    inp("pagosOtros", "Otros pagos a cuenta", x.pagosOtros) + "</div></div>";
+  // Cálculo
+  const fl = (l, v, b) => "<tr><td style='padding:3px 10px;" + (b ? "font-weight:700;" : "") + "'>" + l + "</td><td style='text-align:right;padding:3px 10px;" + (b ? "font-weight:700;" : "") + "'>" + v + "</td></tr>";
+  h += "<div class='card'><details><summary style='cursor:pointer;font-weight:600;color:var(--navy);'>🧮 Ver el cálculo de la previsión</summary><table style='width:auto;font-size:12.5px;margin-top:8px;'>" +
+    fl("Rendimiento neto del trabajo", rtE(c.trabRN)) + fl("Rendimiento neto de actividades", rtE(c.actRN)) + fl("Rendimiento neto de alquileres", rtE(c.alqRN)) + fl("Base imponible general", rtE(c.big), 1) +
+    (c.redPP ? fl("Reducción por planes de pensiones", "− " + rtE(c.redPP)) : "") + (c.redConj ? fl("Reducción por tributación conjunta", "− " + rtE(c.redConj)) : "") +
+    fl("Base liquidable general", rtE(c.blg), 1) + fl("Base liquidable del ahorro", rtE(c.bla), 1) + fl("Mínimo personal y familiar (estatal / autonómico)", rtE(c.minEst) + " / " + rtE(c.minAut)) +
+    fl("Cuota íntegra estatal", rtE(c.ciEst)) + fl("Cuota íntegra autonómica (" + ((RT_CCAA.find((q) => q[0] === x.ccaa) || [])[1] || "") + ")", rtE(c.ciAut)) +
+    (c.dVivE ? fl("Deducción vivienda habitual", "− " + rtE(c.dVivE + c.dVivA)) : "") + (c.dDon ? fl("Deducción por donativos", "− " + rtE(c.dDon)) : "") + (rtN(x.dedOtras) ? fl("Otras deducciones", "− " + rtE(rtN(x.dedOtras))) : "") +
+    (c.dSMI ? fl("Deducción por rendimientos del trabajo (hasta 340 €)", "− " + rtE(c.dSMI)) : "") + fl("Cuota líquida", rtE(c.cl), 1) +
+    fl("Retenciones y pagos a cuenta", "− " + rtE(c.pagos)) + (rtN(x.maternidad) ? fl("Deducción por maternidad", "− " + rtE(rtN(x.maternidad))) : "") + fl("Resultado", (c.dif < 0 ? "a devolver " + rtE(-c.dif) : "a ingresar " + rtE(c.dif)), 1) +
+    "</table><div style='font-size:11.5px;color:var(--gray-600);margin-top:6px;'>No incluye: compensación de pérdidas de años anteriores, régimen de atribución, deducciones autonómicas (ponlas en «Otras deducciones»), rentas en el extranjero ni casos especiales.</div></details></div>";
+  // Documentos y notas
+  h += "<div class='card' style='display:grid;grid-template-columns:1fr 1fr;gap:20px;'><div>" + cardT("📎 Documentos") +
+    (x.docs || []).map((d, i) => "<div style='display:flex;gap:6px;align-items:center;font-size:12.5px;margin:3px 0;'><input type='checkbox'" + (d.ok ? " checked" : "") + " onchange=\"rtFila('docs'," + i + ",'ok',this.checked)\"><span style='flex:1;" + (d.ok ? "color:var(--gray-400);text-decoration:line-through;" : "") + "'>" + rtH(d.t) + "</span><button class='btn btn-secondary' style='padding:1px 6px;font-size:11px;' onclick=\"rtQuitar('docs'," + i + ")\">✕</button></div>").join("") +
+    "<div style='display:flex;gap:6px;margin-top:6px;'><input class='fi2' id='rtDocNuevo' placeholder='Otro documento…'><button class='btn btn-secondary' onclick='rtDocAnadir()'>+</button></div></div>" +
+    "<div>" + cardT("🗒 Notas y comentarios") + "<div style='display:flex;gap:6px;'><textarea class='fi2' id='rtNota' rows='2' placeholder='Comentario del cliente, llamada, algo a revisar…'></textarea><button class='btn btn-secondary' onclick='rtNotaAnadir()'>Añadir</button></div>" +
+    (x.notas || []).slice().reverse().map((n) => "<div style='font-size:12.5px;border-left:3px solid #CBD5E1;padding:4px 8px;margin-top:6px;'><div style='font-size:11px;color:var(--gray-400);'>" + rtH(String(n.fecha).slice(0, 16).replace("T", " ")) + "</div>" + rtH(n.texto).replace(/\n/g, "<br>") + "</div>").join("") +
+    (prev && (prev.notas || []).length ? "<details style='margin-top:8px;font-size:12px;'><summary style='cursor:pointer;color:var(--gray-600);'>Notas de " + prev.ejercicio + " (" + prev.notas.length + ")</summary>" + prev.notas.slice().reverse().map((n) => "<div style='border-left:3px solid #E5E7EB;padding:3px 8px;margin-top:4px;color:var(--gray-600);'>" + rtH(String(n.fecha).slice(0, 10)) + " · " + rtH(n.texto) + "</div>").join("") + "</details>" : "") + "</div></div>";
+  // Resultado presentado
+  const r = x.resultado || {};
+  const dReal = r.importe !== undefined && r.importe !== "" ? (r.tipo === "devolver" ? -1 : 1) * rtN(r.importe) : null;
+  h += "<div class='card'>" + cardT("✅ Declaración presentada") + "<div style='display:grid;grid-template-columns:repeat(6,1fr);gap:10px;'>" +
+    sel("resultado.tipo", "Resultado", [["", "—"], ["devolver", "A devolver"], ["ingresar", "A ingresar"], ["cero", "Cuota cero"]], r.tipo) + inp("resultado.importe", "Importe", r.importe) +
+    "<div class='fg'><label class='fl'>Fecha de presentación</label><input type='date' class='fi2' data-k='resultado.fecha' value='" + rtH(r.fecha || "") + "' onchange='rtCampo(this)'></div>" +
+    inp("resultado.justificante", "Nº justificante / CSV", r.justificante) + inp("resultado.honorarios", "Honorarios", r.honorarios) +
+    sel("resultado.cobrado", "Cobrado", [["", "No"], ["si", "Sí"]], r.cobrado) + "</div>" +
+    (dReal !== null ? "<div style='font-size:12.5px;margin-top:8px;'>Diferencia con la previsión: <b>" + rtE(Math.abs(rtR2(dReal - c.dif))) + "</b> " + (Math.abs(dReal - c.dif) < 1 ? "(coincide)" : "") + "</div>" : "") + "</div>";
+  box.innerHTML = h;
+}
+// ---------- Edición ----------
+function rtSet(k, v) { const p = k.split("."); let o = RT.ed; for (let i = 0; i < p.length - 1; i++) { o[p[i]] = o[p[i]] || {}; o = o[p[i]]; } o[p[p.length - 1]] = v; RT.sucio = true; }
+window.rtCampo = function (el) { rtSet(el.dataset.k, el.type === "checkbox" ? el.checked : el.value); rtRefrescar(); };
+window.rtFila = function (k, i, f, v) { RT.ed[k][i][f] = v; RT.sucio = true; rtRefrescar(); };
+window.rtAnadir = function (k) { RT.ed[k] = RT.ed[k] || []; RT.ed[k].push(k === "alq" ? { nombre: "", ing: "", gas: "", amort: "", red: "60", ret: "" } : { nombre: "", nac: "", disc: "", mitad: false }); RT.sucio = true; rtPinta(); };
+window.rtQuitar = function (k, i) { RT.ed[k].splice(i, 1); RT.sucio = true; rtPinta(); };
+window.rtDocAnadir = function () { const el = document.getElementById("rtDocNuevo"), t = (el.value || "").trim(); if (!t) return; RT.ed.docs.push({ t, ok: false }); RT.sucio = true; rtPinta(); };
+window.rtNotaAnadir = function () { const el = document.getElementById("rtNota"), t = (el.value || "").trim(); if (!t) return; RT.ed.notas = RT.ed.notas || []; RT.ed.notas.push({ fecha: new Date().toISOString(), texto: t }); RT.sucio = true; rtPinta(); };
+// Recalcula sin redibujar los campos (para no perder el foco al escribir)
+let rtT = null;
+function rtRefrescar() {
+  clearTimeout(rtT); rtT = setTimeout(() => {
+    const act = document.activeElement, id = act && act.closest && act.closest("#rtCuerpo") ? [...document.querySelectorAll("#rtCuerpo input,#rtCuerpo select,#rtCuerpo textarea")].indexOf(act) : -1;
+    const pos = act && act.selectionStart != null ? act.selectionStart : null, sc = window.scrollY;
+    rtPinta();
+    if (id > -1) { const el = document.querySelectorAll("#rtCuerpo input,#rtCuerpo select,#rtCuerpo textarea")[id]; if (el) { el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch (e) {} } }
+    window.scrollTo(0, sc);
+  }, 700);
+}
+window.rtGuardar = async function () {
+  const x = RT.ed; if (!x) return;
+  x.modificado = new Date().toISOString(); x.creado = x.creado || x.modificado;
+  const c = rtCalcular(x, x.ejercicio); x.prevision = c.dif;
+  await fbS("renta_exp", x.id, JSON.parse(JSON.stringify(x)));
+  RT.sucio = false; showToast("✓ Expediente guardado"); rtPinta();
+};
+// ---------- Traer datos de las otras apps ----------
+window.rtDeLaboral = function () {
+  const x = RT.ed, nif = String(x.nif || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!nif) { alert("La persona no tiene NIF: sin él no puedo buscar sus nóminas."); return; }
+  const L = (window.WN || []).filter((n) => String(n.dni || "").toUpperCase().replace(/[^A-Z0-9]/g, "") === nif && String(n.anio) === String(x.ejercicio));
+  if (!L.length) { alert("No hay nóminas cerradas de " + x.ejercicio + " con el NIF " + nif + " en Laboral."); return; }
+  if (!confirm("Hay " + L.length + " nómina(s) cerradas de " + x.ejercicio + " en Laboral. Se pondrán en sus meses (bruto, Seguridad Social y retención), sustituyendo lo que haya en esos meses. ¿Seguir?")) return;
+  L.forEach((n) => { const i = (+n.mes || 0) - 1; if (i < 0 || i > 11) return; x.trabajo[i] = { b: String(rtR2(rtN(n.devengo))), ss: String(rtR2(rtN(n.cotTrab) + rtN(n.cotAtr))), ret: String(rtR2(rtN(n.irpf))) }; });
+  RT.sucio = true; rtPinta();
+};
+window.rtDeFiscal = function () {
+  const x = RT.ed, p = rtPersonas().find((q) => q.key === x.persona) || {};
+  if (!p.cid) { alert("Esta persona no es cliente del despacho en Fiscal: escribe los datos a mano."); return; }
+  const ej = String(x.ejercicio), F = (window.WF || []).filter((f) => f.clienteDespachoId === p.cid && String(fR(f) || f.fecha || "").slice(0, 4) === ej);
+  const ing = F.filter((f) => f.tipo === "IVR").reduce((s, f) => s + fBaseTot(f), 0), gas = F.filter((f) => f.tipo === "IVS").reduce((s, f) => s + fBaseTot(f), 0);
+  const ret = F.filter((f) => f.tipo === "IVR").reduce((s, f) => s + (parseFloat(f.retImporte) || 0), 0);
+  const rec = (window.WIN || {})[p.cid + "_" + ej], p130 = ((rec && rec.pagado130) || []).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+  if (!confirm("De Fiscal (" + ej + "): ingresos " + rtE(ing) + ", gastos " + rtE(gas) + ", retenciones " + rtE(ret) + ", pagos del 130 apuntados " + rtE(p130) + ".\n\nSe pondrán en Actividad (la cuota de autónomo no está en Fiscal: escríbela tú). ¿Seguir?")) return;
+  x.act = { ...(x.act || {}), ing: String(rtR2(ing)), gas: String(rtR2(gas)), ret: String(rtR2(ret)), p130: String(rtR2(p130)), origen: "traído de Fiscal el " + new Date().toLocaleDateString("es-ES") };
+  RT.sucio = true; rtPinta();
+};
+// ---------- Personas solo de renta y lista de la campaña ----------
+window.rtNuevaPersona = function () {
+  const nombre = prompt("Nombre y apellidos de la persona (solo cliente de renta):"); if (!nombre || !nombre.trim()) return;
+  const nif = (prompt("NIF (opcional):") || "").trim().toUpperCase();
+  const id = "rp" + Date.now();
+  fbS("renta_personas", id, { id, nombre: nombre.trim(), nif, creado: new Date().toISOString() }).then(() => { RT.per = "p_" + id; RT.ed = null; setTimeout(() => { rtInit(); rtRender(); }, 300); });
+};
+window.rtCampana = function () {
+  const box = document.getElementById("rtCuerpo"), ej = document.getElementById("rtEj").value;
+  const L = (window.WRE || []).filter((x) => String(x.ejercicio) === ej).sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
+  const cnt = {}; L.forEach((x) => (cnt[x.estado] = (cnt[x.estado] || 0) + 1));
+  const hon = L.reduce((s, x) => s + rtN((x.resultado || {}).honorarios), 0), cob = L.filter((x) => (x.resultado || {}).cobrado === "si").reduce((s, x) => s + rtN((x.resultado || {}).honorarios), 0);
+  box.innerHTML = "<div class='card'><div style='display:flex;gap:8px;flex-wrap:wrap;align-items:center;'><b>Campaña de la renta " + ej + "</b> · " + L.length + " expedientes · " +
+    RT_ESTADOS.filter((e) => cnt[e[0]]).map((e) => "<span class='badge' style='background:" + e[2] + ";color:" + e[3] + ";'>" + cnt[e[0]] + " " + e[1].toLowerCase() + "</span>").join(" ") +
+    "<span style='flex:1'></span><span style='font-size:12.5px;'>Honorarios " + rtE(hon) + " · cobrado " + rtE(cob) + "</span> <button class='btn btn-secondary' onclick=\"RT.per='';rtRender()\">Cerrar</button></div></div>" +
+    (L.length ? "<div class='card' style='padding:0;overflow:auto;'><table><thead><tr><th>Persona</th><th>Estado</th><th>Documentos</th><th style='text-align:right;'>Previsión</th><th style='text-align:right;'>Presentada</th><th style='text-align:right;'>Honorarios</th></tr></thead><tbody>" +
+      L.map((x) => { const e = RT_ESTADOS.find((q) => q[0] === x.estado) || RT_ESTADOS[0], r = x.resultado || {}, dk = (x.docs || []).filter((d) => d.ok).length;
+        return "<tr style='cursor:pointer;' onclick=\"rtAbrirExp('" + rtH(x.persona) + "','" + x.ejercicio + "')\"><td><b>" + rtH(x.nombre) + "</b></td><td><span class='badge' style='background:" + e[2] + ";color:" + e[3] + ";'>" + e[1] + "</span></td><td>" + dk + " / " + (x.docs || []).length + "</td>" +
+          "<td class='td-r'>" + (x.prevision != null ? (x.prevision < 0 ? "−" + rtE(-x.prevision) : rtE(x.prevision)) : "") + "</td><td class='td-r'>" + (r.importe ? (r.tipo === "devolver" ? "−" : "") + rtE(rtN(r.importe)) : "") + "</td><td class='td-r'>" + (r.honorarios ? rtE(rtN(r.honorarios)) + (r.cobrado === "si" ? " ✓" : "") : "") + "</td></tr>"; }).join("") +
+      "</tbody></table></div><div style='font-size:11.5px;color:var(--gray-600);'>Importes en negativo: a devolver.</div>" : "<div class='empty'>No hay expedientes de " + ej + ".</div>");
+};
+window.rtAbrirExp = function (per, ej) { RT.per = per; RT.ej = String(ej); RT.ed = null; RT.sucio = false; document.getElementById("rtPer").value = per; document.getElementById("rtEj").value = ej; rtRender(); };
+window.addEventListener("beforeunload", (e) => { if (RT.sucio) { e.preventDefault(); e.returnValue = ""; } });
+
 </script>
 </body>
 </html>
