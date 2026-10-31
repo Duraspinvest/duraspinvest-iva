@@ -123,6 +123,12 @@ tr:last-child td{border-bottom:none;}
 body.visor-open .modal-overlay{left:50%;width:50%;}
 body.visor-open .modal-overlay.open{display:flex;}
 </style>
+<style>
+/* Modo colaboradora: solo Facturas y Portal clientes; sin borrar, sin importar, sin crear cuentas */
+body.colab nav .nav-btn:not([onclick*="'facturas'"]):not([onclick*="'portal'"]){display:none!important;}
+body.colab header a{display:none!important;}
+body.colab [onclick*="opCambiarVista"],body.colab [onclick*="fRegTrim"],body.colab [onclick*="delF("],body.colab [onclick*="eliminarPortalDoc("],body.colab [onclick*="impFInput"],body.colab [onclick*="ccImportar"],body.colab .solo-admin{display:none!important;}
+</style>
 </head>
 <body>
 
@@ -203,6 +209,7 @@ body.visor-open .modal-overlay.open{display:flex;}
       <button class="btn btn-ivs" onclick="openFM('IVS')">+ Recibida</button>
     </div>
   </div>
+  <div id="fRevBanner" style="display:none;margin:0 0 8px;padding:8px 12px;border-radius:8px;background:#FFFBEB;color:#92400E;font-size:12.5px;"></div>
   <div id="fResumen"></div>
   <div class="tabla-wrapper">
     <table><thead><tr>
@@ -525,6 +532,11 @@ body.visor-open .modal-overlay.open{display:flex;}
       </div>
      </div>
     </div>
+    <div style="margin:10px 0 0;padding:8px 10px;border:1px dashed #F59E0B;border-radius:8px;background:#FFFBEB;font-size:12px;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="fRev" style="width:auto;margin:0;"> <b>&#9873; Pendiente de revisión</b> (algo no cuadra o hay una duda)</label>
+      <input type="text" class="fi2" id="fRevNota" placeholder="¿Qué duda hay? (p. ej. no se lee el NIF, el total no cuadra con la foto…)" style="margin-top:6px;font-size:12px;">
+      <div id="fRevQuien" style="font-size:11px;color:var(--gray-400);margin-top:4px;"></div>
+    </div>
     <div class="ma">
       <button class="btn btn-secondary" onclick="closeM('fModal')">Cancelar</button>
       <button class="btn btn-secondary" onclick="saveF(true)">+ Guardar y otra</button>
@@ -609,6 +621,13 @@ body.visor-open .modal-overlay.open{display:flex;}
     u3=onSnapshot(collection(db,"iva_cuentas"),s=>{
       window.WCC=s.docs.map(d=>({...d.data(),id:d.id}));renderC();
     });
+    if(window.ROL==="colab"){   // colaboradora: solo clientes, facturas, cuentas (lectura) y documentos del portal
+      onSnapshot(collection(db,"portal_documentos"),s=>{window.portalDocs=s.docs.map(d=>({...d.data(),id:d.id}));
+        setTimeout(function(){if(typeof poblarFiltroPortalClientes==="function")poblarFiltroPortalClientes();if(typeof renderPortal==="function")renderPortal();
+          const pend=(window.portalDocs||[]).filter(d=>d.estado==="pendiente").length,nb=document.querySelector(".nav-btn[onclick*=portal]");
+          if(nb)nb.innerHTML="&#128229; Portal"+(pend>0?" <span style='background:#EF4444;color:white;border-radius:10px;padding:1px 6px;font-size:10px;'>"+pend+"</span>":"");},100);});
+      return;
+    }
     // Facturación en nombre de los clientes
     const _fxAct=()=>{const sec=document.getElementById("facturacion");if(!(sec&&sec.classList.contains("active")))return;
       if(document.getElementById("fxModal").classList.contains("open")||document.getElementById("fxModal2").classList.contains("open"))return;   // no redibujar con el editor abierto
@@ -671,7 +690,11 @@ body.visor-open .modal-overlay.open{display:flex;}
       window.WC=[];window.WF=[];window.WCC=[];
       document.getElementById("loginScreen").style.display="none";
       document.getElementById("appContent").style.display="flex";
-      document.getElementById("userBadge").textContent=user.email.split("@")[0];
+      // Rol: la cuenta de Emilio (por UID) = despacho; cualquier otra cuenta del despacho = colaboradora (solo Facturas y Portal clientes)
+      window.ROL=user.uid==="hsQ7si0hINTgb1zXlDa2QPdkEFB2"?"admin":"colab";window.YO={uid:user.uid,email:user.email,nombre:user.email.split("@")[0]};
+      document.body.classList.toggle("colab",window.ROL==="colab");
+      document.getElementById("userBadge").textContent=user.email.split("@")[0]+(window.ROL==="colab"?" · colaboradora":"");
+      if(window.ROL==="colab"&&typeof showSection==="function")showSection("portal",document.querySelector(".nav-btn[onclick*=portal]"));
       act();
     } else {
       if(window.__EMON)return;   // trabajando en modo emergencia: no volver a la pantalla de acceso
@@ -798,11 +821,11 @@ async function ctDel(col,id){try{await window.fsDeleteDoc(window.fsDoc(window.db
 function ctLineasFactura(f){
   const cc=getCuentaParaFactura(f),L=[];
   const total=_r2c(parseFloat(f.total)||0),ret=_r2c(parseFloat(f.retImporte)||0);
-  const add=(c,d,h)=>{d=_r2c(d);h=_r2c(h);if(d||h)L.push({c:ctNorm(c),d,h});};
+  const add=(c,d,h)=>{d=_r2c(d);h=_r2c(h);if(d<0||h<0){const x=_r2c((d>0?d:0)+(h<0?-h:0)),y=_r2c((h>0?h:0)+(d<0?-d:0));d=x;h=y;}if(d||h)L.push({c:ctNorm(c),d,h});};   // abonos: importes negativos al lado contrario
   if(f.tipo==="IVR"){
     const cli=cc.cuenta||f.cuenta||"43000000",contra=cc.contrapartida||"70000000";
-    add(cli,total,0); if(ret>0)add(CT_RET_E,ret,0);
-    add(contra,0,fIngreso(f)); const cu=fRep(f); if(cu>0)add(CT_IVA_R,0,cu);
+    add(cli,total,0); if(ret)add(CT_RET_E,ret,0);
+    add(contra,0,fIngreso(f)); const cu=fRep(f); if(cu)add(CT_IVA_R,0,cu);
   }else{
     const prov=cc.cuenta||f.cuenta||"40000000",contra=cc.contrapartida||"60000000";
     const auto=esAuto(f),cuota=fCuota(f),pD=(fOpDe(f)==="rebu")?100:fDedPct(f),cDed=_r2c(cuota*pD/100),cNo=_r2c(cuota-cDed);
@@ -812,9 +835,9 @@ function ctLineasFactura(f){
       add(prov,0,cuota); return L;
     }
     add(contra,base+cNo,0);
-    if(cDed>0&&fOpDe(f)!=="rebu")add(CT_IVA_S,cDed,0);
-    if(auto&&cuota>0)add(CT_IVA_R,0,cuota);
-    add(prov,0,total); if(ret>0)add(CT_RET_R,0,ret);
+    if(cDed&&fOpDe(f)!=="rebu")add(CT_IVA_S,cDed,0);
+    if(auto&&cuota)add(CT_IVA_R,0,cuota);
+    add(prov,0,total); if(ret)add(CT_RET_R,0,ret);
   }
   // Cuadre por redondeos del documento (diferencias de céntimos) contra la cuenta de gasto/ingreso
   const dif=_r2c(L.reduce((s,l)=>s+l.d-l.h,0));
@@ -1368,8 +1391,56 @@ function ctCierre(box,cid){
     "<div style='display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;'><button class='btn btn-primary' onclick='ctRegularizar()'>"+(reg?"Rehacer regularización":"Regularizar "+anio)+"</button><button class='btn btn-primary' onclick='ctApertura()'>"+(ap?"Rehacer apertura de "+sig:"Crear apertura de "+sig)+"</button></div></div>"+
     "<div class='card'><div style='font-weight:600;color:var(--navy);margin-bottom:6px;'>Saldos iniciales de "+anio+" desde Delsol</div>"+
     "<div style='font-size:13px;'>Si el cliente viene de Delsol, exporta de ContaSOL el <strong>balance de sumas y saldos a 31/12/"+(parseInt(anio,10)-1)+"</strong> a Excel (subcuentas) e impórtalo aquí: la app crea el asiento de apertura del 01/01/"+anio+" con las cuentas de balance (grupos 1 a 5). "+(apA?"<span style='color:var(--success);'>✓ Ya hay apertura en "+anio+"</span>":"")+"</div>"+
-    "<input type='file' id='ctApFile' accept='.xlsx,.xls,.csv' style='display:none;' onchange='ctImportApertura(this)'><button class='btn btn-secondary' style='margin-top:8px;' onclick=\"document.getElementById('ctApFile').click()\">&#8679; Importar saldos de Delsol</button></div>";
+    "<input type='file' id='ctApFile' accept='.xlsx,.xls,.csv' style='display:none;' onchange='ctImportApertura(this)'><button class='btn btn-secondary' style='margin-top:8px;' onclick=\"document.getElementById('ctApFile').click()\">&#8679; Importar saldos de Delsol</button></div>"+
+    "<div class='card'><div style='font-weight:600;color:var(--navy);margin-bottom:6px;'>Asientos de Delsol (cliente que llega a mitad de año)</div>"+
+    "<div style='font-size:13px;'>Importa los asientos que <strong>no son de facturas</strong> (apertura, banco, nóminas, impuestos…) desde un Excel con columnas <strong>ASIENTO, FECHA, CUENTA, CONCEPTO, DEBE, HABER</strong> (y TÍTULO para el nombre de la cuenta). Las facturas se importan aparte en Facturas: sus asientos los hace la app. Si vuelves a importar el mismo archivo, no duplica.</div>"+
+    "<input type='file' id='ctAsFile' accept='.xlsx,.xls,.csv' style='display:none;' onchange='ctImportAsientos(this)'><button class='btn btn-secondary' style='margin-top:8px;' onclick=\"document.getElementById('ctAsFile').click()\">&#8679; Importar asientos</button></div>";
 }
+// Asientos sueltos desde Excel (p. ej. el diario de Delsol sin las facturas). Agrupa por nº de asiento.
+function ctImportAsientos(input){
+  const file=input.files&&input.files[0];input.value="";if(!file)return;
+  const cid=document.getElementById("ctCli").value;if(!cid){alert("Elige el cliente.");return;}
+  const rd=new FileReader();
+  rd.onload=async e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""});
+      let hi=-1,M={};
+      for(let i=0;i<Math.min(rows.length,25);i++){const n=rows[i].map(_impNorm);
+        const a=n.findIndex(x=>/^(asiento|n asiento|num asiento|numero asiento)$/.test(x)),c=n.findIndex(x=>/^(cuenta|subcuenta|cod cuenta)$/.test(x));
+        if(a>-1&&c>-1){hi=i;M.a=a;M.c=c;M.f=n.findIndex(x=>/^fecha/.test(x));M.t=n.findIndex(x=>/^(titulo|nombre|titulo cuenta|nombre cuenta)/.test(x));
+          M.k=n.findIndex(x=>/^(concepto|descripcion|observaciones)/.test(x));M.d=n.findIndex(x=>/^debe/.test(x));M.h=n.findIndex(x=>/^haber/.test(x));break;}}
+      if(hi<0||M.f<0||M.d<0||M.h<0)throw new Error("no encuentro las columnas ASIENTO, FECHA, CUENTA, DEBE y HABER");
+      const G={},orden=[],nombres={},avisos=[];
+      for(let i=hi+1;i<rows.length;i++){const r=rows[i];const n=String(r[M.a]).trim();const c=ctNorm(r[M.c]);if(!n||!c)continue;
+        const f=_impFecha(r[M.f]);if(!f){avisos.push("Fila "+(i+1)+": fecha no válida");continue;}
+        if(!G[n]){G[n]={n,fecha:f,concepto:"",lineas:[]};orden.push(n);}
+        const d=_r2c(_impNum(r[M.d])),h=_r2c(_impNum(r[M.h]));if(!d&&!h)continue;
+        G[n].lineas.push({c,d,h});if(!G[n].concepto&&M.k>-1&&r[M.k])G[n].concepto=String(r[M.k]).trim();
+        if(M.t>-1&&r[M.t])nombres[c]=String(r[M.t]).trim();}
+      const A=orden.map(n=>G[n]).filter(a=>a.lineas.length);
+      const mal=A.filter(a=>Math.abs(a.lineas.reduce((s,l)=>s+l.d-l.h,0))>0.005);
+      if(mal.length)throw new Error("hay asientos que no cuadran: "+mal.slice(0,8).map(a=>a.n).join(", "));
+      const ya=new Set((window.WAS||[]).filter(a=>a.cid===cid).map(a=>a.ref));
+      const ref=a=>"IMP-"+a.fecha.slice(0,4)+"-"+a.n;
+      const nuevos=A.filter(a=>!ya.has(ref(a)));
+      const tot=nuevos.reduce((s,a)=>s+a.lineas.reduce((t,l)=>t+l.d,0),0);
+      if(!nuevos.length){alert("Estos "+A.length+" asientos ya estaban importados.");return;}
+      const ap=nuevos.filter(a=>/apertura/i.test(a.concepto)).length;
+      if(!confirm("Importar "+nuevos.length+" asientos ("+nuevos.reduce((s,a)=>s+a.lineas.length,0)+" líneas, "+ctE(tot)+" € al debe) del "+ctFD(nuevos[0].fecha)+" al "+ctFD(nuevos[nuevos.length-1].fecha)+"."+
+        (A.length>nuevos.length?"\nSe omiten "+(A.length-nuevos.length)+" que ya estaban.":"")+(ap?"\n"+ap+" de apertura (se marcan como apertura).":"")+
+        (avisos.length?"\n\nAvisos:\n"+avisos.slice(0,5).join("\n"):"")+"\n\n¿Seguir?"))return;
+      const base=Date.now(),docs=nuevos.map((a,i)=>{const id="I"+(base+i);const esAp=/apertura/i.test(a.concepto);
+        return {id,cid,fecha:a.fecha,concepto:a.concepto||("Asiento "+a.n+" (importado)"),origen:esAp?"apertura":"manual",ref:ref(a),lineas:a.lineas,importado:file.name,creado:new Date(base+i).toISOString()};});
+      for(const [c,nm] of Object.entries(nombres)){if(!(window.WCP||{})[cid+"_"+c]&&!(window.WCC||[]).some(x=>x.clienteDespachoId===cid&&ctNorm(x.cuenta)===c))docs.push({_plan:true,id:cid+"_"+c,cid,cuenta:c,nombre:nm});}
+      if(window.fsBatch){for(let i=0;i<docs.length;i+=400){const b=window.fsBatch();docs.slice(i,i+400).forEach(d=>{const x={...d};delete x._plan;b.set(window.fsDoc(window.db,d._plan?"conta_plan":"conta_asientos",String(d.id)),x);});await b.commit();}}
+      else for(const d of docs){const x={...d};delete x._plan;await ctSave(d._plan?"conta_plan":"conta_asientos",d.id,x);}
+      alert("Importados "+nuevos.length+" asientos.");ctRender();
+    }catch(err){console.error(err);alert("No he podido importar los asientos: "+(err.message||err));}
+  };
+  rd.readAsArrayBuffer(file);
+}
+window.ctImportAsientos=ctImportAsientos;
 async function ctRegularizar(){
   const cid=document.getElementById("ctCli").value,anio=document.getElementById("ctAnio").value;
   const prev=(window.WAS||[]).find(a=>a.cid===cid&&a.origen==="regularizacion"&&a.fecha.slice(0,4)===anio);
@@ -1580,6 +1651,10 @@ function renderF(){
   const fa=document.getElementById("fFA").value,fq=document.getElementById("fFQ").value;
   const fb=_fNorm((document.getElementById("fFB")||{}).value||"").trim();
   const fo=(document.getElementById("fFO")||{}).value||"";
+  {const R=(window.WF||[]).filter(f=>f.revisar),bx=document.getElementById("fRevBanner");
+    if(bx){if(!R.length){bx.style.display="none";window._fRev=false;}else{const por={};R.forEach(f=>{por[f.clienteDespachoId]=(por[f.clienteDespachoId]||0)+1;});
+      bx.style.display="";bx.innerHTML="&#9873; <b>"+R.length+" factura"+(R.length>1?"s":"")+" pendiente"+(R.length>1?"s":"")+" de revisión</b>: "+Object.entries(por).map(([c,n])=>"<a href='#' style='color:#92400E;' onclick=\"document.getElementById('fFC').value='"+c+"';window._fRev=true;renderF();return false;\">"+(((window.WC||[]).find(x=>x.id===c)||{}).nombre||"¿?").replace(/[<>&'"]/g,"")+" ("+n+")</a>").join(" · ")+
+        (window._fRev?" · <a href='#' style='color:#92400E;' onclick='window._fRev=false;renderF();return false;'>ver todas</a>":"");}}}
   // Privacidad: no se enseña ninguna factura hasta elegir un cliente (por si hay alguien delante)
   if(!fc){_fOrdMarcas();window.fVista=[];renderResumenF([]);
     tb.innerHTML="<tr><td colspan='14'><div class='empty'><div class='empty-icon'>&#128274;</div><div>Elige un cliente en el filtro de arriba para ver sus facturas.</div></div></td></tr>";return;}
@@ -1590,6 +1665,7 @@ function renderF(){
     if(fq&&fR(f)&&q(fR(f))!==fq)return false;
     if(fb&&!_fMatch(f,fb))return false;
     if(fo&&!_opGrupo(f,fo))return false;
+    if(window._fRev&&!f.revisar)return false;
     return true;
   }).sort(_fCmp);
   _fOrdMarcas();
@@ -2109,6 +2185,10 @@ function editF(id){
   document.getElementById("fMTitle").textContent=(f.tipo==="IVR"?"Editar factura emitida":"Editar factura recibida")+(f.importado?" (importada)":"");
   const set=(el,v)=>{const e=document.getElementById(el);if(e)e.value=(v===undefined||v===null)?"":v;};
   set("fId",f.id);set("fCD",f.clienteDespachoId);set("fFecha",f.fecha);set("fNum",f.numero);
+  {const r=document.getElementById("fRev");if(r)r.checked=!!f.revisar;set("fRevNota",f.revisarNota||"");window._fEditMod=f.modificado||f.creado||"";
+   const fd=x=>String(x||"").slice(0,10).split("-").reverse().join("/");
+   const quien=[f.registradoPor?"Registrada por "+f.registradoPor.nombre+" ("+fd(f.registradoPor.fecha)+")":"",f.modificadoPor?"última modificación: "+f.modificadoPor.nombre+" ("+fd(f.modificadoPor.fecha)+")":""].filter(Boolean).join(" · ");
+   const q=document.getElementById("fRevQuien");if(q)q.textContent=quien;}
   _fRegSet(f.fechaReg||f.fecha,!!(f.fechaReg&&f.fechaReg!==f.fecha));
   set("fNom",f.nombre);set("fNif",f.nif);{const _n0=document.getElementById("fNif");if(_n0)nifHint(_n0,"fNifHint");}set("fCta",f.cuenta);set("fCP",f.contrapartida);set("fConc",f.concepto);
   set("fB1",f.base1||"");set("fI1",f.iva1||"");set("fB2",f.base2||"");set("fI2",f.iva2||"");set("fTot",f.total||"");
@@ -2158,7 +2238,8 @@ function openFM(tipo){
   document.getElementById("fMTitle").textContent=tipo==="IVR"?"Nueva factura emitida":"Nueva factura recibida";
   document.getElementById("fNLbl").innerHTML=(tipo==="IVR"?"Nombre cliente":"Nombre proveedor")+" <span class='ob'>*</span>";
   document.getElementById("fDedG").style.display=tipo==="IVS"?"block":"none";
-  ["fCD","fNom","fNif","fCta","fCP","fConc","fNum","fB1","fB2","fI1","fI2","fB3","fI3","fEx","fRebuC","fTot","fRI"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
+  ["fCD","fNom","fNif","fCta","fCP","fConc","fNum","fB1","fB2","fI1","fI2","fB3","fI3","fEx","fRebuC","fTot","fRI","fRevNota"].forEach(id=>{const e=document.getElementById(id);if(e)e.value="";});
+  {const r=document.getElementById("fRev");if(r)r.checked=false;const q=document.getElementById("fRevQuien");if(q)q.textContent="";window._fEditMod=null;}
   const _op=document.getElementById("fOp");
   if(_op){_op.innerHTML=Object.entries(OPS[tipo]||OPS.IVS).map(([k,v])=>"<option value='"+k+"'>"+v+"</option>").join("");_op.value="int";}
   if(document.getElementById("fP3"))document.getElementById("fP3").value="";
@@ -2284,6 +2365,11 @@ async function saveF(mantenerAbierto){
   const cl=(window.WC||[]).find(c=>c.id===cid);
   const id=document.getElementById("fId").value||String(Date.now());
   const prev=(window.WF||[]).find(x=>String(x.id)===String(id))||{};
+  // Otra persona la ha cambiado mientras estaba abierta
+  if(prev.id&&window._fEditMod!=null&&(prev.modificado||prev.creado||"")!==window._fEditMod){
+    const qn=(prev.modificadoPor&&prev.modificadoPor.nombre)||"otra persona";
+    if(!confirm("⚠ "+qn+" ha modificado esta factura mientras la tenías abierta.\n\nSi guardas, tus datos sustituyen a los suyos. ¿Guardar igualmente?"))return;
+  }
   if(nifOK(document.getElementById("fNif").value)===false&&!confirm("⚠ El NIF «"+document.getElementById("fNif").value.trim()+"» no es válido (la letra o los números no cuadran).\n\n¿Guardar igualmente?"))return;
   // Aviso de factura duplicada: mismo cliente del despacho, tipo, número y proveedor/cliente (NIF o nombre)
   {
@@ -2322,10 +2408,14 @@ async function saveF(mantenerAbierto){
     m347:document.getElementById("f347").value,
     deducible:tipo==="IVS"?document.getElementById("fDed").value:"",
     ocasional:!!(document.getElementById("fOcas")||{}).checked,
+    revisar:!!(document.getElementById("fRev")||{}).checked,revisarNota:((document.getElementById("fRevNota")||{}).value||"").trim(),
+    registradoPor:prev.registradoPor||{uid:(window.YO||{}).uid||"",nombre:(window.YO||{}).nombre||"",fecha:new Date().toISOString()},
+    modificadoPor:{uid:(window.YO||{}).uid||"",nombre:(window.YO||{}).nombre||"",fecha:new Date().toISOString()},
+    modificado:new Date().toISOString(),
     creado:prev.creado||new Date().toISOString()
   });
   // Recordar el proveedor/cliente y su cuenta de gasto/ingreso para la próxima vez (salvo si es ocasional)
-  if(!(document.getElementById("fOcas")||{}).checked) try{
+  if(window.ROL!=="colab"&&!(document.getElementById("fOcas")||{}).checked) try{
     const _nif=(document.getElementById("fNif").value||"").trim(), _cp=(document.getElementById("fCP").value||"").trim();
     const _tipoC=tipo==="IVR"?"cliente":"proveedor";
     const ex=ccBuscar(cid,_nif,nom,tipo==="IVR");
@@ -2359,7 +2449,7 @@ async function saveF(mantenerAbierto){
   if(window._portalDocId) {
     try{
       const pd=(window.portalDocs||[]).find(x=>x.id===window._portalDocId);
-      if(pd && pd.userEmail && cl && cl.portalEmail!==pd.userEmail){
+      if(window.ROL!=="colab" && pd && pd.userEmail && cl && cl.portalEmail!==pd.userEmail){
         await window.fsSetDoc(window.fsDoc(window.db,"clients",cl.id),{portalEmail:pd.userEmail},{merge:true});
       }
     }catch(e){console.warn("No se pudo vincular el usuario del portal",e);}
@@ -2414,7 +2504,7 @@ async function saveF(mantenerAbierto){
   }
 }
 
-async function delF(id){if(!confirm("Eliminar esta factura?"))return;await fbD("iva_facturas",id);}
+async function delF(id){if(window.ROL==="colab"){alert("Solo Emilio puede borrar facturas. Márcala como «Pendiente de revisión».");return;}if(!confirm("Eliminar esta factura?"))return;await fbD("iva_facturas",id);}
 
 // ---------- Crear subcuentas de proveedor (400) / cliente (430) que faltan ----------
 // Para cada proveedor/cliente sin cuenta (por NIF o nombre) crea la siguiente subcuenta libre
@@ -2893,6 +2983,7 @@ function renderPortal() {
       "<div style='flex:1;min-width:0;'>" +
         "<div style='font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>" + (d.descripcion||d.nombreArchivo||"Documento") + "</div>" +
         "<div style='font-size:11px;color:var(--gray-400);margin-top:2px;'>" + d.userEmail + " · " + fecha + (tamano?" · "+tamano:"") + "</div>" +
+        (d.duda ? "<div style='font-size:11px;color:#B45309;margin-top:3px;'>&#9873; " + String(d.duda).replace(/[<>&]/g,"") + (d.dudaPor?" ("+String(d.dudaPor).replace(/[<>&]/g,"")+")":"") + "</div>" : "") +
       "</div>" +
       "<div style='display:flex;flex-direction:column;align-items:flex-end;gap:6px;'>" +
         "<span style='font-size:10px;padding:2px 8px;border-radius:20px;font-weight:600;background:"+estadoBg+";color:"+estadoColor+";'>"+estadoLabel+"</span>" +
@@ -2900,6 +2991,7 @@ function renderPortal() {
           (d.datos ? "<button class='btn btn-sm' style='background:#EFF6FF;color:#1B4F8A;font-size:11px;' data-id='"+d.id+"' onclick='verDocumento(this.dataset.id)'>Ver</button>" : "") +
           (d.estado !== "procesada" ? "<button class='btn btn-sm' style='background:#FFF7ED;color:#C2410C;font-size:11px;' data-id='"+d.id+"' onclick='registrarFacturaPortal(this.dataset.id)'>&#128203; Registrar</button>" : "") +
           (d.estado !== "procesada" ? "<button class='btn btn-sm' style='background:#D1FAE5;color:#065F46;font-size:11px;' data-id='"+d.id+"' onclick='marcarProcesada(this.dataset.id)'>Procesada</button>" : "") +
+          (d.estado !== "procesada" ? "<button class='btn btn-sm' style='background:#FFFBEB;color:#B45309;font-size:11px;' data-id='"+d.id+"' onclick='dudaPortalDoc(this.dataset.id)' title='No se puede registrar: deja la duda para Emilio'>&#9873; Duda</button>" : "") +
           "<button class='btn btn-sm' style='background:#FEF2F2;color:#EF4444;font-size:11px;' data-id='"+d.id+"' onclick='eliminarPortalDoc(this.dataset.id)'>&#215;</button>" +
         "</div>" +
       "</div>" +
@@ -3107,6 +3199,13 @@ function verDocumento(id) {
   win.document.write("</body></html>");
 }
 
+// Duda sobre un documento del portal que no se puede registrar (foto ilegible, no es una factura…): queda pendiente para Emilio
+async function dudaPortalDoc(id){
+  const d=(window.portalDocs||[]).find(x=>x.id===id);if(!d)return;
+  const t=prompt("¿Qué duda hay con este documento? (vacío = quitar la duda)",d.duda||"");if(t===null)return;
+  await window.fsSetDoc(window.fsDoc(window.db,"portal_documentos",String(id)),t.trim()?{duda:t.trim(),dudaPor:(window.YO||{}).nombre||"",dudaFecha:new Date().toISOString()}:{duda:"",dudaPor:"",dudaFecha:""},{merge:true});
+}
+window.dudaPortalDoc=dudaPortalDoc;
 async function marcarProcesada(id) {
   const d = (window.portalDocs||[]).find(x => x.id === id);
   if(!d) return;
@@ -3117,6 +3216,7 @@ async function marcarProcesada(id) {
 }
 
 async function eliminarPortalDoc(id) {
+  if(window.ROL==="colab"){alert("Solo Emilio puede borrar o archivar documentos. Usa «⚑ Duda».");return;}
   const d = (window.portalDocs||[]).find(x => x.id === id);
   if(!d) return;
   if(d.estado === "procesada") {
